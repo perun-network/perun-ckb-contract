@@ -1,16 +1,13 @@
 #![no_std]
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+use ckb_std::ckb_types::bytes::Bytes;
+
+// Create a struct
+#[derive(Debug)]
+pub struct ChannelParameters {
+    // Participants is an array of addresses.
+    pub participants: [Address; 2],
+    pub nonce: Bytes,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub type Address = [u8; 32];
