@@ -1,0 +1,11 @@
+/* Perun Types */
+array Address [byte; 32];
+
+array Participants [Address; 2];
+
+vector Bytes <byte>;
+
+table ChannelParameters {
+  participants: Participants,
+  nonce:        Bytes,
+}
