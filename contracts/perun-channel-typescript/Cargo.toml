@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 ckb-std = "0.10.0"
+perun-common = { path = "../perun-common" }

@@ -881,6 +881,7 @@ name = "perun-channel-lockscript"
 version = "0.1.0"
 dependencies = [
  "ckb-std",
+ "perun-common",
 ]
 
 [[package]]
@@ -888,13 +889,19 @@ name = "perun-channel-typescript"
 version = "0.1.0"
 dependencies = [
  "ckb-std",
+ "perun-common",
 ]
+
+[[package]]
+name = "perun-common"
+version = "0.1.0"
 
 [[package]]
 name = "perun-funds-lockscript"
 version = "0.1.0"
 dependencies = [
  "ckb-std",
+ "perun-common",
 ]
 
 [[package]]

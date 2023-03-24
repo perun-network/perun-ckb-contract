@@ -3,6 +3,7 @@ members = [ "tests"
           , "contracts/perun-channel-lockscript"
           , "contracts/perun-channel-typescript"
           , "contracts/perun-funds-lockscript"
+          , "contracts/perun-common"
           ]
 
 [profile.release]
