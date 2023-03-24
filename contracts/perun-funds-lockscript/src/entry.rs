@@ -5,13 +5,18 @@ use core::result::Result;
 // https://doc.rust-lang.org/alloc/index.html
 use alloc;
 
+use perun_common::perun_types::ChannelParameters;
+
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
     debug,
-    high_level::{load_cell_data, load_cell_lock_hash, load_script},
+    high_level::{
+        load_cell_data, load_cell_lock_hash, load_script, load_transaction, load_tx_hash,
+        load_witness_args,
+    },
     syscalls::SysError,
 };
 
@@ -29,9 +34,20 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::NoArgs);
     }
 
-    if check_owner_mode(&args)? {
-        return Ok(());
-    }
+    // cell_deps -> point to reference cells for signature verification.
+    //   => Load code from cell deps dynamically and access below.
+    // let cp = ChannelParameters::from_slice(&args).unwrap();
+    // We will access only the first witness, because our lockscript does not
+    // require any more witnesses.
+    let wits = load_witness_args(0, Source::GroupInput)?
+        .lock()
+        // BytesOpt could be empty, we will cast to Option<Bytes> and unwrap
+        // manually.
+        .to_opt()
+        .ok_or(Error::NoWitness)?
+        .unpack();
+
+    verify_valid_participant(&wits, &args)?;
 
     let inputs_amount = collect_inputs_amount()?;
     let outputs_amount = collect_outputs_amount()?;
@@ -41,6 +57,11 @@ pub fn main() -> Result<(), Error> {
     }
 
     return Ok(());
+}
+
+pub fn verify_valid_participant(witness: &Bytes, args: &Bytes) -> Result<(), Error> {
+    let tx_hash = load_tx_hash()?;
+    Ok(())
 }
 
 pub fn check_owner_mode(args: &Bytes) -> Result<bool, Error> {

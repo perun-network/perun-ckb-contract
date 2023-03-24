@@ -10,6 +10,7 @@ pub enum Error {
     // Add customized errors here...
     NoArgs,
     Amount,
+    NoWitness,
 }
 
 impl From<SysError> for Error {
