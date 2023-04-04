@@ -8,18 +8,17 @@ use alloc;
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
-    ckb_constants::Source,
+    ckb_constants::{Source},
     ckb_types::{bytes::Bytes, prelude::*},
     debug,
-    high_level::{load_cell_data, load_cell_lock_hash, load_script},
-    syscalls::SysError,
+    high_level::{load_cell_lock_hash, load_script, load_cell_lock},
+    syscalls::{SysError},
 };
+use perun_common::perun_types::ChannelParameters;
 
 use crate::error::Error;
 
 pub fn main() -> Result<(), Error> {
-    // remove below examples and write your code here
-
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
     debug!("script args is {:?}", args);
@@ -29,21 +28,22 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::NoArgs);
     }
 
-    if check_owner_mode(&args)? {
-        return Ok(());
-    }
+    let params = ChannelParameters::from_slice(&args).expect("unable to parse args as channel parameters");
 
-    let inputs_amount = collect_inputs_amount()?;
-    let outputs_amount = collect_outputs_amount()?;
+    let is_participant = check_is_participant(&params)?;
 
-    if inputs_amount != outputs_amount {
-        return Err(Error::Amount);
+    if !is_participant {
+        return Err(Error::NotParticipant);
     }
 
     return Ok(());
 }
 
-pub fn check_owner_mode(args: &Bytes) -> Result<bool, Error> {
+// check_is_participant checks if the current transaction is executed by a channel participant.
+// It does so by checking if a pay2pubkeyhash cell to a channel participant is present in the inputs.
+pub fn check_is_participant(params: &ChannelParameters) -> Result<bool, Error> {
+    // look for a pay2pubkeyhash script in the inputs
+    let p2pkh_code_hash : Bytes = [0x9b, 0xd7, 0xe0, 0x6f, 0x3e, 0xcf, 0x4b, 0xe0, 0xf2, 0xfc, 0xd2, 0x18, 0x8b, 0x23, 0xf1, 0xb9, 0xfc, 0xc8, 0x8e, 0x5d, 0x4b, 0x65, 0xa8, 0x63, 0x7b, 0x17, 0x72, 0x3b, 0xbd, 0xa3, 0xcc, 0xe8].to_vec().into();
     for i in 0.. {
         // Loop over all input cells.
         let lock_hash = match load_cell_lock_hash(i, Source::Input) {
@@ -51,44 +51,14 @@ pub fn check_owner_mode(args: &Bytes) -> Result<bool, Error> {
             Err(SysError::IndexOutOfBound) => return Ok(false),
             Err(err) => return Err(err.into()),
         };
-        // This checks if the lock_hash matches the args. Also Rust assures,
-        // that both arrays must be of the same length, because lock_hash is
-        // always 32 bytes long.
-        if args[..] == lock_hash[..] {
-            let y = args[31];
-            return Ok(true);
+        if lock_hash[..] == p2pkh_code_hash[..] {
+            let payment_script = load_cell_lock(i, Source::Input).unwrap();
+            let payment_args: Bytes = payment_script.args().unpack();
+            if payment_args[..] == params.participants().nth0().payment_args().as_slice()[..] ||
+                payment_args[..] == params.participants().nth1().payment_args().as_slice()[..] {
+                return Ok(true);
+            }
         }
     }
     Ok(false)
-}
-
-const UDT_LEN: usize = 16;
-
-fn collect_inputs_amount() -> Result<u128, Error> {
-    collect_amount_for_source(Source::GroupInput)
-}
-
-fn collect_outputs_amount() -> Result<u128, Error> {
-    collect_amount_for_source(Source::GroupOutput)
-}
-
-fn collect_amount_for_source(s: Source) -> Result<u128, Error> {
-    let mut amount: u128 = 0;
-    let mut buf = [0u8; UDT_LEN];
-
-    for i in 0.. {
-        let data = match load_cell_data(i, s) {
-            Ok(data) => data,
-            Err(SysError::IndexOutOfBound) => break,
-            Err(err) => return Err(err.into()),
-        };
-
-        if data.len() != UDT_LEN {
-            return Err(Error::Encoding);
-        }
-        buf.copy_from_slice(&data);
-        amount += u128::from_le_bytes(buf);
-    }
-
-    Ok(amount)
 }

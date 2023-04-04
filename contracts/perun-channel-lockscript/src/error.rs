@@ -9,7 +9,7 @@ pub enum Error {
     Encoding,
     // Add customized errors here...
     NoArgs,
-    Amount,
+    NotParticipant,
 }
 
 impl From<SysError> for Error {
