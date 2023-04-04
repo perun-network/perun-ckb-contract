@@ -8,4 +8,5 @@ edition = "2021"
 
 [dependencies]
 ckb-std = "0.10.0"
+ckb-types = "0.108.0" 
 molecule = { version = "0.7.3", default-features = false }
