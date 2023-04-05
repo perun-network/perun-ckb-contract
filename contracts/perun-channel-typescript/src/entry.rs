@@ -1,5 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+use core::{result::Result};
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
@@ -11,11 +11,17 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
     debug,
-    high_level::{load_cell_data, load_cell_lock_hash, load_script},
-    syscalls::SysError,
+    high_level::{load_script, load_witness_args},
 };
-
+use perun_common::perun_types::{ChannelParameters, ChannelState, ChannelWitness, ChannelWitnessUnion, PubKey, Signature};
 use crate::error::Error;
+
+
+enum ChannelAction {
+    Progress {old_state: ChannelState, new_state: ChannelState},   // one PCTS input, one PCTS output
+    Start {new_state: ChannelState},      // no PCTS input, one PCTS output    
+    Close {old_state: ChannelState},      // one PCTS input , no PCTS output
+}
 
 pub fn main() -> Result<(), Error> {
     // remove below examples and write your code here
@@ -29,66 +35,49 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::NoArgs);
     }
 
-    if check_owner_mode(&args)? {
-        return Ok(());
+    let params = ChannelParameters::from_slice(&args).expect("unable to parse args as ChannelParameters");
+
+    // What if there is only an output?
+    let witness_args = load_witness_args(0, Source::GroupInput).unwrap();
+    let witness_bytes: Bytes = witness_args.input_type().to_opt().unwrap().unpack();
+    let channel_witness = ChannelWitness::from_slice(&witness_bytes).unwrap();
+
+    // Todo: figure out which kind of ChannelAction we are actually dealing with!
+    //load_cell_data(0, Source::GroupInput)?;
+    //load_cell_data(0, Source::GroupOutput)?;
+
+    let channel_action = ChannelAction::Progress{old_state: ChannelState::default(), new_state: ChannelState::default()};
+    match channel_action {
+        ChannelAction::Progress{old_state, new_state} => check_valid_progress(&old_state, &new_state, &channel_witness, &params),
+        ChannelAction::Start{new_state} => Err(todo!()),
+        ChannelAction::Close{old_state} => Err(todo!()),
     }
-
-    let inputs_amount = collect_inputs_amount()?;
-    let outputs_amount = collect_outputs_amount()?;
-
-    if inputs_amount != outputs_amount {
-        return Err(Error::Amount);
-    }
-
-    return Ok(());
 }
 
-pub fn check_owner_mode(args: &Bytes) -> Result<bool, Error> {
-    for i in 0.. {
-        // Loop over all input cells.
-        let lock_hash = match load_cell_lock_hash(i, Source::Input) {
-            Ok(lock_hash) => lock_hash,
-            Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(err) => return Err(err.into()),
-        };
-        // This checks if the lock_hash matches the args. Also Rust assures,
-        // that both arrays must be of the same length, because lock_hash is
-        // always 32 bytes long.
-        if args[..] == lock_hash[..] {
-            let y = args[31];
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-const UDT_LEN: usize = 16;
-
-fn collect_inputs_amount() -> Result<u128, Error> {
-    collect_amount_for_source(Source::GroupInput)
-}
-
-fn collect_outputs_amount() -> Result<u128, Error> {
-    collect_amount_for_source(Source::GroupOutput)
-}
-
-fn collect_amount_for_source(s: Source) -> Result<u128, Error> {
-    let mut amount: u128 = 0;
-    let mut buf = [0u8; UDT_LEN];
-
-    for i in 0.. {
-        let data = match load_cell_data(i, s) {
-            Ok(data) => data,
-            Err(SysError::IndexOutOfBound) => break,
-            Err(err) => return Err(err.into()),
-        };
-
-        if data.len() != UDT_LEN {
-            return Err(Error::Encoding);
-        }
-        buf.copy_from_slice(&data);
-        amount += u128::from_le_bytes(buf);
+pub fn check_valid_progress(old_state: &ChannelState, new_state: &ChannelState, witness: &ChannelWitness, params: &ChannelParameters) -> Result<(), Error> {
+    if old_state.channel_id().as_slice()[..] != new_state.channel_id().as_slice()[..] {
+        return Err(Error::ChannelIdMismatch);
     }
 
-    Ok(amount)
+
+    match witness.to_enum() {
+        ChannelWitnessUnion::Dispute(d) => {
+            check_increasing_version_number(old_state, new_state)?;
+            check_valid_state_sig(&d.sig_a(), new_state, &params.participants().nth0().pub_key())?;
+            check_valid_state_sig(&d.sig_b(), new_state, &params.participants().nth1().pub_key())?;
+            Ok(())
+        },
+        _ => Err(todo!()),
+    }
+}
+
+pub fn check_increasing_version_number(old_state: &ChannelState, new_state: &ChannelState) -> Result<(), Error> {
+    if u64::from_le_bytes(old_state.version().as_slice().try_into().unwrap()) < u64::from_le_bytes(new_state.version().as_slice().try_into().unwrap()) {
+        return Ok(())
+    }
+    Err(Error::DisputeWithInvalidVersionNumber)
+}
+
+pub fn check_valid_state_sig(sig: &Signature, state: &ChannelState, pub_key: &PubKey) -> Result<(), Error> {
+    Err(todo!())
 }
