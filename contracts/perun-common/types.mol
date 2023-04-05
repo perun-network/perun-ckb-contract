@@ -1,4 +1,5 @@
 import blockchain;
+
 /* Perun Types */
 array PaymentArgs [byte; 20];
 array PubKey [byte; 32];
@@ -24,14 +25,35 @@ struct ChannelParameters {
   nonce:        Byte32,
 }
 
+array Signature [byte; 65];
+
+
+array Start [byte; 1];
+
+array Fund [byte; 1];
+
+struct Dispute {
+  sig_a : Signature,
+  sig_b : Signature,
+}
+struct Close {
+  sig_a: Signature,
+  sig_b: Signature,
+}
+array ForceClose [byte; 1];
+
+
+union ChannelWitness {
+  Fund,
+  Start,
+  Dispute,
+  Close,
+  ForceClose,
+}
+
 table ChannelState {
   channel_id: Byte32,
   balances: Balances,
   version: Uint64,
   is_final: Bool,
 } 
-
-table PTSArgs {
-  params: ChannelParameters,
-  state: ChannelState,
-}
