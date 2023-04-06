@@ -1,7 +1,6 @@
 import blockchain;
 
 /* Perun Types */
-array PaymentArgs [byte; 20];
 array PubKey [byte; 32];
 
 array Balances [Uint128; 2];
@@ -14,29 +13,61 @@ union Bool {
   False,
 }
 
-struct Participant {
-  payment_args: PaymentArgs,
+array A [byte; 1];
+array B [byte; 1];
+
+union ParticipantIndex {
+  A,
+  B,
+}
+
+option App (Bytes);
+
+table Participant {
+  // unlock_args is the lock-script args which identify this channel participant.
+  // Specifically, this could be the payment args of this participant for a secp256k1_blake160_sighash_all script.
+  unlock_args: Bytes,
+  payment_args: Bytes,
   pub_key: PubKey,
 }
-array Participants [Participant; 2];
-
-struct ChannelParameters {
-  participants: Participants,
+table ChannelParameters {
+  party_a: Participant,
+  party_b: Participant,
   nonce:        Byte32,
+  challenge_duration: Uint64,
+  // The default should be NoApp!
+  app: App,
+  // This should always be set to true for, as we currently only support ledger channels.
+  is_ledger_channel: Bool,
+  // This should always be set to false for, as we currently do not support virtual channels.
+  is_virtual_channel: Bool,
+}
+
+table ChannelConstants {
+  params: ChannelParameters,
+  pfls_hash:     Byte32,
+  pcls_hash:     Byte32,
+  pcls_unlock_script_hash: Byte32,
+  payment_lock_hash: Byte32,
+  // This should propably be the ChannelID / the ChannelToken.
+  pfls_args: Bytes,
+  thread_token: ChannelToken,
 }
 
 array Signature [byte; 65];
 
 
-array Start [byte; 1];
-
-array Fund [byte; 1];
+table Fund {
+  index: ParticipantIndex,
+}
+array Abort [byte; 1];
 
 struct Dispute {
-  sig_a : Signature,
-  sig_b : Signature,
+  sig_a: Signature,
+  sig_b: Signature,
 }
-struct Close {
+table Close {
+  state: ChannelState,
   sig_a: Signature,
   sig_b: Signature,
 }
@@ -45,15 +76,29 @@ array ForceClose [byte; 1];
 
 union ChannelWitness {
   Fund,
-  Start,
+  Abort,
   Dispute,
   Close,
   ForceClose,
 }
 
 table ChannelState {
+  // 
   channel_id: Byte32,
   balances: Balances,
   version: Uint64,
   is_final: Bool,
 } 
+
+table ChannelStatus {
+  state: ChannelState,
+  timestamp: Uint64,
+  funded: Bool,
+  funding: Balances,
+  disputed: Bool,
+}
+
+struct ChannelToken {
+  out_point: OutPoint,
+
+}
