@@ -1,36 +1,40 @@
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
 
-// Import heap related library from `alloc`
-// https://doc.rust-lang.org/alloc/index.html
-use alloc;
-
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
-    ckb_constants::{Source},
-    ckb_types::{bytes::Bytes, prelude::*},
-    debug,
-    high_level::{load_cell_lock_hash, load_script, load_cell_lock},
-    syscalls::{SysError},
+    ckb_constants::Source,
+    ckb_types::{
+        bytes::Bytes,
+        packed::{Byte32, Script},
+        prelude::*,
+    },
+    high_level::{load_cell_lock, load_cell_lock_hash, load_cell_type, load_script},
+    syscalls::SysError,
 };
-use perun_common::perun_types::ChannelParameters;
-
-use crate::error::Error;
+use perun_common::{error::Error, perun_types::ChannelConstants};
 
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-    debug!("script args is {:?}", args);
-
     // return an error if args is invalid
-    if args.is_empty() {
-        return Err(Error::NoArgs);
+    if !args.is_empty() {
+        return Err(Error::PCLSWithArgs);
     }
 
-    let params = ChannelParameters::from_slice(&args).expect("unable to parse args as channel parameters");
+    let idx = get_own_input_index(&script)?;
+    let type_script = load_cell_type(idx, Source::Input)?.expect("type script not found");
+    let type_script_args: Bytes = type_script.args().unpack();
 
-    let is_participant = check_is_participant(&params)?;
+    let constants = ChannelConstants::from_slice(&type_script_args)
+        .expect("unable to parse args as channel parameters");
+
+    let is_participant = verify_is_participant(
+        &constants.pcls_unlock_script_hash(),
+        &constants.params().party_a().unlock_args().unpack(),
+        &constants.params().party_b().unlock_args().unpack(),
+    )?;
 
     if !is_participant {
         return Err(Error::NotParticipant);
@@ -41,9 +45,13 @@ pub fn main() -> Result<(), Error> {
 
 // check_is_participant checks if the current transaction is executed by a channel participant.
 // It does so by checking if a pay2pubkeyhash cell to a channel participant is present in the inputs.
-pub fn check_is_participant(params: &ChannelParameters) -> Result<bool, Error> {
+pub fn verify_is_participant(
+    unlock_script_hash: &Byte32,
+    unlock_args_a: &Bytes,
+    unlock_args_b: &Bytes,
+) -> Result<bool, Error> {
     // look for a pay2pubkeyhash script in the inputs
-    let p2pkh_code_hash : Bytes = [0x9b, 0xd7, 0xe0, 0x6f, 0x3e, 0xcf, 0x4b, 0xe0, 0xf2, 0xfc, 0xd2, 0x18, 0x8b, 0x23, 0xf1, 0xb9, 0xfc, 0xc8, 0x8e, 0x5d, 0x4b, 0x65, 0xa8, 0x63, 0x7b, 0x17, 0x72, 0x3b, 0xbd, 0xa3, 0xcc, 0xe8].to_vec().into();
+    let unlock_script_hash_array = unlock_script_hash.unpack();
     for i in 0.. {
         // Loop over all input cells.
         let lock_hash = match load_cell_lock_hash(i, Source::Input) {
@@ -51,14 +59,25 @@ pub fn check_is_participant(params: &ChannelParameters) -> Result<bool, Error> {
             Err(SysError::IndexOutOfBound) => return Ok(false),
             Err(err) => return Err(err.into()),
         };
-        if lock_hash[..] == p2pkh_code_hash[..] {
-            let payment_script = load_cell_lock(i, Source::Input).unwrap();
-            let payment_args: Bytes = payment_script.args().unpack();
-            if payment_args[..] == params.participants().nth0().payment_args().as_slice()[..] ||
-                payment_args[..] == params.participants().nth1().payment_args().as_slice()[..] {
+        if lock_hash[..] == unlock_script_hash_array[..] {
+            let unlock_script = load_cell_lock(i, Source::Input).unwrap();
+            let unlock_script_args: Bytes = unlock_script.args().unpack();
+            if unlock_script_args[..] == unlock_args_a[..]
+                || unlock_script_args[..] == unlock_args_b[..]
+            {
                 return Ok(true);
             }
         }
     }
     Ok(false)
+}
+
+pub fn get_own_input_index(own_script: &Script) -> Result<usize, Error> {
+    for i in 0.. {
+        let cell_lock_hash = load_cell_lock_hash(i, Source::Input)?;
+        if cell_lock_hash[..] == own_script.code_hash().unpack()[..] {
+            return Ok(i);
+        }
+    }
+    Err(Error::OwnIndexNotFound)
 }
