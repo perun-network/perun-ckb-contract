@@ -1,7 +1,11 @@
 use super::*;
 use ckb_testtool::ckb_error::Error;
-use ckb_testtool::ckb_types::{bytes::Bytes, core::TransactionBuilder, packed::*, prelude::*};
+use ckb_testtool::ckb_types::{
+    bytes::Bytes, core::HeaderBuilder, core::TransactionBuilder, packed::*, prelude::*,
+};
 use ckb_testtool::context::Context;
+use perun;
+use perun::test;
 
 const MAX_CYCLES: u64 = 10_000_000;
 
@@ -20,51 +24,46 @@ fn assert_script_error(err: Error, err_code: i8) {
 
 #[test]
 fn test_success() {
-    // deploy contract
+    // Deploy contracts into environment.
     let mut context = Context::default();
-    let contract_bin: Bytes = Loader::default().load_binary("perun-ckb-contract");
-    let out_point = context.deploy_cell(contract_bin);
+    let pe = perun::harness::prepare_env(&mut context).expect("preparing environment");
 
-    // prepare scripts
-    let lock_script = context
-        .build_script(&out_point, Bytes::from(vec![42]))
-        .expect("perun-cardano-contract");
-    let lock_script_dep = CellDep::new_builder().out_point(out_point).build();
-
-    // prepare cells
+    // Prepare cells.
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
             .capacity(1000u64.pack())
-            .lock(lock_script.clone())
+            .lock(pe.always_success_script.clone())
             .build(),
         Bytes::new(),
     );
+
+    // Prepare transaction fields.
     let input = CellInput::new_builder()
         .previous_output(input_out_point)
         .build();
     let outputs = vec![
         CellOutput::new_builder()
             .capacity(500u64.pack())
-            .lock(lock_script.clone())
+            .lock(pe.always_success_script.clone())
             .build(),
         CellOutput::new_builder()
             .capacity(500u64.pack())
-            .lock(lock_script)
+            .lock(pe.always_success_script.clone())
             .build(),
     ];
 
     let outputs_data = vec![Bytes::new(); 2];
 
-    // build transaction
+    // Build transaction.
     let tx = TransactionBuilder::default()
         .input(input)
         .outputs(outputs)
         .outputs_data(outputs_data.pack())
-        .cell_dep(lock_script_dep)
+        .cell_dep(pe.always_success_script_dep)
         .build();
     let tx = context.complete_tx(tx);
 
-    // run
+    // Run transaction.
     let cycles = context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("pass verification");
@@ -72,52 +71,98 @@ fn test_success() {
 }
 
 #[test]
-fn test_empty_args() {
-    // deploy contract
-    let mut context = Context::default();
-    let contract_bin: Bytes = Loader::default().load_binary("perun-ckb-contract");
-    let out_point = context.deploy_cell(contract_bin);
+fn channel_test_bench() {
+    [
+        test_funding_abort,
+        test_multiple_disputes,
+        test_successful_funding,
+    ]
+    .iter()
+    .for_each(|test| {
+        let mut context = Context::default();
+        let pe = perun::harness::prepare_env(&mut context).expect("preparing environment");
 
-    // prepare scripts
-    let lock_script = context
-        .build_script(&out_point, Default::default())
-        .expect("perun-cardano-contract");
-    let lock_script_dep = CellDep::new_builder().out_point(out_point).build();
+        test(&mut context, &pe);
+    });
+}
 
-    // prepare cells
-    let input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(1000u64.pack())
-            .lock(lock_script.clone())
-            .build(),
-        Bytes::new(),
-    );
-    let input = CellInput::new_builder()
-        .previous_output(input_out_point)
-        .build();
-    let outputs = vec![
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(lock_script.clone())
-            .build(),
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(lock_script)
-            .build(),
-    ];
+fn create_channel_test<P>(
+    _context: &mut Context,
+    _env: &perun::harness::Env,
+    _parts: &[P],
+    _test: impl Fn(&mut perun::channel::Channel<P, perun::State>) -> Result<(), perun::Error>,
+) {
+    // TODO: Implement test creation:
+    //
+    // Create the test channel struct containing all participants and make sure
+    // to prepare the context to allow deploying and using a channel.
+}
 
-    let outputs_data = vec![Bytes::new(); 2];
+fn test_funding_abort(context: &mut Context, env: &perun::harness::Env) {
+    let parts @ [alice, bob] = ["alice", "bob"];
+    let funding_timeout = 10;
+    let funding_agreement = test::FundingAgreement::new(parts.len());
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
 
-    // build transaction
-    let tx = TransactionBuilder::default()
-        .input(input)
-        .outputs(outputs)
-        .outputs_data(outputs_data.pack())
-        .cell_dep(lock_script_dep)
-        .build();
-    let tx = context.complete_tx(tx);
+        chan.delay(funding_timeout);
 
-    // run
-    let err = context.verify_tx(&tx, MAX_CYCLES).unwrap_err();
-    assert_script_error(err, ERROR_EMPTY_ARGS);
+        chan.with(bob)
+            .invalid()
+            .fund(&funding_agreement)
+            .expect("invalid funding channel");
+
+        chan.with(alice).abort().expect("aborting channel");
+
+        chan.assert();
+        Ok(())
+    });
+}
+
+fn test_successful_funding(context: &mut Context, env: &perun::harness::Env) {
+    let parts @ [alice, bob] = ["alice", "bob"];
+    let funding_agreement = test::FundingAgreement::new(parts.len());
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.assert();
+        Ok(())
+    });
+}
+
+fn test_multiple_disputes(context: &mut Context, env: &perun::harness::Env) {
+    let parts @ [alice, bob] = ["alice", "bob"];
+    let funding_agreement = test::FundingAgreement::new(parts.len());
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(alice)
+            .valid()
+            .dispute()
+            .expect("disputing channel");
+
+        chan.with(bob).valid().dispute().expect("disputing channel");
+
+        chan.with(alice)
+            .invalid()
+            .dispute()
+            .expect("disputing channel");
+
+        chan.assert();
+        Ok(())
+    });
 }
