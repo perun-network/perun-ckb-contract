@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+mod perun;
 #[cfg(test)]
 mod tests;
 
