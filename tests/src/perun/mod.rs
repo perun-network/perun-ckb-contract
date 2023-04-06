@@ -5,6 +5,8 @@ pub use error::*;
 
 pub mod channel;
 
+pub mod test;
+
 mod action;
 pub use action::*;
 
