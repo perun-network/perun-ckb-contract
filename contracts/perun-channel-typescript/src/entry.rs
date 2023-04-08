@@ -28,8 +28,6 @@ use perun_common::{
     },
 };
 
-pub const MAX_TIMESTAMP_DRIFT: u64 = 1000 * 15; // 20 seconds
-
 pub enum ChannelAction {
     Progress {
         old_status: ChannelStatus,
@@ -148,7 +146,6 @@ pub fn check_valid_progress(
             verify_channel_state_progression(&old_status.state(), &new_status.state())?;
             verify_status_funded(old_status)?;
             verify_status_disputed(new_status)?;
-            verify_correct_time_stamp(new_status.timestamp().unpack())?;
             verify_valid_state_sig(
                 &d.sig_a(),
                 &new_status.state(),
@@ -181,10 +178,7 @@ pub fn check_valid_close(
         }
         ChannelWitnessUnion::ForceClose(_) => {
             verify_status_funded(old_status)?;
-            verify_time_lock_expired(
-                channel_constants.params().challenge_duration().unpack(),
-                old_status.timestamp().unpack(),
-            )?;
+            verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
             verify_status_disputed(old_status)?;
             verify_all_payed(&old_status.funding(), channel_capacity, channel_constants)?;
             Ok(())
@@ -528,15 +522,9 @@ pub fn verify_all_payed(
     Ok(())
 }
 
-pub fn verify_correct_time_stamp(timestamp: u64) -> Result<(), Error> {
-    let current_time = find_closest_current_time();
-    if timestamp >= current_time && timestamp <= current_time + MAX_TIMESTAMP_DRIFT {
-        return Ok(());
-    }
-    Err(Error::InvalidTimestamp)
-}
-
-pub fn verify_time_lock_expired(time_lock: u64, old_timestamp: u64) -> Result<(), Error> {
+pub fn verify_time_lock_expired(time_lock: u64) -> Result<(), Error> {
+    let old_header = load_header(0, Source::GroupInput)?;
+    let old_timestamp = old_header.raw().timestamp().unpack();
     let current_time = find_closest_current_time();
     if old_timestamp + time_lock > current_time {
         return Err(Error::TimeLockNotExpired);
