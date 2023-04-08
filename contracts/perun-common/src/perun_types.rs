@@ -6032,7 +6032,6 @@ impl ::core::fmt::Display for ChannelStatus {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "state", self.state())?;
-        write!(f, ", {}: {}", "timestamp", self.timestamp())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
         write!(f, ", {}: {}", "funding", self.funding())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
@@ -6046,19 +6045,18 @@ impl ::core::fmt::Display for ChannelStatus {
 impl ::core::default::Default for ChannelStatus {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            171, 0, 0, 0, 24, 0, 0, 0, 121, 0, 0, 0, 129, 0, 0, 0, 134, 0, 0, 0, 166, 0, 0, 0, 97,
-            0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            159, 0, 0, 0, 20, 0, 0, 0, 117, 0, 0, 0, 122, 0, 0, 0, 154, 0, 0, 0, 97, 0, 0, 0, 20,
+            0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelStatus::new_unchecked(v.into())
     }
 }
 impl ChannelStatus {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6081,29 +6079,23 @@ impl ChannelStatus {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         ChannelState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn timestamp(&self) -> Uint64 {
+    pub fn funded(&self) -> Bool {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        Uint64::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn funded(&self) -> Bool {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
         Bool::new_unchecked(self.0.slice(start..end))
     }
     pub fn funding(&self) -> Balances {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
         Balances::new_unchecked(self.0.slice(start..end))
     }
     pub fn disputed(&self) -> Bool {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             Bool::new_unchecked(self.0.slice(start..end))
         } else {
             Bool::new_unchecked(self.0.slice(start..))
@@ -6137,7 +6129,6 @@ impl molecule::prelude::Entity for ChannelStatus {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .state(self.state())
-            .timestamp(self.timestamp())
             .funded(self.funded())
             .funding(self.funding())
             .disputed(self.disputed())
@@ -6163,7 +6154,6 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "state", self.state())?;
-        write!(f, ", {}: {}", "timestamp", self.timestamp())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
         write!(f, ", {}: {}", "funding", self.funding())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
@@ -6175,7 +6165,7 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
     }
 }
 impl<'r> ChannelStatusReader<'r> {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6198,29 +6188,23 @@ impl<'r> ChannelStatusReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         ChannelStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn timestamp(&self) -> Uint64Reader<'r> {
+    pub fn funded(&self) -> BoolReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn funded(&self) -> BoolReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
         BoolReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn funding(&self) -> BalancesReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
         BalancesReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn disputed(&self) -> BoolReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             BoolReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             BoolReader::new_unchecked(&self.as_slice()[start..])
@@ -6277,29 +6261,23 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelStatusReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         ChannelStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BoolReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        BalancesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        BoolReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        BoolReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        BalancesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        BoolReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct ChannelStatusBuilder {
     pub(crate) state: ChannelState,
-    pub(crate) timestamp: Uint64,
     pub(crate) funded: Bool,
     pub(crate) funding: Balances,
     pub(crate) disputed: Bool,
 }
 impl ChannelStatusBuilder {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 4;
     pub fn state(mut self, v: ChannelState) -> Self {
         self.state = v;
-        self
-    }
-    pub fn timestamp(mut self, v: Uint64) -> Self {
-        self.timestamp = v;
         self
     }
     pub fn funded(mut self, v: Bool) -> Self {
@@ -6321,7 +6299,6 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.state.as_slice().len()
-            + self.timestamp.as_slice().len()
             + self.funded.as_slice().len()
             + self.funding.as_slice().len()
             + self.disputed.as_slice().len()
@@ -6331,8 +6308,6 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
         total_size += self.state.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.timestamp.as_slice().len();
         offsets.push(total_size);
         total_size += self.funded.as_slice().len();
         offsets.push(total_size);
@@ -6344,7 +6319,6 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.state.as_slice())?;
-        writer.write_all(self.timestamp.as_slice())?;
         writer.write_all(self.funded.as_slice())?;
         writer.write_all(self.funding.as_slice())?;
         writer.write_all(self.disputed.as_slice())?;

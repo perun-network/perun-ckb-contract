@@ -92,7 +92,6 @@ table ChannelState {
 
 table ChannelStatus {
   state: ChannelState,
-  timestamp: Uint64,
   funded: Bool,
   funding: Balances,
   disputed: Bool,
