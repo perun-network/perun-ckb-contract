@@ -2,7 +2,9 @@
 use core::result::Result;
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc;
+use alloc::{self};
+
+//use secp256k1::{ecdsa, ffi::types::AlignedType, Message, PublicKey, Secp256k1};
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
@@ -24,8 +26,9 @@ use perun_common::{
     helpers::{blake2b256, is_matching_output},
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
-        ChannelWitness, ChannelWitnessUnion, PubKey, Signature,
+        ChannelWitness, ChannelWitnessUnion, CompressedPubKey, RecoverableSignature,
     },
+    sig::recover_signer,
 };
 
 pub enum ChannelAction {
@@ -228,11 +231,19 @@ pub fn verify_increasing_version_number(
 }
 
 pub fn verify_valid_state_sig(
-    sig: &Signature,
+    sig: &RecoverableSignature,
     state: &ChannelState,
-    pub_key: &PubKey,
+    pub_key: &CompressedPubKey,
 ) -> Result<(), Error> {
-    Err(todo!())
+    let mut sig_bytes: [u8; 65] = [0u8; 65];
+    sig_bytes.clone_from_slice(&sig.as_slice());
+    let state_hash = blake2b256(state.as_slice());
+    let signer = recover_signer(&state_hash, &sig_bytes)?;
+    let expected_pub_key = pub_key.raw_data();
+    if signer[..] != expected_pub_key[..] {
+        return Err(Error::InvalidSignature);
+    }
+    Ok(())
 }
 
 pub fn verify_state_not_finalized(state: &ChannelState) -> Result<(), Error> {
