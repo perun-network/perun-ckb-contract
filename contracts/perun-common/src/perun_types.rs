@@ -6,8 +6,8 @@ use ckb_types::prelude::*;
 use molecule::prelude::*;
 
 #[derive(Clone)]
-pub struct PubKey(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for PubKey {
+pub struct CompressedPubKey(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for CompressedPubKey {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -16,31 +16,31 @@ impl ::core::fmt::LowerHex for PubKey {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for PubKey {
+impl ::core::fmt::Debug for CompressedPubKey {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for PubKey {
+impl ::core::fmt::Display for CompressedPubKey {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         let raw_data = hex_string(&self.raw_data());
         write!(f, "{}(0x{})", Self::NAME, raw_data)
     }
 }
-impl ::core::default::Default for PubKey {
+impl ::core::default::Default for CompressedPubKey {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
+            0, 0, 0, 0,
         ];
-        PubKey::new_unchecked(v.into())
+        CompressedPubKey::new_unchecked(v.into())
     }
 }
-impl PubKey {
-    pub const TOTAL_SIZE: usize = 32;
+impl CompressedPubKey {
+    pub const TOTAL_SIZE: usize = 33;
     pub const ITEM_SIZE: usize = 1;
-    pub const ITEM_COUNT: usize = 32;
+    pub const ITEM_COUNT: usize = 33;
     pub fn nth0(&self) -> Byte {
         Byte::new_unchecked(self.0.slice(0..1))
     }
@@ -137,18 +137,21 @@ impl PubKey {
     pub fn nth31(&self) -> Byte {
         Byte::new_unchecked(self.0.slice(31..32))
     }
+    pub fn nth32(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(32..33))
+    }
     pub fn raw_data(&self) -> molecule::bytes::Bytes {
         self.as_bytes()
     }
-    pub fn as_reader<'r>(&'r self) -> PubKeyReader<'r> {
-        PubKeyReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> CompressedPubKeyReader<'r> {
+        CompressedPubKeyReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for PubKey {
-    type Builder = PubKeyBuilder;
-    const NAME: &'static str = "PubKey";
+impl molecule::prelude::Entity for CompressedPubKey {
+    type Builder = CompressedPubKeyBuilder;
+    const NAME: &'static str = "CompressedPubKey";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        PubKey(data)
+        CompressedPubKey(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -157,10 +160,10 @@ impl molecule::prelude::Entity for PubKey {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        PubKeyReader::from_slice(slice).map(|reader| reader.to_entity())
+        CompressedPubKeyReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        PubKeyReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        CompressedPubKeyReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -199,12 +202,13 @@ impl molecule::prelude::Entity for PubKey {
             self.nth29(),
             self.nth30(),
             self.nth31(),
+            self.nth32(),
         ])
     }
 }
 #[derive(Clone, Copy)]
-pub struct PubKeyReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for PubKeyReader<'r> {
+pub struct CompressedPubKeyReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for CompressedPubKeyReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -213,22 +217,22 @@ impl<'r> ::core::fmt::LowerHex for PubKeyReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for PubKeyReader<'r> {
+impl<'r> ::core::fmt::Debug for CompressedPubKeyReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for PubKeyReader<'r> {
+impl<'r> ::core::fmt::Display for CompressedPubKeyReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         let raw_data = hex_string(&self.raw_data());
         write!(f, "{}(0x{})", Self::NAME, raw_data)
     }
 }
-impl<'r> PubKeyReader<'r> {
-    pub const TOTAL_SIZE: usize = 32;
+impl<'r> CompressedPubKeyReader<'r> {
+    pub const TOTAL_SIZE: usize = 33;
     pub const ITEM_SIZE: usize = 1;
-    pub const ITEM_COUNT: usize = 32;
+    pub const ITEM_COUNT: usize = 33;
     pub fn nth0(&self) -> ByteReader<'r> {
         ByteReader::new_unchecked(&self.as_slice()[0..1])
     }
@@ -325,18 +329,21 @@ impl<'r> PubKeyReader<'r> {
     pub fn nth31(&self) -> ByteReader<'r> {
         ByteReader::new_unchecked(&self.as_slice()[31..32])
     }
+    pub fn nth32(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[32..33])
+    }
     pub fn raw_data(&self) -> &'r [u8] {
         self.as_slice()
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for PubKeyReader<'r> {
-    type Entity = PubKey;
-    const NAME: &'static str = "PubKeyReader";
+impl<'r> molecule::prelude::Reader<'r> for CompressedPubKeyReader<'r> {
+    type Entity = CompressedPubKey;
+    const NAME: &'static str = "CompressedPubKeyReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        PubKeyReader(slice)
+        CompressedPubKeyReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -350,15 +357,16 @@ impl<'r> molecule::prelude::Reader<'r> for PubKeyReader<'r> {
         Ok(())
     }
 }
-pub struct PubKeyBuilder(pub(crate) [Byte; 32]);
-impl ::core::fmt::Debug for PubKeyBuilder {
+pub struct CompressedPubKeyBuilder(pub(crate) [Byte; 33]);
+impl ::core::fmt::Debug for CompressedPubKeyBuilder {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:?})", Self::NAME, &self.0[..])
     }
 }
-impl ::core::default::Default for PubKeyBuilder {
+impl ::core::default::Default for CompressedPubKeyBuilder {
     fn default() -> Self {
-        PubKeyBuilder([
+        CompressedPubKeyBuilder([
+            Byte::default(),
             Byte::default(),
             Byte::default(),
             Byte::default(),
@@ -394,11 +402,11 @@ impl ::core::default::Default for PubKeyBuilder {
         ])
     }
 }
-impl PubKeyBuilder {
-    pub const TOTAL_SIZE: usize = 32;
+impl CompressedPubKeyBuilder {
+    pub const TOTAL_SIZE: usize = 33;
     pub const ITEM_SIZE: usize = 1;
-    pub const ITEM_COUNT: usize = 32;
-    pub fn set(mut self, v: [Byte; 32]) -> Self {
+    pub const ITEM_COUNT: usize = 33;
+    pub fn set(mut self, v: [Byte; 33]) -> Self {
         self.0 = v;
         self
     }
@@ -530,10 +538,14 @@ impl PubKeyBuilder {
         self.0[31] = v;
         self
     }
+    pub fn nth32(mut self, v: Byte) -> Self {
+        self.0[32] = v;
+        self
+    }
 }
-impl molecule::prelude::Builder for PubKeyBuilder {
-    type Entity = PubKey;
-    const NAME: &'static str = "PubKeyBuilder";
+impl molecule::prelude::Builder for CompressedPubKeyBuilder {
+    type Entity = CompressedPubKey;
+    const NAME: &'static str = "CompressedPubKeyBuilder";
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
@@ -570,13 +582,14 @@ impl molecule::prelude::Builder for PubKeyBuilder {
         writer.write_all(self.0[29].as_slice())?;
         writer.write_all(self.0[30].as_slice())?;
         writer.write_all(self.0[31].as_slice())?;
+        writer.write_all(self.0[32].as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        PubKey::new_unchecked(inner.into())
+        CompressedPubKey::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -2192,8 +2205,8 @@ impl ::core::fmt::Display for Participant {
 impl ::core::default::Default for Participant {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            56, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            57, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         Participant::new_unchecked(v.into())
     }
@@ -2228,14 +2241,14 @@ impl Participant {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Bytes::new_unchecked(self.0.slice(start..end))
     }
-    pub fn pub_key(&self) -> PubKey {
+    pub fn pub_key(&self) -> CompressedPubKey {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            PubKey::new_unchecked(self.0.slice(start..end))
+            CompressedPubKey::new_unchecked(self.0.slice(start..end))
         } else {
-            PubKey::new_unchecked(self.0.slice(start..))
+            CompressedPubKey::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> ParticipantReader<'r> {
@@ -2329,14 +2342,14 @@ impl<'r> ParticipantReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         BytesReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn pub_key(&self) -> PubKeyReader<'r> {
+    pub fn pub_key(&self) -> CompressedPubKeyReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            PubKeyReader::new_unchecked(&self.as_slice()[start..end])
+            CompressedPubKeyReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            PubKeyReader::new_unchecked(&self.as_slice()[start..])
+            CompressedPubKeyReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -2391,7 +2404,7 @@ impl<'r> molecule::prelude::Reader<'r> for ParticipantReader<'r> {
         }
         BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        PubKeyReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        CompressedPubKeyReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -2399,7 +2412,7 @@ impl<'r> molecule::prelude::Reader<'r> for ParticipantReader<'r> {
 pub struct ParticipantBuilder {
     pub(crate) unlock_args: Bytes,
     pub(crate) payment_args: Bytes,
-    pub(crate) pub_key: PubKey,
+    pub(crate) pub_key: CompressedPubKey,
 }
 impl ParticipantBuilder {
     pub const FIELD_COUNT: usize = 3;
@@ -2411,7 +2424,7 @@ impl ParticipantBuilder {
         self.payment_args = v;
         self
     }
-    pub fn pub_key(mut self, v: PubKey) -> Self {
+    pub fn pub_key(mut self, v: CompressedPubKey) -> Self {
         self.pub_key = v;
         self
     }
@@ -2496,13 +2509,13 @@ impl ::core::fmt::Display for ChannelParameters {
 impl ::core::default::Default for ChannelParameters {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            194, 0, 0, 0, 32, 0, 0, 0, 88, 0, 0, 0, 144, 0, 0, 0, 176, 0, 0, 0, 184, 0, 0, 0, 184,
-            0, 0, 0, 189, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0,
+            196, 0, 0, 0, 32, 0, 0, 0, 89, 0, 0, 0, 146, 0, 0, 0, 178, 0, 0, 0, 186, 0, 0, 0, 186,
+            0, 0, 0, 191, 0, 0, 0, 57, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 57, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelParameters::new_unchecked(v.into())
     }
@@ -2906,20 +2919,20 @@ impl ::core::fmt::Display for ChannelConstants {
 impl ::core::default::Default for ChannelConstants {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            138, 1, 0, 0, 32, 0, 0, 0, 226, 0, 0, 0, 2, 1, 0, 0, 34, 1, 0, 0, 66, 1, 0, 0, 98, 1,
-            0, 0, 102, 1, 0, 0, 194, 0, 0, 0, 32, 0, 0, 0, 88, 0, 0, 0, 144, 0, 0, 0, 176, 0, 0, 0,
-            184, 0, 0, 0, 184, 0, 0, 0, 189, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0,
+            140, 1, 0, 0, 32, 0, 0, 0, 228, 0, 0, 0, 4, 1, 0, 0, 36, 1, 0, 0, 68, 1, 0, 0, 100, 1,
+            0, 0, 104, 1, 0, 0, 196, 0, 0, 0, 32, 0, 0, 0, 89, 0, 0, 0, 146, 0, 0, 0, 178, 0, 0, 0,
+            186, 0, 0, 0, 186, 0, 0, 0, 191, 0, 0, 0, 57, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 57, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelConstants::new_unchecked(v.into())
     }
@@ -3278,8 +3291,8 @@ impl molecule::prelude::Builder for ChannelConstantsBuilder {
     }
 }
 #[derive(Clone)]
-pub struct Signature(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for Signature {
+pub struct RecoverableSignature(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for RecoverableSignature {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -3288,29 +3301,29 @@ impl ::core::fmt::LowerHex for Signature {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for Signature {
+impl ::core::fmt::Debug for RecoverableSignature {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for Signature {
+impl ::core::fmt::Display for RecoverableSignature {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         let raw_data = hex_string(&self.raw_data());
         write!(f, "{}(0x{})", Self::NAME, raw_data)
     }
 }
-impl ::core::default::Default for Signature {
+impl ::core::default::Default for RecoverableSignature {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0,
         ];
-        Signature::new_unchecked(v.into())
+        RecoverableSignature::new_unchecked(v.into())
     }
 }
-impl Signature {
+impl RecoverableSignature {
     pub const TOTAL_SIZE: usize = 65;
     pub const ITEM_SIZE: usize = 1;
     pub const ITEM_COUNT: usize = 65;
@@ -3512,15 +3525,15 @@ impl Signature {
     pub fn raw_data(&self) -> molecule::bytes::Bytes {
         self.as_bytes()
     }
-    pub fn as_reader<'r>(&'r self) -> SignatureReader<'r> {
-        SignatureReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> RecoverableSignatureReader<'r> {
+        RecoverableSignatureReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for Signature {
-    type Builder = SignatureBuilder;
-    const NAME: &'static str = "Signature";
+impl molecule::prelude::Entity for RecoverableSignature {
+    type Builder = RecoverableSignatureBuilder;
+    const NAME: &'static str = "RecoverableSignature";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        Signature(data)
+        RecoverableSignature(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -3529,10 +3542,10 @@ impl molecule::prelude::Entity for Signature {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        SignatureReader::from_slice(slice).map(|reader| reader.to_entity())
+        RecoverableSignatureReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        SignatureReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        RecoverableSignatureReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -3608,8 +3621,8 @@ impl molecule::prelude::Entity for Signature {
     }
 }
 #[derive(Clone, Copy)]
-pub struct SignatureReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for SignatureReader<'r> {
+pub struct RecoverableSignatureReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for RecoverableSignatureReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -3618,19 +3631,19 @@ impl<'r> ::core::fmt::LowerHex for SignatureReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for SignatureReader<'r> {
+impl<'r> ::core::fmt::Debug for RecoverableSignatureReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for SignatureReader<'r> {
+impl<'r> ::core::fmt::Display for RecoverableSignatureReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         let raw_data = hex_string(&self.raw_data());
         write!(f, "{}(0x{})", Self::NAME, raw_data)
     }
 }
-impl<'r> SignatureReader<'r> {
+impl<'r> RecoverableSignatureReader<'r> {
     pub const TOTAL_SIZE: usize = 65;
     pub const ITEM_SIZE: usize = 1;
     pub const ITEM_COUNT: usize = 65;
@@ -3833,14 +3846,14 @@ impl<'r> SignatureReader<'r> {
         self.as_slice()
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for SignatureReader<'r> {
-    type Entity = Signature;
-    const NAME: &'static str = "SignatureReader";
+impl<'r> molecule::prelude::Reader<'r> for RecoverableSignatureReader<'r> {
+    type Entity = RecoverableSignature;
+    const NAME: &'static str = "RecoverableSignatureReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        SignatureReader(slice)
+        RecoverableSignatureReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -3854,15 +3867,15 @@ impl<'r> molecule::prelude::Reader<'r> for SignatureReader<'r> {
         Ok(())
     }
 }
-pub struct SignatureBuilder(pub(crate) [Byte; 65]);
-impl ::core::fmt::Debug for SignatureBuilder {
+pub struct RecoverableSignatureBuilder(pub(crate) [Byte; 65]);
+impl ::core::fmt::Debug for RecoverableSignatureBuilder {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:?})", Self::NAME, &self.0[..])
     }
 }
-impl ::core::default::Default for SignatureBuilder {
+impl ::core::default::Default for RecoverableSignatureBuilder {
     fn default() -> Self {
-        SignatureBuilder([
+        RecoverableSignatureBuilder([
             Byte::default(),
             Byte::default(),
             Byte::default(),
@@ -3931,7 +3944,7 @@ impl ::core::default::Default for SignatureBuilder {
         ])
     }
 }
-impl SignatureBuilder {
+impl RecoverableSignatureBuilder {
     pub const TOTAL_SIZE: usize = 65;
     pub const ITEM_SIZE: usize = 1;
     pub const ITEM_COUNT: usize = 65;
@@ -4200,9 +4213,9 @@ impl SignatureBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for SignatureBuilder {
-    type Entity = Signature;
-    const NAME: &'static str = "SignatureBuilder";
+impl molecule::prelude::Builder for RecoverableSignatureBuilder {
+    type Entity = RecoverableSignature;
+    const NAME: &'static str = "RecoverableSignatureBuilder";
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
@@ -4278,7 +4291,7 @@ impl molecule::prelude::Builder for SignatureBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        Signature::new_unchecked(inner.into())
+        RecoverableSignature::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -4720,11 +4733,11 @@ impl Dispute {
     pub const TOTAL_SIZE: usize = 130;
     pub const FIELD_SIZES: [usize; 2] = [65, 65];
     pub const FIELD_COUNT: usize = 2;
-    pub fn sig_a(&self) -> Signature {
-        Signature::new_unchecked(self.0.slice(0..65))
+    pub fn sig_a(&self) -> RecoverableSignature {
+        RecoverableSignature::new_unchecked(self.0.slice(0..65))
     }
-    pub fn sig_b(&self) -> Signature {
-        Signature::new_unchecked(self.0.slice(65..130))
+    pub fn sig_b(&self) -> RecoverableSignature {
+        RecoverableSignature::new_unchecked(self.0.slice(65..130))
     }
     pub fn as_reader<'r>(&'r self) -> DisputeReader<'r> {
         DisputeReader::new_unchecked(self.as_slice())
@@ -4783,11 +4796,11 @@ impl<'r> DisputeReader<'r> {
     pub const TOTAL_SIZE: usize = 130;
     pub const FIELD_SIZES: [usize; 2] = [65, 65];
     pub const FIELD_COUNT: usize = 2;
-    pub fn sig_a(&self) -> SignatureReader<'r> {
-        SignatureReader::new_unchecked(&self.as_slice()[0..65])
+    pub fn sig_a(&self) -> RecoverableSignatureReader<'r> {
+        RecoverableSignatureReader::new_unchecked(&self.as_slice()[0..65])
     }
-    pub fn sig_b(&self) -> SignatureReader<'r> {
-        SignatureReader::new_unchecked(&self.as_slice()[65..130])
+    pub fn sig_b(&self) -> RecoverableSignatureReader<'r> {
+        RecoverableSignatureReader::new_unchecked(&self.as_slice()[65..130])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for DisputeReader<'r> {
@@ -4813,18 +4826,18 @@ impl<'r> molecule::prelude::Reader<'r> for DisputeReader<'r> {
 }
 #[derive(Debug, Default)]
 pub struct DisputeBuilder {
-    pub(crate) sig_a: Signature,
-    pub(crate) sig_b: Signature,
+    pub(crate) sig_a: RecoverableSignature,
+    pub(crate) sig_b: RecoverableSignature,
 }
 impl DisputeBuilder {
     pub const TOTAL_SIZE: usize = 130;
     pub const FIELD_SIZES: [usize; 2] = [65, 65];
     pub const FIELD_COUNT: usize = 2;
-    pub fn sig_a(mut self, v: Signature) -> Self {
+    pub fn sig_a(mut self, v: RecoverableSignature) -> Self {
         self.sig_a = v;
         self
     }
-    pub fn sig_b(mut self, v: Signature) -> Self {
+    pub fn sig_b(mut self, v: RecoverableSignature) -> Self {
         self.sig_b = v;
         self
     }
@@ -4916,20 +4929,20 @@ impl Close {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         ChannelState::new_unchecked(self.0.slice(start..end))
     }
-    pub fn sig_a(&self) -> Signature {
+    pub fn sig_a(&self) -> RecoverableSignature {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        Signature::new_unchecked(self.0.slice(start..end))
+        RecoverableSignature::new_unchecked(self.0.slice(start..end))
     }
-    pub fn sig_b(&self) -> Signature {
+    pub fn sig_b(&self) -> RecoverableSignature {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            Signature::new_unchecked(self.0.slice(start..end))
+            RecoverableSignature::new_unchecked(self.0.slice(start..end))
         } else {
-            Signature::new_unchecked(self.0.slice(start..))
+            RecoverableSignature::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> CloseReader<'r> {
@@ -5017,20 +5030,20 @@ impl<'r> CloseReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         ChannelStateReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn sig_a(&self) -> SignatureReader<'r> {
+    pub fn sig_a(&self) -> RecoverableSignatureReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
-        SignatureReader::new_unchecked(&self.as_slice()[start..end])
+        RecoverableSignatureReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn sig_b(&self) -> SignatureReader<'r> {
+    pub fn sig_b(&self) -> RecoverableSignatureReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            SignatureReader::new_unchecked(&self.as_slice()[start..end])
+            RecoverableSignatureReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            SignatureReader::new_unchecked(&self.as_slice()[start..])
+            RecoverableSignatureReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -5084,16 +5097,16 @@ impl<'r> molecule::prelude::Reader<'r> for CloseReader<'r> {
             return ve!(Self, OffsetsNotMatch);
         }
         ChannelStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        SignatureReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        SignatureReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        RecoverableSignatureReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        RecoverableSignatureReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct CloseBuilder {
     pub(crate) state: ChannelState,
-    pub(crate) sig_a: Signature,
-    pub(crate) sig_b: Signature,
+    pub(crate) sig_a: RecoverableSignature,
+    pub(crate) sig_b: RecoverableSignature,
 }
 impl CloseBuilder {
     pub const FIELD_COUNT: usize = 3;
@@ -5101,11 +5114,11 @@ impl CloseBuilder {
         self.state = v;
         self
     }
-    pub fn sig_a(mut self, v: Signature) -> Self {
+    pub fn sig_a(mut self, v: RecoverableSignature) -> Self {
         self.sig_a = v;
         self
     }
-    pub fn sig_b(mut self, v: Signature) -> Self {
+    pub fn sig_b(mut self, v: RecoverableSignature) -> Self {
         self.sig_b = v;
         self
     }

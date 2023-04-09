@@ -60,7 +60,8 @@ pub enum Error {
     NotAllPayed,
     TimeLockNotExpired,
     InvalidTimestamp,
-    UnableToLoadAnyChannelStatus
+    UnableToLoadAnyChannelStatus,
+    InvalidSignature,
 }
 
 impl From<SysError> for Error {

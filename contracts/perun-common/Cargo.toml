@@ -9,6 +9,7 @@ edition = "2021"
 ckb-std = "0.10.0"
 blake2b-rs = "0.2.0"
 ckb-types = { package = "ckb-standalone-types", version = "0.1.2", default-features = false }
+k256 = { version = "0.11.6", default-features = false, features = ["ecdsa", "keccak256", "arithmetic"]}
 
 [dependencies.molecule]
 version = "0.7.3"

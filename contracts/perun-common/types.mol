@@ -1,7 +1,7 @@
 import blockchain;
 
 /* Perun Types */
-array PubKey [byte; 32];
+array CompressedPubKey [byte; 33];
 
 array Balances [Uint128; 2];
 
@@ -28,7 +28,7 @@ table Participant {
   // Specifically, this could be the payment args of this participant for a secp256k1_blake160_sighash_all script.
   unlock_args: Bytes,
   payment_args: Bytes,
-  pub_key: PubKey,
+  pub_key: CompressedPubKey,
 }
 table ChannelParameters {
   party_a: Participant,
@@ -54,7 +54,7 @@ table ChannelConstants {
   thread_token: ChannelToken,
 }
 
-array Signature [byte; 65];
+array RecoverableSignature [byte; 65];
 
 
 table Fund {
@@ -63,13 +63,13 @@ table Fund {
 array Abort [byte; 1];
 
 struct Dispute {
-  sig_a: Signature,
-  sig_b: Signature,
+  sig_a: RecoverableSignature,
+  sig_b: RecoverableSignature,
 }
 table Close {
   state: ChannelState,
-  sig_a: Signature,
-  sig_b: Signature,
+  sig_a: RecoverableSignature,
+  sig_b: RecoverableSignature,
 }
 array ForceClose [byte; 1];
 

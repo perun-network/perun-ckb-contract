@@ -1,10 +1,9 @@
 use blake2b_rs::Blake2bBuilder;
 use ckb_types::packed::{CellOutput, Script};
-use ckb_types::prelude::Unpack;
-use ckb_types::{prelude::Entity};
+use ckb_types::prelude::{Entity, Unpack};
 
 use crate::error::Error;
-use crate::perun_types::{Bool, BoolUnion, Balances, ParticipantIndex, ParticipantIndexUnion};
+use crate::perun_types::{Balances, Bool, BoolUnion, ParticipantIndex, ParticipantIndexUnion};
 
 impl Bool {
     pub fn to_bool(&self) -> bool {
@@ -51,19 +50,23 @@ impl Balances {
 }
 
 pub fn geq_components(fst: &Balances, snd: &Balances) -> bool {
-    let a_fst =fst.nth0().unpack();
+    let a_fst = fst.nth0().unpack();
     let a_snd = snd.nth0().unpack();
     let b_fst = fst.nth1().unpack();
     let b_snd = snd.nth1().unpack();
     a_fst >= a_snd && b_fst >= b_snd
 }
 
-pub fn is_matching_output(output: &CellOutput, own_lock_script: &Script, own_type_script: &Script) -> bool {
+pub fn is_matching_output(
+    output: &CellOutput,
+    own_lock_script: &Script,
+    own_type_script: &Script,
+) -> bool {
     let out_lock = output.lock();
     let out_type = output.type_().to_opt();
     if own_lock_script.as_slice()[..] != out_lock.as_slice()[..] {
         return false;
-    }   
+    }
     if out_type.is_none() {
         return false;
     }
@@ -73,12 +76,12 @@ pub fn is_matching_output(output: &CellOutput, own_lock_script: &Script, own_typ
 
 pub const CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
 
-pub fn blake2b256(data : &[u8]) -> [u8; 32] {
+pub fn blake2b256(data: &[u8]) -> [u8; 32] {
     let mut result = [0u8; 32];
     let mut blake2b = Blake2bBuilder::new(32)
         .personal(CKB_HASH_PERSONALIZATION)
         .build();
     blake2b.update(data);
     blake2b.finalize(&mut result);
-    result    
+    result
 }
