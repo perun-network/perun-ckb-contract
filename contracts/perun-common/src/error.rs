@@ -63,6 +63,8 @@ pub enum Error {
     UnableToLoadAnyChannelStatus,
     InvalidSignature,
     InvalidMessage,
+    InvalidPFLSInOutputs,
+    PCTSNotFound,
 }
 
 impl From<SysError> for Error {

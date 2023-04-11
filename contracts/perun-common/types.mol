@@ -99,5 +99,9 @@ table ChannelStatus {
 
 struct ChannelToken {
   out_point: OutPoint,
+}
 
+struct PFLSArgs {
+  pcts_hash: Byte32,
+  thread_token: ChannelToken,
 }

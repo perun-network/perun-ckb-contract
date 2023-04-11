@@ -6494,3 +6494,170 @@ impl molecule::prelude::Builder for ChannelTokenBuilder {
         ChannelToken::new_unchecked(inner.into())
     }
 }
+#[derive(Clone)]
+pub struct PFLSArgs(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for PFLSArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for PFLSArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for PFLSArgs {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "pcts_hash", self.pcts_hash())?;
+        write!(f, ", {}: {}", "thread_token", self.thread_token())?;
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for PFLSArgs {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        PFLSArgs::new_unchecked(v.into())
+    }
+}
+impl PFLSArgs {
+    pub const TOTAL_SIZE: usize = 68;
+    pub const FIELD_SIZES: [usize; 2] = [32, 36];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn pcts_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(0..32))
+    }
+    pub fn thread_token(&self) -> ChannelToken {
+        ChannelToken::new_unchecked(self.0.slice(32..68))
+    }
+    pub fn as_reader<'r>(&'r self) -> PFLSArgsReader<'r> {
+        PFLSArgsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for PFLSArgs {
+    type Builder = PFLSArgsBuilder;
+    const NAME: &'static str = "PFLSArgs";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        PFLSArgs(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        PFLSArgsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        PFLSArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .pcts_hash(self.pcts_hash())
+            .thread_token(self.thread_token())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct PFLSArgsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for PFLSArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for PFLSArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for PFLSArgsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "pcts_hash", self.pcts_hash())?;
+        write!(f, ", {}: {}", "thread_token", self.thread_token())?;
+        write!(f, " }}")
+    }
+}
+impl<'r> PFLSArgsReader<'r> {
+    pub const TOTAL_SIZE: usize = 68;
+    pub const FIELD_SIZES: [usize; 2] = [32, 36];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn pcts_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    }
+    pub fn thread_token(&self) -> ChannelTokenReader<'r> {
+        ChannelTokenReader::new_unchecked(&self.as_slice()[32..68])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for PFLSArgsReader<'r> {
+    type Entity = PFLSArgs;
+    const NAME: &'static str = "PFLSArgsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        PFLSArgsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct PFLSArgsBuilder {
+    pub(crate) pcts_hash: Byte32,
+    pub(crate) thread_token: ChannelToken,
+}
+impl PFLSArgsBuilder {
+    pub const TOTAL_SIZE: usize = 68;
+    pub const FIELD_SIZES: [usize; 2] = [32, 36];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn pcts_hash(mut self, v: Byte32) -> Self {
+        self.pcts_hash = v;
+        self
+    }
+    pub fn thread_token(mut self, v: ChannelToken) -> Self {
+        self.thread_token = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for PFLSArgsBuilder {
+    type Entity = PFLSArgs;
+    const NAME: &'static str = "PFLSArgsBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(self.pcts_hash.as_slice())?;
+        writer.write_all(self.thread_token.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        PFLSArgs::new_unchecked(inner.into())
+    }
+}
