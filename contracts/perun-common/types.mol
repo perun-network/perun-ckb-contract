@@ -27,6 +27,8 @@ table Participant {
   // unlock_args is the lock-script args which identify this channel participant.
   // Specifically, this could be the payment args of this participant for a secp256k1_blake160_sighash_all script.
   unlock_args: Bytes,
+  // payment_args is the lock-script args which must be used to pay out to this participant in the args field
+  // of an output with the payment_lock_hash agreed upon in the ChannelConstants.
   payment_args: Bytes,
   pub_key: CompressedPubKey,
 }
@@ -45,12 +47,16 @@ table ChannelParameters {
 
 table ChannelConstants {
   params: ChannelParameters,
+  // pfls_hash specifies the lock_script that guards funds for this channel.
+  // Specifically, this should be the perun-funding-lockscript.
   pfls_hash:     Byte32,
+  // pcls_hash specifies the lock_script used for this channel.
+  // Specifically, this should be the perun-channel-lockscript.
   pcls_hash:     Byte32,
+  // pcls_unlock_script_hash specifies the unlock script that must be present for the pcls to allow a transaction to interact with the channel.
   pcls_unlock_script_hash: Byte32,
+  // payment_lock_hash specifies the script used to pay out channel participants
   payment_lock_hash: Byte32,
-  // This should propably be the ChannelID / the ChannelToken.
-  pfls_args: Bytes,
   thread_token: ChannelToken,
 }
 
