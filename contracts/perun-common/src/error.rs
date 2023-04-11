@@ -62,6 +62,7 @@ pub enum Error {
     InvalidTimestamp,
     UnableToLoadAnyChannelStatus,
     InvalidSignature,
+    InvalidMessage,
 }
 
 impl From<SysError> for Error {

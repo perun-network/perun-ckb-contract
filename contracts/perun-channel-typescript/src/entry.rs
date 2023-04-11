@@ -235,10 +235,7 @@ pub fn verify_valid_state_sig(
     state: &ChannelState,
     pub_key: &CompressedPubKey,
 ) -> Result<(), Error> {
-    let mut sig_bytes: [u8; 65] = [0u8; 65];
-    sig_bytes.clone_from_slice(&sig.as_slice());
-    let state_hash = blake2b256(state.as_slice());
-    let signer = recover_signer(&state_hash, &sig_bytes)?;
+    let signer = recover_signer(state.as_slice(), sig.as_slice())?;
     let expected_pub_key = pub_key.raw_data();
     if signer[..] != expected_pub_key[..] {
         return Err(Error::InvalidSignature);
