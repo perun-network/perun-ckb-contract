@@ -13,7 +13,6 @@
 
 // define modules
 mod entry;
-mod error;
 
 use ckb_std::default_alloc;
 use core::arch::asm;
