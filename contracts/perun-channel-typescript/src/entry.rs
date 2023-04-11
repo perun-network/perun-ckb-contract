@@ -521,6 +521,9 @@ pub fn verify_all_payed(
     let outputs = load_transaction()?.raw().outputs();
 
     // TODO: Maybe we want to check that there is only one paying output per party?
+    // TODO: Deal with balances below minimum output capacity.
+    //  One approach would be allowing not to pay users with balances below the minimum output capacity.
+    //  For this we would need to specify the minimum output capacity of the script used for payouts in the channel constants.
     for output in outputs.into_iter() {
         if output.type_().to_opt().is_some() {
             continue;
@@ -537,7 +540,7 @@ pub fn verify_all_payed(
             outputs_snd += u128::from(output.capacity().unpack());
         }
     }
-    if balance_fst != outputs_fst || balance_snd != outputs_snd {
+    if balance_fst > outputs_fst || balance_snd > outputs_snd {
         return Err(Error::NotAllPayed);
     }
     Ok(())
