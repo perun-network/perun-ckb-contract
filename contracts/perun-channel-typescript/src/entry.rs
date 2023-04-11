@@ -26,7 +26,7 @@ use perun_common::{
     helpers::{blake2b256, is_matching_output},
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
-        ChannelWitness, ChannelWitnessUnion, CompressedPubKey, RecoverableSignature,
+        ChannelWitness, ChannelWitnessUnion, CompressedPubKey, PFLSArgs, RecoverableSignature,
     },
     sig::recover_signer,
 };
@@ -106,7 +106,12 @@ pub fn check_valid_start(
 
     verify_funding_in_status(0, &new_status.funding(), &new_status.state())?;
     verify_funding_is_zero_at_index(1, &new_status.funding())?;
-    verify_funding_in_outputs(0, &new_status.state().balances(), channel_constants)?;
+    verify_funding_in_outputs(
+        0,
+        &new_status.state().balances(),
+        channel_constants,
+        own_script,
+    )?;
     verify_funded_status(new_status)?;
     verify_status_not_disputed(new_status)?;
     Ok(())
@@ -140,6 +145,7 @@ pub fn check_valid_progress(
                 f.index().to_idx(),
                 &old_status.state().balances(),
                 channel_constants,
+                own_script,
             )?;
             verify_status_not_disputed(new_status)?;
             verify_funded_status(&new_status)?;
@@ -349,20 +355,27 @@ pub fn verify_funding_in_outputs(
     idx: usize,
     initial_balance: &Balances,
     channel_constants: &ChannelConstants,
+    own_script: &Script,
 ) -> Result<(), Error> {
     let to_fund = initial_balance.get(idx)?;
     if to_fund == 0 {
         return Ok(());
     }
+    let actual_pcts_hash = own_script.code_hash().unpack();
     let outputs = load_transaction()?.raw().outputs();
     let pfls_hash = channel_constants.pfls_hash().unpack();
-    let pfls_args: Bytes = channel_constants.pfls_args().unpack();
     let mut capacity_sum: u128 = 0;
     for output in outputs.into_iter() {
         if output.lock().code_hash().unpack()[..] == pfls_hash[..] {
-            let lock_args: Bytes = output.lock().args().unpack();
-            if lock_args[..] == pfls_args[..] {
+            let output_lock_args: Bytes = output.lock().args().unpack();
+            let pfls_args = PFLSArgs::from_slice(&output_lock_args)?;
+            if pfls_args.pcts_hash().unpack()[..] == actual_pcts_hash[..]
+                && pfls_args.thread_token().as_slice()[..]
+                    == channel_constants.thread_token().as_slice()[..]
+            {
                 capacity_sum += u128::from(output.capacity().unpack());
+            } else {
+                return Err(Error::InvalidPFLSInOutputs);
             }
         }
     }
