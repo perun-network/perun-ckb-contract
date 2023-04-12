@@ -1,6 +1,10 @@
 use blake2b_rs::Blake2bBuilder;
-use ckb_types::packed::{CellOutput, Script};
-use ckb_types::prelude::{Entity, Unpack};
+
+#[cfg(feature = "std")]
+use {ckb_types::packed::*, ckb_types::prelude::*};
+
+#[cfg(not(feature = "std"))]
+use {ckb_standalone_types::packed::*, ckb_standalone_types::prelude::*};
 
 use crate::error::Error;
 use crate::perun_types::{Balances, Bool, BoolUnion, ParticipantIndex, ParticipantIndexUnion};
