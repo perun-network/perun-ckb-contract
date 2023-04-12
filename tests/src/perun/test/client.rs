@@ -4,11 +4,12 @@ use crate::perun;
 use crate::perun::harness;
 use crate::perun::test;
 
+#[derive(Copy, Clone, Debug)]
 pub struct Client {}
 
 impl Client {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new() -> Client {
+        Client {}
     }
 
     pub fn open(

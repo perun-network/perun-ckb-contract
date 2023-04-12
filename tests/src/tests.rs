@@ -26,7 +26,7 @@ fn assert_script_error(err: Error, err_code: i8) {
 fn test_success() {
     // Deploy contracts into environment.
     let mut context = Context::default();
-    let pe = perun::harness::prepare_env(&mut context).expect("preparing environment");
+    let pe = perun::harness::Env::new(&mut context).expect("preparing environment");
 
     // Prepare cells.
     let input_out_point = context.create_cell(
@@ -80,22 +80,21 @@ fn channel_test_bench() {
     .iter()
     .for_each(|test| {
         let mut context = Context::default();
-        let pe = perun::harness::prepare_env(&mut context).expect("preparing environment");
-
+        let pe = perun::harness::Env::new(&mut context).expect("preparing environment");
         test(&mut context, &pe);
     });
 }
 
 fn create_channel_test<P>(
-    _context: &mut Context,
-    _env: &perun::harness::Env,
-    _parts: &[P],
-    _test: impl Fn(&mut perun::channel::Channel<P, perun::State>) -> Result<(), perun::Error>,
-) {
-    // TODO: Implement test creation:
-    //
-    // Create the test channel struct containing all participants and make sure
-    // to prepare the context to allow deploying and using a channel.
+    context: &mut Context,
+    env: &perun::harness::Env,
+    parts: &[P],
+    test: impl Fn(&mut perun::channel::Channel<P, perun::State>) -> Result<(), perun::Error>,
+) where
+    P: Eq + std::hash::Hash + Copy + Clone,
+{
+    let mut chan = perun::channel::Channel::new(context, env, parts);
+    test(&mut chan);
 }
 
 fn test_funding_abort(context: &mut Context, env: &perun::harness::Env) {
