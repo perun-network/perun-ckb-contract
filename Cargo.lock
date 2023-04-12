@@ -158,7 +158,7 @@ dependencies = [
  "ckb-fixed-hash",
  "faster-hex",
  "lazy_static",
- "rand",
+ "rand 0.7.3",
  "secp256k1",
  "thiserror",
 ]
@@ -405,7 +405,7 @@ dependencies = [
  "ckb-vm-definitions",
  "lazy_static",
  "linked_hash_set",
- "rand",
+ "rand 0.7.3",
 ]
 
 [[package]]
@@ -483,7 +483,7 @@ dependencies = [
  "goblin 0.4.0",
  "libc",
  "mapr",
- "rand",
+ "rand 0.7.3",
  "scroll",
  "serde",
 ]
@@ -1018,7 +1018,7 @@ checksum = "6aab1d6457b97b49482f22a92f0f58a2f39bdd7f3b2f977eae67e8bc206aa980"
 dependencies = [
  "heapsize",
  "numext-constructor",
- "rand",
+ "rand 0.7.3",
  "serde",
  "thiserror",
 ]
@@ -1102,7 +1102,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17367f0cc86f2d25802b2c26ee58a7b23faeccf78a396094c13dced0d0182526"
 dependencies = [
  "phf_shared",
- "rand",
+ "rand 0.7.3",
 ]
 
 [[package]]
@@ -1152,10 +1152,21 @@ checksum = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
 dependencies = [
  "getrandom 0.1.16",
  "libc",
- "rand_chacha",
+ "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc",
  "rand_pcg",
+]
+
+[[package]]
+name = "rand"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+dependencies = [
+ "libc",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -1166,6 +1177,16 @@ checksum = "f4c8ed856279c9737206bf725bf36935d8666ead7aa69b52be55af369d193402"
 dependencies = [
  "ppv-lite86",
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_chacha"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -1182,6 +1203,9 @@ name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+dependencies = [
+ "getrandom 0.2.8",
+]
 
 [[package]]
 name = "rand_hc"
@@ -1430,6 +1454,7 @@ name = "tests"
 version = "0.1.0"
 dependencies = [
  "ckb-testtool",
+ "rand 0.8.5",
 ]
 
 [[package]]
