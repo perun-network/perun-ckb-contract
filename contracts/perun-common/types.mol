@@ -1,7 +1,7 @@
 import blockchain;
 
 /* Perun Types */
-array CompressedPubKey [byte; 33];
+array SEC1EncodedPubKey [byte; 65];
 
 array Balances [Uint128; 2];
 
@@ -30,7 +30,7 @@ table Participant {
   // payment_args is the lock-script args which must be used to pay out to this participant in the args field
   // of an output with the payment_lock_hash agreed upon in the ChannelConstants.
   payment_args: Bytes,
-  pub_key: CompressedPubKey,
+  pub_key: SEC1EncodedPubKey,
 }
 table ChannelParameters {
   party_a: Participant,
@@ -60,22 +60,20 @@ table ChannelConstants {
   thread_token: ChannelToken,
 }
 
-array RecoverableSignature [byte; 65];
-
 
 table Fund {
   index: ParticipantIndex,
 }
 array Abort [byte; 1];
 
-struct Dispute {
-  sig_a: RecoverableSignature,
-  sig_b: RecoverableSignature,
+table Dispute {
+  sig_a: Bytes,
+  sig_b: Bytes,
 }
 table Close {
   state: ChannelState,
-  sig_a: RecoverableSignature,
-  sig_b: RecoverableSignature,
+  sig_a: Bytes,
+  sig_b: Bytes,
 }
 array ForceClose [byte; 1];
 

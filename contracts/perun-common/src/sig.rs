@@ -1,18 +1,12 @@
-use k256::ecdsa::{recoverable, signature::Signature};
+use k256::ecdsa::{VerifyingKey, Signature, signature::{hazmat::PrehashVerifier}};
 
 use crate::{error::Error, helpers::blake2b256};
 
 // TODO: This is just a draft!
-pub fn recover_signer(msg: &[u8], sig: &[u8]) -> Result<[u8; 33], Error> {
+pub fn verify_signature(msg: &[u8], sig: &[u8], key: &[u8]) -> Result<(), Error> {
     let msg_hash = blake2b256(msg);
-    if sig.len() != 65 {
-        return Err(Error::InvalidSignature);
-    }
-    let sig = recoverable::Signature::from_bytes(sig)
-        .expect("Can't fail because size is known at compile time");
-    let verifying_key = sig
-        .recover_verifying_key_from_digest_bytes(&msg_hash.into())
-        .expect("signature verification failed");
-
-    Ok(verifying_key.to_bytes().into())
+    let signature = Signature::from_der(sig)?;
+    let verifying_key = VerifyingKey::from_sec1_bytes(key)?;
+    verifying_key.verify_prehash(&msg_hash, &signature)?;
+    Ok(())
 }

@@ -2,6 +2,7 @@ use core::fmt::Debug;
 
 use ckb_std::error::SysError;
 use molecule::error::VerificationError;
+use k256::ecdsa::Error as SigError;
 
 /// Error
 #[derive(Debug)]
@@ -18,6 +19,10 @@ pub enum Error {
     UnknownItem,
     OffsetsNotMatch,
     FieldCountNotMatch,
+
+    // Signature Errors
+    SignatureVerificationError,
+
     // Add customized errors here...
     NoArgs,
     NoWitness,
@@ -90,5 +95,11 @@ impl From<VerificationError> for Error {
             OffsetsNotMatch(_) => Self::OffsetsNotMatch,
             FieldCountNotMatch(_, _, _) => Self::FieldCountNotMatch,
         }
+    }
+}
+
+impl From <SigError> for Error {
+    fn from(_: SigError) -> Self {
+        return Self::SignatureVerificationError;
     }
 }

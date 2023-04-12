@@ -1,5 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+use core::{result::Result};
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{self};
@@ -26,9 +26,9 @@ use perun_common::{
     helpers::{blake2b256, is_matching_output},
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
-        ChannelWitness, ChannelWitnessUnion, CompressedPubKey, PFLSArgs, RecoverableSignature,
+        ChannelWitness, ChannelWitnessUnion, SEC1EncodedPubKey, PFLSArgs,
     },
-    sig::recover_signer,
+    sig::verify_signature,
 };
 
 pub enum ChannelAction {
@@ -156,12 +156,12 @@ pub fn check_valid_progress(
             verify_status_funded(old_status)?;
             verify_status_disputed(new_status)?;
             verify_valid_state_sig(
-                &d.sig_a(),
+                &d.sig_a().unpack(),
                 &new_status.state(),
                 &channel_constants.params().party_a().pub_key(),
             )?;
             verify_valid_state_sig(
-                &d.sig_b(),
+                &d.sig_b().unpack(),
                 &new_status.state(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
@@ -197,12 +197,12 @@ pub fn check_valid_close(
             verify_status_funded(old_status)?;
             verify_state_finalized(&c.state())?;
             verify_valid_state_sig(
-                &c.sig_a(),
+                &c.sig_a().unpack(),
                 &c.state(),
                 &channel_constants.params().party_a().pub_key(),
             )?;
             verify_valid_state_sig(
-                &c.sig_b(),
+                &c.sig_b().unpack(),
                 &c.state(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
@@ -237,15 +237,11 @@ pub fn verify_increasing_version_number(
 }
 
 pub fn verify_valid_state_sig(
-    sig: &RecoverableSignature,
+    sig: &Bytes,
     state: &ChannelState,
-    pub_key: &CompressedPubKey,
+    pub_key: &SEC1EncodedPubKey,
 ) -> Result<(), Error> {
-    let signer = recover_signer(state.as_slice(), sig.as_slice())?;
-    let expected_pub_key = pub_key.raw_data();
-    if signer[..] != expected_pub_key[..] {
-        return Err(Error::InvalidSignature);
-    }
+    verify_signature(state.as_slice(), sig, pub_key.as_slice())?;
     Ok(())
 }
 
