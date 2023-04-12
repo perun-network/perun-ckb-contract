@@ -20,11 +20,11 @@ where
 {
     /// The active party. Actions called on the channel will be issued by this
     /// party henceforth.
-    active_part: &'a test::Client,
+    active_part: test::Client,
     /// The id of the channel.
     id: test::ChannelId,
     /// All available parties.
-    parts: HashMap<P, &'a test::Client>,
+    parts: HashMap<P, test::Client>,
     /// The surrounding chain context.
     ctx: &'a mut Context,
     /// The intial test harness environment supplying all Perun specific
@@ -63,12 +63,32 @@ macro_rules! call_action {
 
 impl<'a, P, S> Channel<'a, P, S>
 where
-    P: Eq + std::hash::Hash,
     S: Default + perun::Applyable + Debug + PartialEq,
+    P: Eq + std::hash::Hash + Copy + Clone + 'a,
 {
+    pub fn new(context: &'a mut Context, env: &'a perun::harness::Env, parts: &[P]) -> Self {
+        let m_parts: HashMap<_, _> = parts
+            .iter()
+            .map(|p| (p.clone(), perun::test::Client::new()))
+            .collect();
+        let active = m_parts.get(&parts[0]).expect("part not found");
+
+        Channel {
+            id: test::ChannelId::new(),
+            current_time: 0,
+            ctx: context,
+            env,
+            active_part: *active,
+            parts: m_parts.clone(),
+            validity: ActionValidity::Valid,
+            history: Vec::new(),
+            current_state: S::default(),
+        }
+    }
+
     /// with sets the currently active participant to the given `part`.
     pub fn with(&mut self, part: P) -> &mut Self {
-        self.active_part = self.parts.get(&part).expect("part not found");
+        self.active_part = *self.parts.get(&part).expect("part not found");
         self
     }
 
