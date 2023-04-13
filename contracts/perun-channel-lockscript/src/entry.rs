@@ -15,6 +15,21 @@ use ckb_std::{
 };
 use perun_common::{error::Error, perun_types::ChannelConstants};
 
+// The perun-channel-lockscript (pcls) is used to lock access to interacting with a channel and is attached as lock script
+// to the cell containing the perun-channel-type-script (pcts).
+// A channel defines a pcls_unlock_script_hash in the ChannelConstants (args of the channel type script).
+// A channel defines two participants, each of which has their own unlock_args (also defined in the ChannelConstants).
+// The pcls allows a transaction to interact with the channel, if at least one input cell is present with:
+// - lock script hash == pcls_unlock_script_hash and
+// - lock script args == unlock_args of one of the channel participants.
+//
+// We recommend using the secp256k1_blake160_sighash_all script as unlock script and corresponding payment args for each 
+// participant's unlock_args.
+//
+// Note: This means, that each participant needs to use a secp256k1_blake160_sighash_all as input to interact with the channel.
+// This should not be a substantial restriction, since a payment input will likely be used anyway (e.g. for funding or fees).
+
+
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
@@ -23,6 +38,7 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::PCLSWithArgs);
     }
 
+    // locate the ChannelConstants in the type script of the input cell.
     let idx = get_own_input_index(&script)?;
     let type_script = load_cell_type(idx, Source::Input)?.expect("type script not found");
     let type_script_args: Bytes = type_script.args().unpack();
@@ -43,8 +59,9 @@ pub fn main() -> Result<(), Error> {
     return Ok(());
 }
 
-// check_is_participant checks if the current transaction is executed by a channel participant.
-// It does so by checking if a pay2pubkeyhash cell to a channel participant is present in the inputs.
+/// check_is_participant checks if the current transaction is executed by a channel participant.
+/// It does so by looking for an input cell with the same lock script hash as the unlock_script_hash
+/// and lock args equal to one of the participants' unlock_args.
 pub fn verify_is_participant(
     unlock_script_hash: &Byte32,
     unlock_args_a: &Bytes,
