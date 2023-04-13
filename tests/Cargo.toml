@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 ckb-testtool = "0.9"
+hex = "0.4.3"
 rand = "0.8.5"
 perun-common = { path = "../contracts/perun-common" }
 ckb-types = { package = "ckb-standalone-types", version = "0.1.2" }
