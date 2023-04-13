@@ -114,8 +114,13 @@ pub fn check_valid_start(
     )?;
     verify_valid_lock_script(own_script, channel_constants)?;
 
+    verify_different_payment_addresses(channel_constants)?;
+
     verify_no_funds_in_inputs(&channel_constants.pfls_hash())?;
-    verify_state_valid_as_start(&new_status.state(), channel_constants.pfls_min_capacity().unpack())?;
+    verify_state_valid_as_start(
+        &new_status.state(),
+        channel_constants.pfls_min_capacity().unpack(),
+    )?;
 
     verify_funding_in_status(0, &new_status.funding(), &new_status.state())?;
     verify_funding_is_zero_at_index(1, &new_status.funding())?;
@@ -463,7 +468,10 @@ pub fn verify_channel_id_integrity(
     Ok(())
 }
 
-pub fn verify_state_valid_as_start(state: &ChannelState, pfls_min_capacity: u64) -> Result<(), Error> {
+pub fn verify_state_valid_as_start(
+    state: &ChannelState,
+    pfls_min_capacity: u64,
+) -> Result<(), Error> {
     if state.version().unpack() != 0 {
         return Err(Error::StartWithNonZeroVersion);
     }
@@ -522,14 +530,36 @@ pub fn verify_all_payed(
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let minimum_payment = u128::from(channel_constants.payment_min_capacity().unpack());
+    let minimum_payment_fst = u128::from(
+        channel_constants
+            .params()
+            .party_a()
+            .payment_min_capacity()
+            .unpack(),
+    );
+    let minimum_payment_snd = u128::from(
+        channel_constants
+            .params()
+            .party_b()
+            .payment_min_capacity()
+            .unpack(),
+    );
     let balance_fst: u128 = final_balance.get(0)? + u128::from(channel_capacity);
     let payment_args_fst: Bytes = channel_constants.params().party_a().payment_args().unpack();
 
     let balance_snd: u128 = final_balance.get(1)?;
     let payment_args_snd: Bytes = channel_constants.params().party_b().payment_args().unpack();
 
-    let payment_lock_hash = channel_constants.payment_lock_hash().unpack();
+    let payment_lock_hash_fst = channel_constants
+        .params()
+        .party_a()
+        .payment_lock_hash()
+        .unpack();
+    let payment_lock_hash_snd = channel_constants
+        .params()
+        .party_b()
+        .payment_lock_hash()
+        .unpack();
 
     let mut outputs_fst = 0;
     let mut outputs_snd = 0;
@@ -542,22 +572,20 @@ pub fn verify_all_payed(
             continue;
         }
         let lock_hash = output.lock().code_hash().unpack();
-        if lock_hash[..] != payment_lock_hash[..] {
-            continue;
-        }
         let lock_args: Bytes = output.lock().args().unpack();
-        if lock_args[..] == payment_args_fst[..] {
+        if lock_hash[..] == payment_lock_hash_fst[..] && lock_args[..] == payment_args_fst[..] {
             outputs_fst += u128::from(output.capacity().unpack());
         }
-        if lock_args[..] == payment_args_snd[..] {
+        if lock_hash[..] == payment_lock_hash_snd[..] && lock_args[..] == payment_args_snd[..] {
             outputs_snd += u128::from(output.capacity().unpack());
         }
     }
 
     // Parties with balances below the minimum capacity of the payment script
     // are not required to be payed.
-    if (balance_fst > outputs_fst && balance_fst >= minimum_payment) || 
-        (balance_snd > outputs_snd && balance_snd >= minimum_payment) {
+    if (balance_fst > outputs_fst && balance_fst >= minimum_payment_fst)
+        || (balance_snd > outputs_snd && balance_snd >= minimum_payment_snd)
+    {
         return Err(Error::NotAllPayed);
     }
     Ok(())
@@ -664,6 +692,29 @@ pub fn verify_channel_count(
     }
     if channel_count > 1 {
         return Err(Error::MoreThanOneChannel);
+    }
+    Ok(())
+}
+
+pub fn verify_different_payment_addresses(
+    channel_constants: &ChannelConstants,
+) -> Result<(), Error> {
+    let payment_lock_hash_fst = channel_constants
+        .params()
+        .party_a()
+        .payment_lock_hash()
+        .unpack();
+    let payment_lock_hash_snd = channel_constants
+        .params()
+        .party_b()
+        .payment_lock_hash()
+        .unpack();
+    let payment_args_fst: Bytes = channel_constants.params().party_a().payment_args().unpack();
+    let payment_args_snd: Bytes = channel_constants.params().party_b().payment_args().unpack();
+    if payment_lock_hash_fst[..] == payment_lock_hash_snd[..]
+        && payment_args_fst[..] == payment_args_snd[..]
+    {
+        return Err(Error::SamePaymentAddress);
     }
     Ok(())
 }

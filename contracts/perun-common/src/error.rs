@@ -73,6 +73,7 @@ pub enum Error {
     FoundDifferentChannel,
     MoreThanOneChannel,
     BalanceBelowPFLSMinCapacity,
+    SamePaymentAddress,
 }
 
 impl From<SysError> for Error {
