@@ -15,7 +15,7 @@ use ckb_std::{
     },
     debug,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash,
+        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
         load_cell_type_hash, load_header, load_script, load_transaction, load_witness_args,
     },
 };
@@ -67,6 +67,8 @@ pub fn main() -> Result<(), Error> {
     if args.is_empty() {
         return Err(Error::NoArgs);
     }
+
+    verify_max_one_channel(&script.code_hash().unpack(), &args)?;
 
     let channel_constants =
         ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParameters");
@@ -586,7 +588,6 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
     Ok(())
 }
 
-// TODO: Verify that there are never PCTS in inputs or outputs.
 pub fn get_channel_action() -> Result<ChannelAction, Error> {
     let mut input_status_opt: Option<ChannelStatus> = None;
     let mut output_status_opt: Option<ChannelStatus> = None;
@@ -623,4 +624,38 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
         (None, Some(new_status)) => Ok(ChannelAction::Start { new_status }),
         (None, None) => Err(Error::UnableToLoadAnyChannelStatus),
     }
+}
+
+/// verify_channel_count verifies that there is at most one perun channel in the inputs of the transaction
+/// and at most one perun channel in the outputs of the transaction. It also verifies that each of those channels
+/// is the current channel.
+pub fn verify_max_one_channel(own_hash: &[u8; 32], own_args: &Bytes) -> Result<(), Error> {
+    verify_channel_count(own_hash, own_args, Source::Input)?;
+    verify_channel_count(own_hash, own_args, Source::Output)
+}
+
+pub fn verify_channel_count(
+    own_hash: &[u8; 32],
+    own_args: &Bytes,
+    source: Source,
+) -> Result<(), Error> {
+    let mut channel_count = 0;
+    for i in 0.. {
+        match load_cell_type_hash(i, source)? {
+            Some(hash) => {
+                if hash[..] == own_hash[..] {
+                    channel_count += 1;
+                    let input_args: Bytes = load_cell_type(i, source)?.unwrap().args().unpack();
+                    if input_args[..] != own_args[..] {
+                        return Err(Error::FoundDifferentChannel);
+                    }
+                }
+            }
+            None => continue,
+        }
+    }
+    if channel_count > 1 {
+        return Err(Error::MoreThanOneChannel);
+    }
+    Ok(())
 }

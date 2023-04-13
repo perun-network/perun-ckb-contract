@@ -70,6 +70,8 @@ pub enum Error {
     InvalidMessage,
     InvalidPFLSInOutputs,
     PCTSNotFound,
+    FoundDifferentChannel,
+    MoreThanOneChannel,
 }
 
 impl From<SysError> for Error {
