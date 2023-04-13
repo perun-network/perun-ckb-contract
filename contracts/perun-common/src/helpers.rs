@@ -19,7 +19,7 @@ impl Bool {
     pub fn from_bool(b: bool) -> Self {
         if b {
             ctrue!();
-        } 
+        }
         cfalse!()
     }
 }
@@ -33,8 +33,8 @@ macro_rules! ctrue {
             ))
             .build()
     };
-} 
-pub (crate) use ctrue;
+}
+pub(crate) use ctrue;
 
 #[macro_export]
 macro_rules! cfalse {
@@ -45,8 +45,8 @@ macro_rules! cfalse {
             ))
             .build()
     };
-} 
-pub (crate) use cfalse;
+}
+pub(crate) use cfalse;
 
 impl ParticipantIndex {
     pub fn to_idx(&self) -> usize {
