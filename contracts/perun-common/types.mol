@@ -45,11 +45,16 @@ table ChannelParameters {
   is_virtual_channel: Bool,
 }
 
+// Important: Upon channel creation, every participant must verify the integrity of the channel.
+// This includes verifying that the correct ChannelConstants are present.
+// If e.g. the payment_min_capacity were to be significantly larger than the minimum capacity of the payment lock script,
+// a party could steal funds from the channel participants with balances smaller than the payment_min_capacity upon channel closing.
 table ChannelConstants {
   params: ChannelParameters,
   // pfls_hash specifies the lock_script that guards funds for this channel.
   // Specifically, this should be the perun-funding-lockscript.
   pfls_hash:     Byte32,
+  pfls_min_capacity: Uint64,
   // pcls_hash specifies the lock_script used for this channel.
   // Specifically, this should be the perun-channel-lockscript.
   pcls_hash:     Byte32,
@@ -57,6 +62,7 @@ table ChannelConstants {
   pcls_unlock_script_hash: Byte32,
   // payment_lock_hash specifies the script used to pay out channel participants
   payment_lock_hash: Byte32,
+  payment_min_capacity: Uint64,
   thread_token: ChannelToken,
 }
 
