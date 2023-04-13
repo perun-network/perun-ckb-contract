@@ -6,5 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ckb-testtool = "0.8"
+ckb-testtool = "0.9"
 rand = "0.8.5"
+perun-common = { path = "../contracts/perun-common" }
+ckb-types = { package = "ckb-standalone-types", version = "0.1.2" }
+k256 = { version = "0.11.6", default-features = false, features = ["ecdsa", "keccak256", "arithmetic"]}
+rand_core = { version = "0.6", features = ["getrandom"] }
+ckb-std = "0.10.0"
