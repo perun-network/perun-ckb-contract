@@ -115,7 +115,7 @@ pub fn check_valid_start(
     verify_valid_lock_script(own_script, channel_constants)?;
 
     verify_no_funds_in_inputs(&channel_constants.pfls_hash())?;
-    verify_state_valid_as_start(&new_status.state())?;
+    verify_state_valid_as_start(&new_status.state(), channel_constants.pfls_min_capacity().unpack())?;
 
     verify_funding_in_status(0, &new_status.funding(), &new_status.state())?;
     verify_funding_is_zero_at_index(1, &new_status.funding())?;
@@ -463,12 +463,18 @@ pub fn verify_channel_id_integrity(
     Ok(())
 }
 
-pub fn verify_state_valid_as_start(state: &ChannelState) -> Result<(), Error> {
+pub fn verify_state_valid_as_start(state: &ChannelState, pfls_min_capacity: u64) -> Result<(), Error> {
     if state.version().unpack() != 0 {
         return Err(Error::StartWithNonZeroVersion);
     }
     if state.is_final().to_bool() {
         return Err(Error::StartWithFinalizedState);
+    }
+    if state.balances().get(0)? < u128::from(pfls_min_capacity) {
+        return Err(Error::BalanceBelowPFLSMinCapacity);
+    }
+    if state.balances().get(1)? < u128::from(pfls_min_capacity) {
+        return Err(Error::BalanceBelowPFLSMinCapacity);
     }
     // TODO: Check that each individual balance is large enough to be funded.
     Ok(())

@@ -72,6 +72,7 @@ pub enum Error {
     PCTSNotFound,
     FoundDifferentChannel,
     MoreThanOneChannel,
+    BalanceBelowPFLSMinCapacity,
 }
 
 impl From<SysError> for Error {
