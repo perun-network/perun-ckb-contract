@@ -7,7 +7,7 @@ use {ckb_types::packed::*, ckb_types::prelude::*};
 use {ckb_standalone_types::packed::*, ckb_standalone_types::prelude::*};
 
 use crate::error::Error;
-use crate::perun_types::{Balances, Bool, BoolUnion, ParticipantIndex, ParticipantIndexUnion};
+use crate::perun_types::{Balances, Bool, BoolUnion, ParticipantIndex, ParticipantIndexUnion, True, False};
 
 impl Bool {
     pub fn to_bool(&self) -> bool {
@@ -15,6 +15,16 @@ impl Bool {
             BoolUnion::True(_) => true,
             BoolUnion::False(_) => false,
         }
+    }
+    pub fn from_bool(b: bool) -> Self {
+        if b {
+            return Bool::new_builder()
+            .set(BoolUnion::True(True::default()))
+            .build();
+        } 
+        return Bool::new_builder()
+        .set(BoolUnion::False(False::default()))
+        .build();
     }
 }
 
@@ -105,7 +115,7 @@ pub const CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
 pub fn blake2b256(data: &[u8]) -> [u8; 32] {
     let mut result = [0u8; 32];
     let mut blake2b = Blake2bBuilder::new(32)
-        .personal(CKB_HASH_PERSONALIZATION)
+        //.personal(CKB_HASH_PERSONALIZATION)
         .build();
     blake2b.update(data);
     blake2b.finalize(&mut result);
