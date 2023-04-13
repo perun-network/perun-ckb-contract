@@ -6,3 +6,5 @@ pub use funding_agreement::*;
 
 mod channel_id;
 pub use channel_id::*;
+
+pub mod keys;

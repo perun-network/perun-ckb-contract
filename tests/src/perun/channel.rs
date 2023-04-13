@@ -1,4 +1,6 @@
 use ckb_testtool::context::Context;
+use k256::ecdsa::SigningKey;
+use rand_core::OsRng;
 
 use crate::perun;
 use crate::perun::{harness, test};
@@ -67,9 +69,14 @@ where
     P: Eq + std::hash::Hash + Copy + Clone + 'a,
 {
     pub fn new(context: &'a mut Context, env: &'a perun::harness::Env, parts: &[P]) -> Self {
-        let m_parts: HashMap<_, _> = parts
-            .iter()
-            .map(|p| (p.clone(), perun::test::Client::new()))
+        let m_parts: HashMap<_, _> = (0..)
+            .zip(parts.iter())
+            .map(|(i, p)| {
+                (
+                    p.clone(),
+                    perun::test::Client::new(i, SigningKey::random(&mut OsRng)),
+                )
+            })
             .collect();
         let active = m_parts.get(&parts[0]).expect("part not found");
 
@@ -78,7 +85,7 @@ where
             current_time: 0,
             ctx: context,
             env,
-            active_part: *active,
+            active_part: active.clone(),
             parts: m_parts.clone(),
             validity: ActionValidity::Valid,
             history: Vec::new(),
@@ -88,7 +95,7 @@ where
 
     /// with sets the currently active participant to the given `part`.
     pub fn with(&mut self, part: P) -> &mut Self {
-        self.active_part = *self.parts.get(&part).expect("part not found");
+        self.active_part = self.parts.get(&part).expect("part not found").clone();
         self
     }
 
