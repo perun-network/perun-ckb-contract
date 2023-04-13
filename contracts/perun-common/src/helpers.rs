@@ -7,7 +7,7 @@ use {ckb_types::packed::*, ckb_types::prelude::*};
 use {ckb_standalone_types::packed::*, ckb_standalone_types::prelude::*};
 
 use crate::error::Error;
-use crate::perun_types::{Balances, Bool, BoolUnion, ParticipantIndex, ParticipantIndexUnion, True, False};
+use crate::perun_types::{Balances, Bool, BoolUnion, ParticipantIndex, ParticipantIndexUnion};
 
 impl Bool {
     pub fn to_bool(&self) -> bool {
@@ -18,13 +18,9 @@ impl Bool {
     }
     pub fn from_bool(b: bool) -> Self {
         if b {
-            return Bool::new_builder()
-            .set(BoolUnion::True(True::default()))
-            .build();
+            ctrue!();
         } 
-        return Bool::new_builder()
-        .set(BoolUnion::False(False::default()))
-        .build();
+        cfalse!()
     }
 }
 
@@ -37,7 +33,8 @@ macro_rules! ctrue {
             ))
             .build()
     };
-}
+} 
+pub (crate) use ctrue;
 
 #[macro_export]
 macro_rules! cfalse {
@@ -48,7 +45,8 @@ macro_rules! cfalse {
             ))
             .build()
     };
-}
+} 
+pub (crate) use cfalse;
 
 impl ParticipantIndex {
     pub fn to_idx(&self) -> usize {
