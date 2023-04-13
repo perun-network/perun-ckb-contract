@@ -18,6 +18,28 @@ impl Bool {
     }
 }
 
+#[macro_export]
+macro_rules! ctrue {
+    () => {
+        $crate::perun_types::BoolBuilder::default()
+            .set($crate::perun_types::BoolUnion::True(
+                $crate::perun_types::True::default(),
+            ))
+            .build()
+    };
+}
+
+#[macro_export]
+macro_rules! cfalse {
+    () => {
+        $crate::perun_types::BoolBuilder::default()
+            .set($crate::perun_types::BoolUnion::False(
+                $crate::perun_types::False::default(),
+            ))
+            .build()
+    };
+}
+
 impl ParticipantIndex {
     pub fn to_idx(&self) -> usize {
         match self.to_enum() {
