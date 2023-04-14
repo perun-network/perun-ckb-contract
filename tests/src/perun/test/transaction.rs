@@ -75,10 +75,15 @@ pub fn mk_open(
         ),
     ];
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
+    let cell_deps = vec![
+        env.always_success_script_dep.clone(),
+        env.pcts_script_dep.clone(),
+    ];
     let tx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs.iter().map(|o| o.0.clone()))
         .outputs_data(outputs_data.pack())
+        .cell_deps(cell_deps)
         .build();
     Ok(ctx.complete_tx(tx))
 }

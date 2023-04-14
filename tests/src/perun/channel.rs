@@ -48,12 +48,12 @@ macro_rules! call_action {
     ($self:ident, $action:ident $(, $x:expr)*) => (
         {
             let res = match $self.validity {
-                ActionValidity::Valid => $self.active_part.$action($self.id, $self.ctx, $self.env, $($x),*),
+                ActionValidity::Valid => $self.active_part.$action($self.ctx, $self.env, $($x),*),
                 ActionValidity::Invalid => {
-                    let res = $self.active_part.$action($self.id, $self.ctx, $self.env, $($x),*);
+                    let res = $self.active_part.$action($self.ctx, $self.env, $($x),*);
                     match res {
                         Ok(_) => Err(perun::Error::new("action should have failed")),
-                        Err(_) => Ok(()),
+                        Err(_) => Ok(Default::default()),
                     }
                 }
             };
@@ -113,13 +113,15 @@ where
     /// open a channel using the currently active participant set by `with(..)`
     /// with the value given in `funding_agreement`.
     pub fn open(&mut self, funding_agreement: &test::FundingAgreement) -> Result<(), perun::Error> {
-        call_action!(self, open, funding_agreement)
+        let id = call_action!(self, open, funding_agreement)?;
+        self.id = id;
+        Ok(())
     }
 
     /// fund a channel using the currently active participant set by `with(..)`
     /// with the value given in `funding_agreement`.
     pub fn fund(&mut self, funding_agreement: &test::FundingAgreement) -> Result<(), perun::Error> {
-        call_action!(self, fund, funding_agreement)
+        call_action!(self, fund, self.id, funding_agreement)
     }
 
     /// send a payment using the currently active participant set by `with(..)`
@@ -132,25 +134,25 @@ where
     /// dispute a channel using the currently active participant set by
     /// `with(..)`.
     pub fn dispute(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, dispute)
+        call_action!(self, dispute, self.id)
     }
 
     /// abort a channel using the currently active participant set by
     /// `with(..)`.
     pub fn abort(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, abort)
+        call_action!(self, abort, self.id)
     }
 
     /// close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn close(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, close)
+        call_action!(self, close, self.id)
     }
 
     /// force_close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn force_close(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, force_close)
+        call_action!(self, force_close, self.id)
     }
 
     /// valid sets the validity of the next action to valid. (default)

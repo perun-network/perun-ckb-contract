@@ -11,6 +11,7 @@ use ckb_testtool::context::Context;
 use perun_common::*;
 
 use ckb_occupied_capacity::{Capacity, IntoCapacity};
+use perun_common::helpers::blake2b256;
 
 use crate::perun;
 use crate::perun::harness;
@@ -22,6 +23,8 @@ use k256::{
     ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey},
     SecretKey,
 };
+
+use super::ChannelId;
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -45,11 +48,10 @@ impl Client {
 
     pub fn open(
         &self,
-        cid: test::ChannelId,
         ctx: &mut Context,
         env: &harness::Env,
         funding_agreement: &test::FundingAgreement,
-    ) -> Result<(), perun::Error> {
+    ) -> Result<ChannelId, perun::Error> {
         // Prepare environment so that this party has the required funds.
         let (my_funds_outpoint, my_funds) =
             env.create_funds_for_index(ctx, self.index, funding_agreement)?;
@@ -90,6 +92,8 @@ impl Client {
             .pfls_min_capacity(env.min_capacity_pfls.pack())
             .thread_token(channel_token.clone())
             .build();
+        let cid_raw = blake2b256(&chan_const.as_bytes());
+        let cid = ChannelId::from(cid_raw);
 
         let pcls = env.build_pcls(ctx, Default::default());
         let pcts = env.build_pcts(ctx, chan_const.as_bytes());
@@ -121,14 +125,14 @@ impl Client {
             .verify_tx(&tx, env.max_cycles)
             .expect("pass verification");
         println!("consumed cycles: {}", cycles);
-        Ok(())
+        Ok(cid)
     }
 
     pub fn fund(
         &self,
-        cid: test::ChannelId,
         ctx: &mut Context,
         env: &harness::Env,
+        cid: test::ChannelId,
         funding_agreement: &test::FundingAgreement,
     ) -> Result<(), perun::Error> {
         Ok(())
@@ -140,36 +144,36 @@ impl Client {
 
     pub fn dispute(
         &self,
-        cid: test::ChannelId,
         ctx: &mut Context,
         env: &harness::Env,
+        cid: test::ChannelId,
     ) -> Result<(), perun::Error> {
         Ok(())
     }
 
     pub fn abort(
         &self,
-        cid: test::ChannelId,
         ctx: &mut Context,
         env: &harness::Env,
+        cid: test::ChannelId,
     ) -> Result<(), perun::Error> {
         Ok(())
     }
 
     pub fn close(
         &self,
-        cid: test::ChannelId,
         ctx: &mut Context,
         env: &harness::Env,
+        cid: test::ChannelId,
     ) -> Result<(), perun::Error> {
         Ok(())
     }
 
     pub fn force_close(
         &self,
-        cid: test::ChannelId,
         ctx: &mut Context,
         env: &harness::Env,
+        cid: test::ChannelId,
     ) -> Result<(), perun::Error> {
         Ok(())
     }
