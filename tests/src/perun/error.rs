@@ -30,3 +30,9 @@ impl From<&str> for Error {
         Error::new(err)
     }
 }
+
+impl From<ckb_occupied_capacity::Error> for Error {
+    fn from(err: ckb_occupied_capacity::Error) -> Error {
+        Error::new(&err.to_string())
+    }
+}
