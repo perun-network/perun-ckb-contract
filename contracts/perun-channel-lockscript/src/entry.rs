@@ -7,7 +7,7 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{
         bytes::Bytes,
-        packed::{Byte32, Script},
+        packed::Byte32,
         prelude::*,
     },
     high_level::{load_cell_lock, load_cell_lock_hash, load_cell_type, load_script},
@@ -39,8 +39,7 @@ pub fn main() -> Result<(), Error> {
     }
 
     // locate the ChannelConstants in the type script of the input cell.
-    let idx = get_own_input_index(&script)?;
-    let type_script = load_cell_type(idx, Source::Input)?.expect("type script not found");
+    let type_script = load_cell_type(0, Source::GroupInput)?.expect("type script not found");
     let type_script_args: Bytes = type_script.args().unpack();
 
     let constants = ChannelConstants::from_slice(&type_script_args)
@@ -87,14 +86,4 @@ pub fn verify_is_participant(
         }
     }
     Ok(false)
-}
-
-pub fn get_own_input_index(own_script: &Script) -> Result<usize, Error> {
-    for i in 0.. {
-        let cell_lock_hash = load_cell_lock_hash(i, Source::Input)?;
-        if cell_lock_hash[..] == own_script.code_hash().unpack()[..] {
-            return Ok(i);
-        }
-    }
-    Err(Error::OwnIndexNotFound)
 }
