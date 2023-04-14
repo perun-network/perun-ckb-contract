@@ -58,6 +58,11 @@ pub enum ChannelAction {
     Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
 }
 
+// TODO: consider hash_type field of scripts instead of just comparing the code_hashes throughout the contract.
+// Also, it would probably be better to use the `Script` type, whenever we want to generalize a script instead of
+// using the hash and the args (and the hash_type) separately. For example:
+// instead of payment_script_hash: Byte32, payment_script_args: Bytes, (payment_script_hash_type)
+// we could use payment_script: Script
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
@@ -145,7 +150,7 @@ pub fn check_valid_start(
 
 
     // We verify that the pcts is guarded by the pcls script specified in the channel constants
-    verify_valid_lock_script(own_script, channel_constants)?;
+    verify_valid_lock_script(channel_constants)?;
     debug!("verify_valid_lock_script passed");
 
     // We verify that the channel participants have different payment addresses
@@ -346,7 +351,7 @@ pub fn check_valid_close(
 }
 
 pub fn load_witness() -> Result<ChannelWitness, Error> {
-    // What if there is only an output?
+    // TODO: Verify that this is how we want to load witnesses!
     let witness_args = load_witness_args(0, Source::GroupInput)?;
     let witness_bytes: Bytes = witness_args
         .input_type()
@@ -401,8 +406,7 @@ pub fn verify_equal_sum_of_balances(
 }
 
 pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
-    let idx = get_own_index(own_script, Source::Input)?;
-    let corresponding_lock_script = load_cell_lock(idx, Source::Input)?;
+    let corresponding_lock_script = load_cell_lock(0, Source::GroupInput)?;
     let outputs = load_transaction()?.raw().outputs();
 
     let mut found_match = false;
@@ -419,19 +423,6 @@ pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
         return Ok(());
     }
     return Err(Error::ChannelDoesNotContinue);
-}
-
-pub fn get_own_index(own_script: &Script, source: Source) -> Result<usize, Error> {
-    let own_script_hash = own_script.code_hash().unpack();
-    for i in 0.. {
-        let cell_type = load_cell_type(i, source)?;
-        if cell_type.is_some() &&
-            cell_type.unwrap().code_hash().unpack()[..] == own_script_hash[..] {
-                return Ok(i);
-
-        }
-    }
-    Err(Error::OwnIndexNotFound)
 }
 
 pub fn verify_no_funds_in_inputs(pfls_hash: &Byte32) -> Result<(), Error> {
@@ -613,12 +604,9 @@ pub fn verify_state_valid_as_start(
 }
 
 pub fn verify_valid_lock_script(
-    own_type_script: &Script,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let idx = get_own_index(own_type_script, Source::Output)?;
-    debug!("Own output index: {}", idx);
-    let lock_script = load_cell_lock(idx, Source::Output)?;
+    let lock_script = load_cell_lock(0, Source::GroupOutput)?;
     let lock_script_args: Bytes = lock_script.args().unpack();
     if lock_script.code_hash().unpack()[..] != channel_constants.pcls_hash().unpack()[..] {
         return Err(Error::InvalidPCLSHash);
