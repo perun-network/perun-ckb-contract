@@ -16,7 +16,7 @@ enum ActionValidity {
 /// Channel is a Perun test channel. It handles the state of said channel
 /// together with the participants, the current time and surrounding chain
 /// context.
-pub struct Channel<'a, P, S>
+pub struct Channel<'a, S>
 where
     S: perun::Applyable + Debug + PartialEq,
 {
@@ -26,7 +26,7 @@ where
     /// The id of the channel.
     id: test::ChannelId,
     /// All available parties.
-    parts: HashMap<P, test::Client>,
+    parts: HashMap<String, test::Client>,
     /// The surrounding chain context.
     ctx: &'a mut Context,
     /// The intial test harness environment supplying all Perun specific
@@ -63,22 +63,26 @@ macro_rules! call_action {
 )
 }
 
-impl<'a, P, S> Channel<'a, P, S>
+impl<'a, S> Channel<'a, S>
 where
     S: Default + perun::Applyable + Debug + PartialEq,
-    P: Eq + std::hash::Hash + Copy + Clone + 'a,
 {
-    pub fn new(context: &'a mut Context, env: &'a perun::harness::Env, parts: &[P]) -> Self {
-        let m_parts: HashMap<_, _> = (0..)
-            .zip(parts.iter())
+    pub fn new<P: perun::Account>(
+        context: &'a mut Context,
+        env: &'a perun::harness::Env,
+        parts: &[P],
+    ) -> Self {
+        let m_parts: HashMap<_, _> = parts
+            .iter()
+            .enumerate()
             .map(|(i, p)| {
                 (
-                    p.clone(),
-                    perun::test::Client::new(i, SigningKey::random(&mut OsRng)),
+                    p.name().clone(),
+                    perun::test::Client::new(i as u8, SigningKey::random(&mut OsRng)),
                 )
             })
             .collect();
-        let active = m_parts.get(&parts[0]).expect("part not found");
+        let active = m_parts.get(&parts[0].name()).expect("part not found");
 
         Channel {
             id: test::ChannelId::new(),
@@ -94,8 +98,8 @@ where
     }
 
     /// with sets the currently active participant to the given `part`.
-    pub fn with(&mut self, part: P) -> &mut Self {
-        self.active_part = self.parts.get(&part).expect("part not found").clone();
+    pub fn with(&mut self, part: &str) -> &mut Self {
+        self.active_part = self.parts.get(part).expect("part not found").clone();
         self
     }
 
@@ -120,8 +124,8 @@ where
 
     /// send a payment using the currently active participant set by `with(..)`
     /// to the given `to` participant.
-    pub fn send(&mut self, to: &P, amount: u64) -> Result<(), perun::Error> {
-        let to = self.parts.get(to).expect("part not found");
+    pub fn send<P: perun::Account>(&mut self, to: &P, amount: u64) -> Result<(), perun::Error> {
+        let to = self.parts.get(&to.name()).expect("part not found");
         self.active_part.send(self.ctx, self.env)
     }
 
