@@ -1447,6 +1447,7 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
+ "ckb-occupied-capacity",
  "ckb-standalone-types",
  "ckb-std",
  "ckb-testtool",

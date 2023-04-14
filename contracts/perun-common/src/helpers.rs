@@ -18,9 +18,10 @@ impl Bool {
     }
     pub fn from_bool(b: bool) -> Self {
         if b {
-            ctrue!();
+            return ctrue!();
+        } else {
+            return cfalse!();
         }
-        cfalse!()
     }
 }
 
