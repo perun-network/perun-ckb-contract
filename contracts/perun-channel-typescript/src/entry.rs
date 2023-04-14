@@ -170,7 +170,7 @@ pub fn check_valid_start(
 
     // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
     verify_funded_status(new_status)?;
-    
+
     // We verify that the channel status is not disputed upon start.
     verify_status_not_disputed(new_status)?;
     Ok(())
@@ -183,18 +183,35 @@ pub fn check_valid_progress(
     channel_constants: &ChannelConstants,
     own_script: &Script,
 ) -> Result<(), Error> {
+    // At this point we know that the transaction progresses the channel. There are two different
+    // kinds of channel progression: Funding and Dispute. Which kind of progression is performed
+    // depends on the witness.
+
+    // Some checks are common to both kinds of progression and are performed here.
+    // We check that both the old and the new state have the same channel id.
     verify_equal_channel_id(&old_status.state(), &new_status.state())?;
+    // No kind of channel progression should pay out any funds locked by the pfls, so we just check
+    // that there are no funds locked by the pfls hash in the inputs of the transaction.
     verify_no_funds_in_inputs(&channel_constants.pfls_hash())?;
+    // Here, we verify that there is exactly one cell in the outputs with the exact same pcts as type script.
+    // (this also compares the args field and therefore the integrity of the channel constants). We also
+    // verify that said cell is guarded by the pcls script specified in the channel constants.
     verify_channel_continues(own_script)?;
+
     match witness.to_enum() {
         ChannelWitnessUnion::Fund(f) => {
+            // Funding must not alter the channel's state.
             verify_equal_channel_state(&old_status.state(), &new_status.state())?;
+            // Funding an already funded status is invalid.
             verify_status_not_funded(&old_status)?;
+            // Funding status of the peer must be untouched, funding for the other party is not allowed.
             verify_funding_unchanged(
                 f.index().idx_of_peer(),
                 &old_status.funding(),
                 &new_status.funding(),
             )?;
+            // We verify that both the new status reflects that funding is complete for this party and that
+            // the funds are actually locked to the pfls with correct args in the outputs of this transaction.
             verify_funding_in_status(
                 f.index().to_idx(),
                 &new_status.funding(),
@@ -206,14 +223,36 @@ pub fn check_valid_progress(
                 channel_constants,
                 own_script,
             )?;
+            // Funding a disputed status is invalid. This should not be able to happen anyway, but we check
+            // it nontheless.
             verify_status_not_disputed(new_status)?;
+            // We check that the funded bit in the channel status is set to true, iff the funding is complete.
             verify_funded_status(&new_status)?;
             Ok(())
         }
         ChannelWitnessUnion::Dispute(d) => {
+            // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
+            // the channel. For this, the honest party needs to provide the latest state (in the "new" channel status)
+            // as well as a valid signature by each party on that state (in the witness). After the expiration of the
+            // relative time lock (challenge duration), the honest party can forcibly close the channel.
+            // If a malicious party disputes with an old channel state, an honest party can dispute again with
+            // the latest state (with higher version number) and the corresponding signatures within the challenge
+            // duration.
+
+            // First, we verify the integrity of the channel state. For this, the following must hold:
+            // - channel id is equal
+            // - version number is strictly increasing
+            // - sum of balances is equal
+            // - old state is not final
             verify_channel_state_progression(&old_status.state(), &new_status.state())?;
+
+            // One cannot dispute if funding is not complete.
             verify_status_funded(old_status)?;
+            // The disputed flag in the new status must be set. This indicates that the channel can be closed
+            // forcibly after the expiration of the challenge duration in a later transaction.
             verify_status_disputed(new_status)?;
+
+            // We verify that the signatures of both parties are valid on the new channel state.
             verify_valid_state_sig(
                 &d.sig_a().unpack(),
                 &new_status.state(),
@@ -226,6 +265,7 @@ pub fn check_valid_progress(
             )?;
             Ok(())
         }
+        // Close, ForceClose and Abort may not happen as channel progression (if there is a continuing channel output).
         ChannelWitnessUnion::Close(_) => Err(Error::ChannelCloseWithChannelOutput),
         ChannelWitnessUnion::ForceClose(_) => Err(Error::ChannelForceCloseWithChannelOutput),
         ChannelWitnessUnion::Abort(_) => Err(Error::ChannelAbortWithChannelOutput),
