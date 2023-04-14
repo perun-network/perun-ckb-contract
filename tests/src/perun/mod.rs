@@ -1,3 +1,4 @@
+#[cfg(test)]
 pub mod harness;
 
 mod error;

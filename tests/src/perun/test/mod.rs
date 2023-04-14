@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod client;
 pub use client::*;
 
