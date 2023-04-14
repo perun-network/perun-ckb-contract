@@ -743,7 +743,7 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
 
     // Hack: If load_cell_type succeeds, we know that this type script exists at least in an input of the transaction.
     // If it does not succeed, we know that it does not exist in any input of the transaction.
-    // We do not actually care about the hash.
+    // We do not actually care about the type script.
     match load_cell_type(0, Source::GroupInput) {
         Ok(_) => {
             input_status_opt = Some(ChannelStatus::from_slice(
@@ -755,7 +755,7 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
 
     // Hack: If load_cell_type succeeds, we know that this type script exists at least in an output of the transaction.
     // If it does not succeed, we know that it does not exist in any output of the transaction.
-    // We do not actually care about the hash.
+    // We do not actually care about the type script.
     match load_cell_type(0, Source::GroupOutput) {
         Ok(_) => {
             output_status_opt = Some(ChannelStatus::from_slice(
