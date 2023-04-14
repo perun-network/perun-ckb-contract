@@ -200,6 +200,7 @@ pub fn check_valid_progress(
 
     match witness.to_enum() {
         ChannelWitnessUnion::Fund(f) => {
+            // The funding array in a channel status reflects how much each party has funded up to that point.
             // Funding must not alter the channel's state.
             verify_equal_channel_state(&old_status.state(), &new_status.state())?;
             // Funding an already funded status is invalid.
@@ -277,14 +278,25 @@ pub fn check_valid_close(
     channel_witness: &ChannelWitness,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    // At this point we know that this transaction closes the channel. There are three different kinds of
+    // closing: Abort, ForceClose and Close. Which kind of closing is performed depends on the witness.
+    // Every channel closing transaction must pay out all funds the the channel participants. The amount
+    // to be payed to each party
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
     match channel_witness.to_enum() {
         ChannelWitnessUnion::Abort(_) => {
+            // An abort can be performed at any time by a channel participant on a channel for which funding
+            // is not yet complete. It allows the initial party to reclaim its funds if e.g. the other party
+            // refuses to fund the channel.
             verify_status_not_funded(old_status)?;
+            // We verify that every party is payed the amount of funds that it has locked to the channel so far.
             verify_all_payed(&old_status.funding(), channel_capacity, channel_constants)?;
             Ok(())
         }
         ChannelWitnessUnion::ForceClose(_) => {
+            // A force close can be performed after the channel was disputed and the challenge duration has
+            // expired. Upon force close, each party is payed according to the balance distribution in the
+            // latest state.
             verify_status_funded(old_status)?;
             verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
             verify_status_disputed(old_status)?;
@@ -292,6 +304,9 @@ pub fn check_valid_close(
             Ok(())
         }
         ChannelWitnessUnion::Close(c) => {
+            // A channel can be closed by either party at any time after funding is complete.
+            // For this the party needs to provide a final state (final bit set) and signatures
+            // by all peers on that state.
             verify_equal_channel_id(&old_status.state(), &c.state())?;
             verify_status_funded(old_status)?;
             verify_state_finalized(&c.state())?;
@@ -305,6 +320,7 @@ pub fn check_valid_close(
                 &c.state(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
+            // We verify that each party is payed according to the balance distribution in the final state.
             verify_all_payed(&c.state().balances(), channel_capacity, channel_constants)?;
             Ok(())
         }
