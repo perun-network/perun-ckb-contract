@@ -86,8 +86,8 @@ fn test_funding_abort(
     let parts = [random::account(alice), random::account(bob)];
     let funding_timeout = 10;
     let funding = [
-        Capacity::bytes(100)?.as_u64(),
-        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(1000)?.as_u64(),
+        Capacity::bytes(1000)?.as_u64(),
     ];
     let funding_agreement = test::FundingAgreement::new_with_capacities(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
