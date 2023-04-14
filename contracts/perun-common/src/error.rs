@@ -32,7 +32,7 @@ pub enum Error {
     StateNotFinal,
     ChannelNotFunded,
     NotParticipant,
-    BalancesNotEqual,
+    SumOfBalancesNotEqual,
     OwnIndexNotFound,
     ChannelDoesNotContinue,
     MultipleMatchingOutputs,

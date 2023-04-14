@@ -318,14 +318,14 @@ pub fn verify_status_funded(status: &ChannelStatus) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_equal_balances(
+pub fn verify_equal_sum_of_balances(
     old_balances: &Balances,
     new_balances: &Balances,
 ) -> Result<(), Error> {
-    if old_balances.equal(new_balances) {
+    if old_balances.sum() == new_balances.sum() {
         return Ok(());
     }
-    Err(Error::BalancesNotEqual)
+    Err(Error::SumOfBalancesNotEqual)
 }
 
 pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
@@ -483,7 +483,7 @@ pub fn verify_channel_state_progression(
 ) -> Result<(), Error> {
     verify_equal_channel_id(old_state, new_state)?;
     verify_increasing_version_number(old_state, new_state)?;
-    verify_equal_balances(&old_state.balances(), &new_state.balances())?;
+    verify_equal_sum_of_balances(&old_state.balances(), &new_state.balances())?;
     verify_state_not_finalized(old_state)?;
     Ok(())
 }
