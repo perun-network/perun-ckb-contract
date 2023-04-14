@@ -781,8 +781,8 @@ pub fn verify_channel_count(
 ) -> Result<(), Error> {
     let mut channel_count = 0;
     for i in 0.. {
-        match load_cell_type_hash(i, source)? {
-            Some(hash) => {
+        match load_cell_type_hash(i, source) {
+            Ok(Some(hash)) => {
                 if hash[..] == own_hash[..] {
                     channel_count += 1;
                     let input_args: Bytes = load_cell_type(i, source)?.unwrap().args().unpack();
@@ -791,7 +791,8 @@ pub fn verify_channel_count(
                     }
                 }
             }
-            None => continue,
+            Ok(None) => continue,
+            Err(_) => break,
         }
     }
     if channel_count > 1 {
