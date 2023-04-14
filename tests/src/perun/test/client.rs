@@ -83,6 +83,8 @@ impl Client {
             .is_ledger_channel(ctrue!())
             .is_virtual_channel(cfalse!())
             .build();
+        let cid_raw = blake2b256(chan_params.as_slice());
+        let cid = ChannelId::from(cid_raw);
         let chan_const = perun_types::ChannelConstantsBuilder::default()
             .params(chan_params)
             .pfls_hash(pfls_hash.clone())
@@ -92,8 +94,6 @@ impl Client {
             .pfls_min_capacity(env.min_capacity_pfls.pack())
             .thread_token(channel_token.clone())
             .build();
-        let cid_raw = blake2b256(&chan_const.as_bytes());
-        let cid = ChannelId::from(cid_raw);
 
         let pcls = env.build_pcls(ctx, Default::default());
         let pcts = env.build_pcts(ctx, chan_const.as_bytes());

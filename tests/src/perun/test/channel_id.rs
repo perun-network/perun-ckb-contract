@@ -4,7 +4,7 @@ use ckb_testtool::ckb_types::{
 };
 use rand::Rng;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct ChannelId([u8; 32]);
 
 impl ChannelId {
@@ -21,8 +21,7 @@ impl ChannelId {
         let x = self.0;
         let y = x.iter().map(|x| (*x).into()).collect::<Vec<Byte>>();
         byte32.copy_from_slice(&y);
-        Byte32Builder::default().set(byte32).build();
-        Default::default()
+        Byte32Builder::default().set(byte32).build()
     }
 }
 
