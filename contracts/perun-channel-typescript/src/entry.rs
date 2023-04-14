@@ -16,7 +16,7 @@ use ckb_std::{
     debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
-        load_cell_type_hash, load_header, load_script, load_transaction, load_witness_args,
+        load_header, load_script, load_transaction, load_witness_args,
     },
 };
 use perun_common::{
@@ -61,7 +61,6 @@ pub enum ChannelAction {
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-    debug!("script args is {:?}", args);
 
     // return an error if args is empty
     if args.is_empty() {
@@ -424,19 +423,12 @@ pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
 
 pub fn get_own_index(own_script: &Script, source: Source) -> Result<usize, Error> {
     let own_script_hash = own_script.code_hash().unpack();
-    debug!("Own script hash: {:?}", own_script_hash);
     for i in 0.. {
-        debug!("Checking index {}", i);
-        let cell_type_hash = load_cell_type_hash(i, source)?;
-        debug!("Loaded type hash");
-        debug!("Cell type hash is_some: {}", cell_type_hash.is_some());
-        if cell_type_hash.is_some() {
-            debug!("Cell type hash: {:?}", cell_type_hash.unwrap());
-        }
-        if cell_type_hash.is_some()
-            && cell_type_hash.unwrap()[..] == own_script_hash[..]
-        {
-            return Ok(i);
+        let cell_type = load_cell_type(i, source)?;
+        if cell_type.is_some() &&
+            cell_type.unwrap().code_hash().unpack()[..] == own_script_hash[..] {
+                return Ok(i);
+
         }
     }
     Err(Error::OwnIndexNotFound)
@@ -606,6 +598,9 @@ pub fn verify_state_valid_as_start(
     let min_balance = u128::from(pfls_min_capacity);
     let balance_a = state.balances().get(0)?;
     let balance_b = state.balances().get(1)?;
+    debug!("Balance A: {}", balance_a);
+    debug!("Balance B: {}", balance_b);
+    debug!("Min balance: {}", min_balance);
     if balance_a < min_balance &&
         balance_a != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
@@ -758,10 +753,10 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
     let mut input_status_opt: Option<ChannelStatus> = None;
     let mut output_status_opt: Option<ChannelStatus> = None;
 
-    // Hack: If load_cell_type_hash succeeds, we know that this type script exists at least in an input of the transaction.
+    // Hack: If load_cell_type succeeds, we know that this type script exists at least in an input of the transaction.
     // If it does not succeed, we know that it does not exist in any input of the transaction.
     // We do not actually care about the hash.
-    match load_cell_type_hash(0, Source::GroupInput) {
+    match load_cell_type(0, Source::GroupInput) {
         Ok(_) => {
             input_status_opt = Some(ChannelStatus::from_slice(
                 load_cell_data(0, Source::GroupInput)?.as_slice(),
@@ -770,10 +765,10 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
         Err(_) => {}
     }
 
-    // Hack: If load_cell_type_hash succeeds, we know that this type script exists at least in an output of the transaction.
+    // Hack: If load_cell_type succeeds, we know that this type script exists at least in an output of the transaction.
     // If it does not succeed, we know that it does not exist in any output of the transaction.
     // We do not actually care about the hash.
-    match load_cell_type_hash(0, Source::GroupOutput) {
+    match load_cell_type(0, Source::GroupOutput) {
         Ok(_) => {
             output_status_opt = Some(ChannelStatus::from_slice(
                 load_cell_data(0, Source::GroupOutput)?.as_slice(),
@@ -807,9 +802,9 @@ pub fn verify_channel_count(
 ) -> Result<(), Error> {
     let mut channel_count = 0;
     for i in 0.. {
-        match load_cell_type_hash(i, source) {
-            Ok(Some(hash)) => {
-                if hash[..] == own_hash[..] {
+        match load_cell_type(i, source) {
+            Ok(Some(type_script)) => {
+                if type_script.code_hash().unpack()[..] == own_hash[..] {
                     channel_count += 1;
                     let input_args: Bytes = load_cell_type(i, source)?.unwrap().args().unpack();
                     if input_args[..] != own_args[..] {
