@@ -1,6 +1,10 @@
+use crate::perun::random;
+
 use super::*;
+use ckb_occupied_capacity::Capacity;
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::{ckb_types::core::TransactionBuilder, context::Context};
+use k256::PublicKey;
 use perun;
 use perun::test;
 use perun_common::perun_types::{Balances, Bool, ChannelState, SEC1EncodedPubKey};
@@ -44,55 +48,6 @@ fn test_signature() {
 }
 
 #[test]
-fn test_success() {
-    // Deploy contracts into environment.
-    let mut context = Context::default();
-    let pe = perun::harness::Env::new(&mut context, MAX_CYCLES, CHALLENGE_DURATION_MS)
-        .expect("preparing environment");
-
-    // Prepare cells.
-    let input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(1000u64.pack())
-            .lock(pe.always_success_script.clone())
-            .build(),
-        Bytes::new(),
-    );
-
-    // Prepare transaction fields.
-    let input = CellInput::new_builder()
-        .previous_output(input_out_point)
-        .build();
-    let outputs = vec![
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(pe.always_success_script.clone())
-            .build(),
-        CellOutput::new_builder()
-            .capacity(500u64.pack())
-            .lock(pe.always_success_script.clone())
-            .build(),
-    ];
-
-    let outputs_data = vec![Bytes::new(); 2];
-
-    // Build transaction.
-    let tx = TransactionBuilder::default()
-        .input(input)
-        .outputs(outputs)
-        .outputs_data(outputs_data.pack())
-        .cell_dep(pe.always_success_script_dep)
-        .build();
-    let tx = context.complete_tx(tx);
-
-    // Run transaction.
-    let cycles = context
-        .verify_tx(&tx, MAX_CYCLES)
-        .expect("pass verification");
-    println!("consume cycles: {}", cycles);
-}
-
-#[test]
 fn channel_test_bench() -> Result<(), perun::Error> {
     let res = [
         test_funding_abort,
@@ -114,10 +69,10 @@ fn create_channel_test<P>(
     context: &mut Context,
     env: &perun::harness::Env,
     parts: &[P],
-    test: impl Fn(&mut perun::channel::Channel<P, perun::State>) -> Result<(), perun::Error>,
+    test: impl Fn(&mut perun::channel::Channel<perun::State>) -> Result<(), perun::Error>,
 ) -> Result<(), perun::Error>
 where
-    P: Eq + std::hash::Hash + Copy + Clone,
+    P: perun::Account,
 {
     let mut chan = perun::channel::Channel::new(context, env, parts);
     test(&mut chan)
@@ -127,9 +82,16 @@ fn test_funding_abort(
     context: &mut Context,
     env: &perun::harness::Env,
 ) -> Result<(), perun::Error> {
-    let parts @ [alice, bob] = ["alice", "bob"];
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
     let funding_timeout = 10;
-    let funding_agreement = test::FundingAgreement::new(parts.len());
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
             .open(&funding_agreement)
@@ -153,8 +115,15 @@ fn test_successful_funding(
     context: &mut Context,
     env: &perun::harness::Env,
 ) -> Result<(), perun::Error> {
-    let parts @ [alice, bob] = ["alice", "bob"];
-    let funding_agreement = test::FundingAgreement::new(parts.len());
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
             .open(&funding_agreement)
@@ -173,8 +142,15 @@ fn test_multiple_disputes(
     context: &mut Context,
     env: &perun::harness::Env,
 ) -> Result<(), perun::Error> {
-    let parts @ [alice, bob] = ["alice", "bob"];
-    let funding_agreement = test::FundingAgreement::new(parts.len());
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
             .open(&funding_agreement)
