@@ -478,13 +478,20 @@ pub fn verify_state_valid_as_start(
     if state.is_final().to_bool() {
         return Err(Error::StartWithFinalizedState);
     }
-    if state.balances().get(0)? < u128::from(pfls_min_capacity) {
+
+    // We verify that each participant's initial balance is at least the minimum capacity of a PFLS (or zero),
+    // to ensure that funding is possible for the initial balance distribution.
+    let min_balance = u128::from(pfls_min_capacity);
+    let balance_a = state.balances().get(0)?;
+    let balance_b = state.balances().get(1)?;
+    if balance_a < min_balance &&
+        balance_a != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
-    if state.balances().get(1)? < u128::from(pfls_min_capacity) {
+    if balance_b < min_balance &&
+        balance_b != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
-    // TODO: Check that each individual balance is large enough to be funded.
     Ok(())
 }
 
