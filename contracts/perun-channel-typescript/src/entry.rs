@@ -68,14 +68,22 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::NoArgs);
     }
 
+    // Currently, we do not support interacting with different channels in the same transaction.
+    // This also prevents that someone instantiates two channels with the same ChannelToken in one
+    // start transaction
     verify_max_one_channel(&script.code_hash().unpack(), &args)?;
 
+    // The channel constants do not change during the lifetime of a channel. They are located in the 
+    // args field of the pcts.
     let channel_constants =
         ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParameters");
+
     // Verify that the channel parameters are compatible with the currently supported
     // features of perun channels.
     verify_channel_params_compatibility(&channel_constants.params())?;
 
+    // Next, we determine whether the transaction starts, progresses or closes the channel and fetch
+    // the respective old and/or new channel status.
     let channel_action = get_channel_action()?;
 
     match channel_action {
@@ -107,21 +115,50 @@ pub fn check_valid_start(
     channel_constants: &ChannelConstants,
     own_script: &Script,
 ) -> Result<(), Error> {
+    // Upon start of a channel, the channel constants are stored in the args field of the pcts output.
+    // We uniquely identify a channel through the combination of the channel id (hash of ChannelParameters,
+    // which is part of the ChannelConstants) and the "thread token".
+    // The thread token contains an OutPoint and the channel type script verifies, that that outpoint is
+    // consumed in the inputs of the transaction that starts the channel.
+    // This means: Once a (pcts-hash, channel-id, thread-token) tuple appears once on chain and is recognized
+    // as the on-chain representation of this channel by all peers, no other "copy" or "fake" of that channel 
+    // can be created on chain, as an OutPoint can only be consumed once. 
+    
+    // here, we verify that the OutPoint in the thread token is actually consumed.
     verify_thread_token_integrity(&channel_constants.thread_token())?;
+
+    // We verify that the channel id is the hash of the channel parameters.
     verify_channel_id_integrity(
         &new_status.state().channel_id(),
         &channel_constants.params(),
     )?;
+
+    // We verify that the pcts is guarded by the pcls script specified in the channel constants
     verify_valid_lock_script(own_script, channel_constants)?;
 
+    // We verify that the channel participants have different payment addresses
+    // For this purpose we consider a payment address to be the tuple of (payment lock script, payment lock script args).
     verify_different_payment_addresses(channel_constants)?;
 
+    // We verify that there are no funds locked by the pfls hash of this channel in the inputs of the transaction.
+    // This check is not strictly necessary for the current implementation of the pfls, but it is good practice to
+    // verify this anyway, as there is no reason to include funds locked for any channel in the input of a transaction
+    // that creates a new channel besides trying some kind of attack.
     verify_no_funds_in_inputs(&channel_constants.pfls_hash())?;
+
+    // We verify that the state the channel starts with is valid according to the utxo-adaption of the perun protocol.
+    // For example, the channel must not be final and the version number must be 0.
     verify_state_valid_as_start(
         &new_status.state(),
         channel_constants.pfls_min_capacity().unpack(),
     )?;
 
+    // Here we verify that the first party completes its funding according to protocol.
+    // This includes:
+    // - The funding entry of the first party in the new status is equal to the balance entry of the first party in the
+    //   initial state.
+    // - The funding entry of the other party is untouched (=0).
+    // - The funds are actually locked to the pfls with correct args.
     verify_funding_in_status(0, &new_status.funding(), &new_status.state())?;
     verify_funding_is_zero_at_index(1, &new_status.funding())?;
     verify_funding_in_outputs(
@@ -130,7 +167,11 @@ pub fn check_valid_start(
         channel_constants,
         own_script,
     )?;
+
+    // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
     verify_funded_status(new_status)?;
+    
+    // We verify that the channel status is not disputed upon start.
     verify_status_not_disputed(new_status)?;
     Ok(())
 }
