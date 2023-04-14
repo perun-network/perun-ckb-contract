@@ -72,19 +72,27 @@ pub fn main() -> Result<(), Error> {
     // This also prevents that someone instantiates two channels with the same ChannelToken in one
     // start transaction
     verify_max_one_channel(&script.code_hash().unpack(), &args)?;
+    debug!("verify_max_one_channel passed");
+
 
     // The channel constants do not change during the lifetime of a channel. They are located in the 
     // args field of the pcts.
     let channel_constants =
         ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParameters");
+        debug!("parsing channel constants passed");
+
 
     // Verify that the channel parameters are compatible with the currently supported
     // features of perun channels.
     verify_channel_params_compatibility(&channel_constants.params())?;
+    debug!("verify_channel_params_compatibility passed");
+
 
     // Next, we determine whether the transaction starts, progresses or closes the channel and fetch
     // the respective old and/or new channel status.
     let channel_action = get_channel_action()?;
+    debug!("get_channel_action passed");
+
 
     match channel_action {
         ChannelAction::Start { new_status } => {
@@ -126,25 +134,34 @@ pub fn check_valid_start(
     
     // here, we verify that the OutPoint in the thread token is actually consumed.
     verify_thread_token_integrity(&channel_constants.thread_token())?;
+    debug!("verify_thread_token_integrity passed");
+
 
     // We verify that the channel id is the hash of the channel parameters.
     verify_channel_id_integrity(
         &new_status.state().channel_id(),
         &channel_constants.params(),
     )?;
+    debug!("verify_channel_id_integrity passed");
+
 
     // We verify that the pcts is guarded by the pcls script specified in the channel constants
     verify_valid_lock_script(own_script, channel_constants)?;
+    debug!("verify_valid_lock_script passed");
 
     // We verify that the channel participants have different payment addresses
     // For this purpose we consider a payment address to be the tuple of (payment lock script, payment lock script args).
     verify_different_payment_addresses(channel_constants)?;
+    debug!("verify_different_payment_addresses passed");
+
 
     // We verify that there are no funds locked by the pfls hash of this channel in the inputs of the transaction.
     // This check is not strictly necessary for the current implementation of the pfls, but it is good practice to
     // verify this anyway, as there is no reason to include funds locked for any channel in the input of a transaction
     // that creates a new channel besides trying some kind of attack.
     verify_no_funds_in_inputs(&channel_constants.pfls_hash())?;
+
+    debug!("verify_no_funds_in_inputs passed");
 
     // We verify that the state the channel starts with is valid according to the utxo-adaption of the perun protocol.
     // For example, the channel must not be final and the version number must be 0.
@@ -385,7 +402,7 @@ pub fn verify_equal_sum_of_balances(
 }
 
 pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
-    let idx = get_own_input_index(own_script)?;
+    let idx = get_own_index(own_script, Source::Input)?;
     let corresponding_lock_script = load_cell_lock(idx, Source::Input)?;
     let outputs = load_transaction()?.raw().outputs();
 
@@ -405,11 +422,19 @@ pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
     return Err(Error::ChannelDoesNotContinue);
 }
 
-pub fn get_own_input_index(own_script: &Script) -> Result<usize, Error> {
+pub fn get_own_index(own_script: &Script, source: Source) -> Result<usize, Error> {
+    let own_script_hash = own_script.code_hash().unpack();
+    debug!("Own script hash: {:?}", own_script_hash);
     for i in 0.. {
-        let cell_type_hash = load_cell_type_hash(i, Source::Input)?;
+        debug!("Checking index {}", i);
+        let cell_type_hash = load_cell_type_hash(i, source)?;
+        debug!("Loaded type hash");
+        debug!("Cell type hash is_some: {}", cell_type_hash.is_some());
+        if cell_type_hash.is_some() {
+            debug!("Cell type hash: {:?}", cell_type_hash.unwrap());
+        }
         if cell_type_hash.is_some()
-            && cell_type_hash.unwrap()[..] == own_script.code_hash().unpack()[..]
+            && cell_type_hash.unwrap()[..] == own_script_hash[..]
         {
             return Ok(i);
         }
@@ -596,8 +621,9 @@ pub fn verify_valid_lock_script(
     own_type_script: &Script,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let idx = get_own_input_index(own_type_script)?;
-    let lock_script = load_cell_lock(idx, Source::Input)?;
+    let idx = get_own_index(own_type_script, Source::Output)?;
+    debug!("Own output index: {}", idx);
+    let lock_script = load_cell_lock(idx, Source::Output)?;
     let lock_script_args: Bytes = lock_script.args().unpack();
     if lock_script.code_hash().unpack()[..] != channel_constants.pcls_hash().unpack()[..] {
         return Err(Error::InvalidPCLSHash);
