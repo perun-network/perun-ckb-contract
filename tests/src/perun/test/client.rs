@@ -2,7 +2,7 @@ use ckb_testtool::ckb_traits::CellDataProvider;
 use ckb_testtool::ckb_types::bytes::Bytes;
 use ckb_testtool::ckb_types::core::TransactionBuilder;
 use ckb_testtool::ckb_types::packed::{
-    Byte32, Bytes as PackedBytes, BytesBuilder, CellInput, CellOutput, OutPointBuilder,
+    Byte32, Bytes as PackedBytes, BytesBuilder, CellInput, CellOutput, OutPoint, OutPointBuilder,
     ScriptOptBuilder,
 };
 use ckb_testtool::ckb_types::prelude::*;
@@ -58,6 +58,7 @@ impl Client {
         // Create the channel token.
         let (channel_token, channel_token_outpoint) = env.create_channel_token(ctx);
 
+        let pcls = env.build_pcls(ctx, Default::default());
         let pcls_hash = ctx
             .get_cell_data_hash(&env.pcls_out_point)
             .expect("pcls hash");
@@ -95,8 +96,9 @@ impl Client {
             .thread_token(channel_token.clone())
             .build();
 
-        let pcls = env.build_pcls(ctx, Default::default());
         let pcts = env.build_pcts(ctx, chan_const.as_bytes());
+        println!("code_hash: {}", pcts.code_hash());
+        println!("script_hash: {}", pcts.calc_script_hash());
 
         let pfls_args = perun_types::PFLSArgsBuilder::default()
             .pcts_hash(pcts_hash.clone())
@@ -156,7 +158,12 @@ impl Client {
         ctx: &mut Context,
         env: &harness::Env,
         cid: test::ChannelId,
+        channel_cell: OutPoint,
+        funds: Vec<OutPoint>,
     ) -> Result<(), perun::Error> {
+        let ar = transaction::mk_abort(ctx, env, channel_cell, funds)?;
+        let cycles = ctx.verify_tx(&ar.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
         Ok(())
     }
 

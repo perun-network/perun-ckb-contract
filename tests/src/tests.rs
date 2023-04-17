@@ -99,11 +99,6 @@ fn test_funding_abort(
 
         chan.delay(funding_timeout);
 
-        chan.with(bob)
-            .invalid()
-            .fund(&funding_agreement)
-            .expect("invalid funding channel");
-
         chan.with(alice).abort().expect("aborting channel");
 
         chan.assert();

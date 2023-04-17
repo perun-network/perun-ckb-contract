@@ -1,3 +1,5 @@
+use ckb_testtool::ckb_types::core::BlockBuilder;
+use ckb_testtool::ckb_types::packed::{CellOutput, HeaderBuilder, HeaderViewBuilder, OutPoint};
 use ckb_testtool::context::Context;
 use k256::ecdsa::SigningKey;
 use rand_core::OsRng;
@@ -25,6 +27,10 @@ where
     active_part: test::Client,
     /// The id of the channel.
     id: test::ChannelId,
+    /// The cell which represents this channel on-chain.
+    channel_cell: Option<OutPoint>,
+    /// The cells locking funds for this channel.
+    funding_cells: Vec<OutPoint>,
     /// All available parties.
     parts: HashMap<String, test::Client>,
     /// The surrounding chain context.
@@ -89,6 +95,8 @@ where
             current_time: 0,
             ctx: context,
             env,
+            channel_cell: None,
+            funding_cells: Vec::new(),
             active_part: active.clone(),
             parts: m_parts.clone(),
             validity: ActionValidity::Valid,
@@ -113,8 +121,12 @@ where
     /// open a channel using the currently active participant set by `with(..)`
     /// with the value given in `funding_agreement`.
     pub fn open(&mut self, funding_agreement: &test::FundingAgreement) -> Result<(), perun::Error> {
-        let id = call_action!(self, open, funding_agreement)?;
+        let (id, or) = call_action!(self, open, funding_agreement)?;
         self.id = id;
+        self.channel_cell = Some(or.channel_cell);
+        let mut fs = self.funding_cells.clone();
+        fs.extend(or.funds_cells.iter().cloned());
+        self.funding_cells = fs.to_vec();
         Ok(())
     }
 
@@ -140,7 +152,18 @@ where
     /// abort a channel using the currently active participant set by
     /// `with(..)`.
     pub fn abort(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, abort, self.id)
+        match &self.channel_cell {
+            Some(channel_cell) => {
+                call_action!(
+                    self,
+                    abort,
+                    self.id,
+                    channel_cell.clone(),
+                    self.funding_cells.clone()
+                )
+            }
+            None => panic!("no channel cell, invalid test setup"),
+        }
     }
 
     /// close a channel using the currently active participant set by
