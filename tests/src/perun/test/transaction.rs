@@ -1,6 +1,6 @@
 use ckb_occupied_capacity::{Capacity, IntoCapacity};
 use ckb_testtool::ckb_types::core::{TransactionBuilder, TransactionView};
-use ckb_testtool::ckb_types::packed::{TransactionViewBuilder, WitnessArgsBuilder};
+use ckb_testtool::ckb_types::packed::WitnessArgsBuilder;
 use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
@@ -10,11 +10,11 @@ use ckb_testtool::{
     context::Context,
 };
 use ckb_types::prelude::*;
-use perun_common::perun_types::{self, ChannelWitnessUnion};
 use perun_common::redeemer;
 
 use crate::perun::{self, harness};
 
+use super::cell::FundingCell;
 use super::{ChannelId, FundingAgreement};
 
 /// Build witness args containing the given action.
@@ -45,7 +45,7 @@ pub struct OpenArgs {
 pub struct OpenResult {
     pub tx: TransactionView,
     pub channel_cell: OutPoint,
-    pub funds_cells: Vec<OutPoint>,
+    pub funds_cells: Vec<FundingCell>,
 }
 
 impl Default for OpenResult {
@@ -117,7 +117,11 @@ pub fn mk_open(
     Ok(OpenResult {
         // See NOTE above for magic indices.
         channel_cell: OutPoint::new(tx.hash(), 0),
-        funds_cells: vec![OutPoint::new(tx.hash(), 1)],
+        funds_cells: vec![FundingCell {
+            index: args.party_index,
+            amount: wanted,
+            out_point: OutPoint::new(tx.hash(), 1),
+        }],
         tx,
     })
 }
@@ -129,32 +133,49 @@ fn create_funding_from(
     Ok(available_capacity.safe_sub(wanted_capacity)?)
 }
 
+#[derive(Debug, Clone)]
+pub struct AbortArgs {
+    pub channel_cell: OutPoint,
+    pub funds: Vec<FundingCell>,
+}
+
+#[derive(Debug, Clone)]
 pub struct AbortResult {
     pub tx: TransactionView,
+}
+
+impl Default for AbortResult {
+    fn default() -> Self {
+        AbortResult {
+            tx: TransactionBuilder::default().build(),
+        }
+    }
 }
 
 pub fn mk_abort(
     ctx: &mut Context,
     env: &harness::Env,
-    channel_cell: OutPoint,
-    funds: Vec<OutPoint>,
+    args: AbortArgs,
 ) -> Result<AbortResult, perun::Error> {
     let abort_action = redeemer!(Abort);
     let witness_args = channel_witness!(abort_action);
     let mut inputs = vec![CellInput::new_builder()
-        .previous_output(channel_cell)
+        .previous_output(args.channel_cell)
         .build()];
-    inputs.extend(
-        funds
-            .iter()
-            .cloned()
-            .map(|op| CellInput::new_builder().previous_output(op).build()),
-    );
+    inputs.extend(args.funds.iter().cloned().map(|op| {
+        CellInput::new_builder()
+            .previous_output(op.out_point)
+            .build()
+    }));
 
-    let outputs = vec![CellOutput::new_builder()
-        .capacity((1u64).into_capacity().pack())
-        .lock(env.always_success_script.clone())
-        .build()];
+    // TODO: We are expecting the output amounts to be greater than the minimum amount necessary to
+    // accomodate the space required for each output cell.
+    let outputs = args.funds.iter().cloned().map(|f| {
+        CellOutput::new_builder()
+            .capacity(f.amount.pack())
+            .lock(env.build_lock_script(ctx, Bytes::from(vec![f.index])))
+            .build()
+    });
     let tx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs)

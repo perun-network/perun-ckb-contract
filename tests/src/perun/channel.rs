@@ -10,6 +10,8 @@ use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use super::test::cell::FundingCell;
+
 enum ActionValidity {
     Valid,
     Invalid,
@@ -30,7 +32,7 @@ where
     /// The cell which represents this channel on-chain.
     channel_cell: Option<OutPoint>,
     /// The cells locking funds for this channel.
-    funding_cells: Vec<OutPoint>,
+    funding_cells: Vec<FundingCell>,
     /// All available parties.
     parts: HashMap<String, test::Client>,
     /// The surrounding chain context.

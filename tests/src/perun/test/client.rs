@@ -16,7 +16,7 @@ use perun_common::helpers::blake2b256;
 use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
-use crate::perun::test::transaction::OpenResult;
+use crate::perun::test::transaction::{AbortArgs, OpenResult};
 use crate::perun::test::{self, Asset};
 use crate::perun::test::{keys, transaction};
 
@@ -25,6 +25,7 @@ use k256::{
     SecretKey,
 };
 
+use super::cell::FundingCell;
 use super::ChannelId;
 
 #[derive(Clone, Debug)]
@@ -152,11 +153,18 @@ impl Client {
         &self,
         ctx: &mut Context,
         env: &harness::Env,
-        cid: test::ChannelId,
+        _cid: test::ChannelId,
         channel_cell: OutPoint,
-        funds: Vec<OutPoint>,
+        funds: Vec<FundingCell>,
     ) -> Result<(), perun::Error> {
-        let ar = transaction::mk_abort(ctx, env, channel_cell, funds)?;
+        let ar = transaction::mk_abort(
+            ctx,
+            env,
+            AbortArgs {
+                channel_cell,
+                funds,
+            },
+        )?;
         let cycles = ctx.verify_tx(&ar.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
         Ok(())

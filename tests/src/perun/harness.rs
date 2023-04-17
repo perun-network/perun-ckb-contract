@@ -148,6 +148,13 @@ impl Env {
             .expect("perun-funds-lockscript")
     }
 
+    pub fn build_lock_script(&self, context: &mut Context, args: Bytes) -> Script {
+        let always_success_out_point = &self.always_success_out_point;
+        context
+            .build_script(always_success_out_point, args)
+            .expect("always_success")
+    }
+
     pub fn min_capacity_for_channel(&self, cs: ChannelStatus) -> Result<Capacity, perun::Error> {
         let tmp_output = CellOutput::new_builder()
             .capacity(0u64.pack())
