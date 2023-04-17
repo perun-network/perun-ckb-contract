@@ -1,5 +1,7 @@
 use std::{error, fmt};
 
+use ckb_testtool::ckb_error;
+
 #[derive(Debug)]
 pub struct Error {
     details: String,
@@ -33,6 +35,12 @@ impl From<&str> for Error {
 
 impl From<ckb_occupied_capacity::Error> for Error {
     fn from(err: ckb_occupied_capacity::Error) -> Error {
+        Error::new(&err.to_string())
+    }
+}
+
+impl From<ckb_error::Error> for Error {
+    fn from(err: ckb_error::Error) -> Error {
         Error::new(&err.to_string())
     }
 }
