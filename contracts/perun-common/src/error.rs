@@ -1,8 +1,8 @@
 use core::fmt::Debug;
 
 use ckb_std::error::SysError;
-use molecule::error::VerificationError;
 use k256::ecdsa::Error as SigError;
+use molecule::error::VerificationError;
 
 /// Error
 #[derive(Debug)]
@@ -57,7 +57,8 @@ pub enum Error {
     InvalidChannelId,
     StartWithNonZeroVersion,
     StartWithFinalizedState,
-    InvalidPCLSHash,
+    InvalidPCLSCodeHash,
+    InvalidPCLSHashType,
     PCLSWithArgs,
     StatusDisputed,
     StatusNotDisputed,
@@ -74,6 +75,8 @@ pub enum Error {
     MoreThanOneChannel,
     BalanceBelowPFLSMinCapacity,
     SamePaymentAddress,
+    TypeScriptInPaymentOutput,
+    TypeScriptInPFLSOutput,
 }
 
 impl From<SysError> for Error {
@@ -102,7 +105,7 @@ impl From<VerificationError> for Error {
     }
 }
 
-impl From <SigError> for Error {
+impl From<SigError> for Error {
     fn from(_: SigError) -> Self {
         return Self::SignatureVerificationError;
     }

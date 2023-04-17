@@ -2613,15 +2613,24 @@ impl ::core::fmt::Debug for Participant {
 impl ::core::fmt::Display for Participant {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "payment_lock_hash", self.payment_lock_hash())?;
+        write!(
+            f,
+            "{}: {}",
+            "payment_script_hash",
+            self.payment_script_hash()
+        )?;
         write!(
             f,
             ", {}: {}",
             "payment_min_capacity",
             self.payment_min_capacity()
         )?;
-        write!(f, ", {}: {}", "unlock_args", self.unlock_args())?;
-        write!(f, ", {}: {}", "payment_args", self.payment_args())?;
+        write!(
+            f,
+            ", {}: {}",
+            "unlock_script_hash",
+            self.unlock_script_hash()
+        )?;
         write!(f, ", {}: {}", "pub_key", self.pub_key())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2633,17 +2642,18 @@ impl ::core::fmt::Display for Participant {
 impl ::core::default::Default for Participant {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            137, 0, 0, 0, 24, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 68, 0, 0, 0, 72, 0, 0, 0, 0, 0, 0,
+            157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         Participant::new_unchecked(v.into())
     }
 }
 impl Participant {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2660,7 +2670,7 @@ impl Participant {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn payment_lock_hash(&self) -> Byte32 {
+    pub fn payment_script_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -2672,23 +2682,17 @@ impl Participant {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint64::new_unchecked(self.0.slice(start..end))
     }
-    pub fn unlock_args(&self) -> Bytes {
+    pub fn unlock_script_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn payment_args(&self) -> Bytes {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
+        Byte32::new_unchecked(self.0.slice(start..end))
     }
     pub fn pub_key(&self) -> SEC1EncodedPubKey {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             SEC1EncodedPubKey::new_unchecked(self.0.slice(start..end))
         } else {
             SEC1EncodedPubKey::new_unchecked(self.0.slice(start..))
@@ -2721,10 +2725,9 @@ impl molecule::prelude::Entity for Participant {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .payment_lock_hash(self.payment_lock_hash())
+            .payment_script_hash(self.payment_script_hash())
             .payment_min_capacity(self.payment_min_capacity())
-            .unlock_args(self.unlock_args())
-            .payment_args(self.payment_args())
+            .unlock_script_hash(self.unlock_script_hash())
             .pub_key(self.pub_key())
     }
 }
@@ -2747,15 +2750,24 @@ impl<'r> ::core::fmt::Debug for ParticipantReader<'r> {
 impl<'r> ::core::fmt::Display for ParticipantReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "payment_lock_hash", self.payment_lock_hash())?;
+        write!(
+            f,
+            "{}: {}",
+            "payment_script_hash",
+            self.payment_script_hash()
+        )?;
         write!(
             f,
             ", {}: {}",
             "payment_min_capacity",
             self.payment_min_capacity()
         )?;
-        write!(f, ", {}: {}", "unlock_args", self.unlock_args())?;
-        write!(f, ", {}: {}", "payment_args", self.payment_args())?;
+        write!(
+            f,
+            ", {}: {}",
+            "unlock_script_hash",
+            self.unlock_script_hash()
+        )?;
         write!(f, ", {}: {}", "pub_key", self.pub_key())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -2765,7 +2777,7 @@ impl<'r> ::core::fmt::Display for ParticipantReader<'r> {
     }
 }
 impl<'r> ParticipantReader<'r> {
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -2782,7 +2794,7 @@ impl<'r> ParticipantReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn payment_lock_hash(&self) -> Byte32Reader<'r> {
+    pub fn payment_script_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -2794,23 +2806,17 @@ impl<'r> ParticipantReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Uint64Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn unlock_args(&self) -> BytesReader<'r> {
+    pub fn unlock_script_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn payment_args(&self) -> BytesReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn pub_key(&self) -> SEC1EncodedPubKeyReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[24..]) as usize;
+            let end = molecule::unpack_number(&slice[20..]) as usize;
             SEC1EncodedPubKeyReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             SEC1EncodedPubKeyReader::new_unchecked(&self.as_slice()[start..])
@@ -2868,36 +2874,30 @@ impl<'r> molecule::prelude::Reader<'r> for ParticipantReader<'r> {
         }
         Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BytesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        BytesReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        SEC1EncodedPubKeyReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        SEC1EncodedPubKeyReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct ParticipantBuilder {
-    pub(crate) payment_lock_hash: Byte32,
+    pub(crate) payment_script_hash: Byte32,
     pub(crate) payment_min_capacity: Uint64,
-    pub(crate) unlock_args: Bytes,
-    pub(crate) payment_args: Bytes,
+    pub(crate) unlock_script_hash: Byte32,
     pub(crate) pub_key: SEC1EncodedPubKey,
 }
 impl ParticipantBuilder {
-    pub const FIELD_COUNT: usize = 5;
-    pub fn payment_lock_hash(mut self, v: Byte32) -> Self {
-        self.payment_lock_hash = v;
+    pub const FIELD_COUNT: usize = 4;
+    pub fn payment_script_hash(mut self, v: Byte32) -> Self {
+        self.payment_script_hash = v;
         self
     }
     pub fn payment_min_capacity(mut self, v: Uint64) -> Self {
         self.payment_min_capacity = v;
         self
     }
-    pub fn unlock_args(mut self, v: Bytes) -> Self {
-        self.unlock_args = v;
-        self
-    }
-    pub fn payment_args(mut self, v: Bytes) -> Self {
-        self.payment_args = v;
+    pub fn unlock_script_hash(mut self, v: Byte32) -> Self {
+        self.unlock_script_hash = v;
         self
     }
     pub fn pub_key(mut self, v: SEC1EncodedPubKey) -> Self {
@@ -2910,33 +2910,29 @@ impl molecule::prelude::Builder for ParticipantBuilder {
     const NAME: &'static str = "ParticipantBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.payment_lock_hash.as_slice().len()
+            + self.payment_script_hash.as_slice().len()
             + self.payment_min_capacity.as_slice().len()
-            + self.unlock_args.as_slice().len()
-            + self.payment_args.as_slice().len()
+            + self.unlock_script_hash.as_slice().len()
             + self.pub_key.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.payment_lock_hash.as_slice().len();
+        total_size += self.payment_script_hash.as_slice().len();
         offsets.push(total_size);
         total_size += self.payment_min_capacity.as_slice().len();
         offsets.push(total_size);
-        total_size += self.unlock_args.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.payment_args.as_slice().len();
+        total_size += self.unlock_script_hash.as_slice().len();
         offsets.push(total_size);
         total_size += self.pub_key.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.payment_lock_hash.as_slice())?;
+        writer.write_all(self.payment_script_hash.as_slice())?;
         writer.write_all(self.payment_min_capacity.as_slice())?;
-        writer.write_all(self.unlock_args.as_slice())?;
-        writer.write_all(self.payment_args.as_slice())?;
+        writer.write_all(self.unlock_script_hash.as_slice())?;
         writer.write_all(self.pub_key.as_slice())?;
         Ok(())
     }
@@ -2993,19 +2989,20 @@ impl ::core::fmt::Display for ChannelParameters {
 impl ::core::default::Default for ChannelParameters {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            100, 1, 0, 0, 32, 0, 0, 0, 169, 0, 0, 0, 50, 1, 0, 0, 82, 1, 0, 0, 90, 1, 0, 0, 90, 1,
-            0, 0, 95, 1, 0, 0, 137, 0, 0, 0, 24, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 68, 0, 0, 0,
-            72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 137, 0, 0, 0, 24, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 68, 0, 0, 0, 72, 0, 0, 0, 0, 0,
+            140, 1, 0, 0, 32, 0, 0, 0, 189, 0, 0, 0, 90, 1, 0, 0, 122, 1, 0, 0, 130, 1, 0, 0, 130,
+            1, 0, 0, 135, 1, 0, 0, 157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 157, 0, 0, 0, 20, 0,
+            0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelParameters::new_unchecked(v.into())
     }
@@ -3388,15 +3385,11 @@ impl ::core::fmt::Display for ChannelConstants {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "params", self.params())?;
-        write!(f, ", {}: {}", "pfls_hash", self.pfls_hash())?;
+        write!(f, ", {}: {}", "pfls_code_hash", self.pfls_code_hash())?;
+        write!(f, ", {}: {}", "pfls_hash_type", self.pfls_hash_type())?;
         write!(f, ", {}: {}", "pfls_min_capacity", self.pfls_min_capacity())?;
-        write!(f, ", {}: {}", "pcls_hash", self.pcls_hash())?;
-        write!(
-            f,
-            ", {}: {}",
-            "pcls_unlock_script_hash",
-            self.pcls_unlock_script_hash()
-        )?;
+        write!(f, ", {}: {}", "pcls_code_hash", self.pcls_code_hash())?;
+        write!(f, ", {}: {}", "pcls_hash_type", self.pcls_hash_type())?;
         write!(f, ", {}: {}", "thread_token", self.thread_token())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -3408,31 +3401,32 @@ impl ::core::fmt::Display for ChannelConstants {
 impl ::core::default::Default for ChannelConstants {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            12, 2, 0, 0, 28, 0, 0, 0, 128, 1, 0, 0, 160, 1, 0, 0, 168, 1, 0, 0, 200, 1, 0, 0, 232,
-            1, 0, 0, 100, 1, 0, 0, 32, 0, 0, 0, 169, 0, 0, 0, 50, 1, 0, 0, 82, 1, 0, 0, 90, 1, 0,
-            0, 90, 1, 0, 0, 95, 1, 0, 0, 137, 0, 0, 0, 24, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 68,
-            0, 0, 0, 72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 137, 0, 0, 0, 24, 0, 0, 0, 56, 0, 0, 0, 64, 0, 0, 0, 68, 0, 0, 0, 72, 0, 0,
+            26, 2, 0, 0, 32, 0, 0, 0, 172, 1, 0, 0, 204, 1, 0, 0, 205, 1, 0, 0, 213, 1, 0, 0, 245,
+            1, 0, 0, 246, 1, 0, 0, 140, 1, 0, 0, 32, 0, 0, 0, 189, 0, 0, 0, 90, 1, 0, 0, 122, 1, 0,
+            0, 130, 1, 0, 0, 130, 1, 0, 0, 135, 1, 0, 0, 157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0,
+            60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
         ];
         ChannelConstants::new_unchecked(v.into())
     }
 }
 impl ChannelConstants {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3455,35 +3449,41 @@ impl ChannelConstants {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         ChannelParameters::new_unchecked(self.0.slice(start..end))
     }
-    pub fn pfls_hash(&self) -> Byte32 {
+    pub fn pfls_code_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn pfls_min_capacity(&self) -> Uint64 {
+    pub fn pfls_hash_type(&self) -> Byte {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        Uint64::new_unchecked(self.0.slice(start..end))
+        Byte::new_unchecked(self.0.slice(start..end))
     }
-    pub fn pcls_hash(&self) -> Byte32 {
+    pub fn pfls_min_capacity(&self) -> Uint64 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        Byte32::new_unchecked(self.0.slice(start..end))
+        Uint64::new_unchecked(self.0.slice(start..end))
     }
-    pub fn pcls_unlock_script_hash(&self) -> Byte32 {
+    pub fn pcls_code_hash(&self) -> Byte32 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
         let end = molecule::unpack_number(&slice[24..]) as usize;
         Byte32::new_unchecked(self.0.slice(start..end))
     }
-    pub fn thread_token(&self) -> ChannelToken {
+    pub fn pcls_hash_type(&self) -> Byte {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        Byte::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn thread_token(&self) -> ChannelToken {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
+            let end = molecule::unpack_number(&slice[32..]) as usize;
             ChannelToken::new_unchecked(self.0.slice(start..end))
         } else {
             ChannelToken::new_unchecked(self.0.slice(start..))
@@ -3517,10 +3517,11 @@ impl molecule::prelude::Entity for ChannelConstants {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .params(self.params())
-            .pfls_hash(self.pfls_hash())
+            .pfls_code_hash(self.pfls_code_hash())
+            .pfls_hash_type(self.pfls_hash_type())
             .pfls_min_capacity(self.pfls_min_capacity())
-            .pcls_hash(self.pcls_hash())
-            .pcls_unlock_script_hash(self.pcls_unlock_script_hash())
+            .pcls_code_hash(self.pcls_code_hash())
+            .pcls_hash_type(self.pcls_hash_type())
             .thread_token(self.thread_token())
     }
 }
@@ -3544,15 +3545,11 @@ impl<'r> ::core::fmt::Display for ChannelConstantsReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "params", self.params())?;
-        write!(f, ", {}: {}", "pfls_hash", self.pfls_hash())?;
+        write!(f, ", {}: {}", "pfls_code_hash", self.pfls_code_hash())?;
+        write!(f, ", {}: {}", "pfls_hash_type", self.pfls_hash_type())?;
         write!(f, ", {}: {}", "pfls_min_capacity", self.pfls_min_capacity())?;
-        write!(f, ", {}: {}", "pcls_hash", self.pcls_hash())?;
-        write!(
-            f,
-            ", {}: {}",
-            "pcls_unlock_script_hash",
-            self.pcls_unlock_script_hash()
-        )?;
+        write!(f, ", {}: {}", "pcls_code_hash", self.pcls_code_hash())?;
+        write!(f, ", {}: {}", "pcls_hash_type", self.pcls_hash_type())?;
         write!(f, ", {}: {}", "thread_token", self.thread_token())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -3562,7 +3559,7 @@ impl<'r> ::core::fmt::Display for ChannelConstantsReader<'r> {
     }
 }
 impl<'r> ChannelConstantsReader<'r> {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -3585,35 +3582,41 @@ impl<'r> ChannelConstantsReader<'r> {
         let end = molecule::unpack_number(&slice[8..]) as usize;
         ChannelParametersReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn pfls_hash(&self) -> Byte32Reader<'r> {
+    pub fn pfls_code_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn pfls_min_capacity(&self) -> Uint64Reader<'r> {
+    pub fn pfls_hash_type(&self) -> ByteReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         let end = molecule::unpack_number(&slice[16..]) as usize;
-        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+        ByteReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn pcls_hash(&self) -> Byte32Reader<'r> {
+    pub fn pfls_min_capacity(&self) -> Uint64Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
         let end = molecule::unpack_number(&slice[20..]) as usize;
-        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn pcls_unlock_script_hash(&self) -> Byte32Reader<'r> {
+    pub fn pcls_code_hash(&self) -> Byte32Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[20..]) as usize;
         let end = molecule::unpack_number(&slice[24..]) as usize;
         Byte32Reader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn thread_token(&self) -> ChannelTokenReader<'r> {
+    pub fn pcls_hash_type(&self) -> ByteReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[24..]) as usize;
+        let end = molecule::unpack_number(&slice[28..]) as usize;
+        ByteReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn thread_token(&self) -> ChannelTokenReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[28..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
+            let end = molecule::unpack_number(&slice[32..]) as usize;
             ChannelTokenReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             ChannelTokenReader::new_unchecked(&self.as_slice()[start..])
@@ -3671,42 +3674,48 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelConstantsReader<'r> {
         }
         ChannelParametersReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Uint64Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        ByteReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Byte32Reader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
-        ChannelTokenReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        ByteReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
+        ChannelTokenReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct ChannelConstantsBuilder {
     pub(crate) params: ChannelParameters,
-    pub(crate) pfls_hash: Byte32,
+    pub(crate) pfls_code_hash: Byte32,
+    pub(crate) pfls_hash_type: Byte,
     pub(crate) pfls_min_capacity: Uint64,
-    pub(crate) pcls_hash: Byte32,
-    pub(crate) pcls_unlock_script_hash: Byte32,
+    pub(crate) pcls_code_hash: Byte32,
+    pub(crate) pcls_hash_type: Byte,
     pub(crate) thread_token: ChannelToken,
 }
 impl ChannelConstantsBuilder {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 7;
     pub fn params(mut self, v: ChannelParameters) -> Self {
         self.params = v;
         self
     }
-    pub fn pfls_hash(mut self, v: Byte32) -> Self {
-        self.pfls_hash = v;
+    pub fn pfls_code_hash(mut self, v: Byte32) -> Self {
+        self.pfls_code_hash = v;
+        self
+    }
+    pub fn pfls_hash_type(mut self, v: Byte) -> Self {
+        self.pfls_hash_type = v;
         self
     }
     pub fn pfls_min_capacity(mut self, v: Uint64) -> Self {
         self.pfls_min_capacity = v;
         self
     }
-    pub fn pcls_hash(mut self, v: Byte32) -> Self {
-        self.pcls_hash = v;
+    pub fn pcls_code_hash(mut self, v: Byte32) -> Self {
+        self.pcls_code_hash = v;
         self
     }
-    pub fn pcls_unlock_script_hash(mut self, v: Byte32) -> Self {
-        self.pcls_unlock_script_hash = v;
+    pub fn pcls_hash_type(mut self, v: Byte) -> Self {
+        self.pcls_hash_type = v;
         self
     }
     pub fn thread_token(mut self, v: ChannelToken) -> Self {
@@ -3720,10 +3729,11 @@ impl molecule::prelude::Builder for ChannelConstantsBuilder {
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.params.as_slice().len()
-            + self.pfls_hash.as_slice().len()
+            + self.pfls_code_hash.as_slice().len()
+            + self.pfls_hash_type.as_slice().len()
             + self.pfls_min_capacity.as_slice().len()
-            + self.pcls_hash.as_slice().len()
-            + self.pcls_unlock_script_hash.as_slice().len()
+            + self.pcls_code_hash.as_slice().len()
+            + self.pcls_hash_type.as_slice().len()
             + self.thread_token.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
@@ -3732,13 +3742,15 @@ impl molecule::prelude::Builder for ChannelConstantsBuilder {
         offsets.push(total_size);
         total_size += self.params.as_slice().len();
         offsets.push(total_size);
-        total_size += self.pfls_hash.as_slice().len();
+        total_size += self.pfls_code_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.pfls_hash_type.as_slice().len();
         offsets.push(total_size);
         total_size += self.pfls_min_capacity.as_slice().len();
         offsets.push(total_size);
-        total_size += self.pcls_hash.as_slice().len();
+        total_size += self.pcls_code_hash.as_slice().len();
         offsets.push(total_size);
-        total_size += self.pcls_unlock_script_hash.as_slice().len();
+        total_size += self.pcls_hash_type.as_slice().len();
         offsets.push(total_size);
         total_size += self.thread_token.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
@@ -3746,10 +3758,11 @@ impl molecule::prelude::Builder for ChannelConstantsBuilder {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.params.as_slice())?;
-        writer.write_all(self.pfls_hash.as_slice())?;
+        writer.write_all(self.pfls_code_hash.as_slice())?;
+        writer.write_all(self.pfls_hash_type.as_slice())?;
         writer.write_all(self.pfls_min_capacity.as_slice())?;
-        writer.write_all(self.pcls_hash.as_slice())?;
-        writer.write_all(self.pcls_unlock_script_hash.as_slice())?;
+        writer.write_all(self.pcls_code_hash.as_slice())?;
+        writer.write_all(self.pcls_hash_type.as_slice())?;
         writer.write_all(self.thread_token.as_slice())?;
         Ok(())
     }
@@ -6049,172 +6062,5 @@ impl molecule::prelude::Builder for ChannelTokenBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         ChannelToken::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct PFLSArgs(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for PFLSArgs {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for PFLSArgs {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for PFLSArgs {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "pcts_hash", self.pcts_hash())?;
-        write!(f, ", {}: {}", "thread_token", self.thread_token())?;
-        write!(f, " }}")
-    }
-}
-impl ::core::default::Default for PFLSArgs {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        PFLSArgs::new_unchecked(v.into())
-    }
-}
-impl PFLSArgs {
-    pub const TOTAL_SIZE: usize = 68;
-    pub const FIELD_SIZES: [usize; 2] = [32, 36];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn pcts_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(0..32))
-    }
-    pub fn thread_token(&self) -> ChannelToken {
-        ChannelToken::new_unchecked(self.0.slice(32..68))
-    }
-    pub fn as_reader<'r>(&'r self) -> PFLSArgsReader<'r> {
-        PFLSArgsReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for PFLSArgs {
-    type Builder = PFLSArgsBuilder;
-    const NAME: &'static str = "PFLSArgs";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        PFLSArgs(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        PFLSArgsReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        PFLSArgsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .pcts_hash(self.pcts_hash())
-            .thread_token(self.thread_token())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct PFLSArgsReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for PFLSArgsReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for PFLSArgsReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for PFLSArgsReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "pcts_hash", self.pcts_hash())?;
-        write!(f, ", {}: {}", "thread_token", self.thread_token())?;
-        write!(f, " }}")
-    }
-}
-impl<'r> PFLSArgsReader<'r> {
-    pub const TOTAL_SIZE: usize = 68;
-    pub const FIELD_SIZES: [usize; 2] = [32, 36];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn pcts_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
-    }
-    pub fn thread_token(&self) -> ChannelTokenReader<'r> {
-        ChannelTokenReader::new_unchecked(&self.as_slice()[32..68])
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for PFLSArgsReader<'r> {
-    type Entity = PFLSArgs;
-    const NAME: &'static str = "PFLSArgsReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        PFLSArgsReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct PFLSArgsBuilder {
-    pub(crate) pcts_hash: Byte32,
-    pub(crate) thread_token: ChannelToken,
-}
-impl PFLSArgsBuilder {
-    pub const TOTAL_SIZE: usize = 68;
-    pub const FIELD_SIZES: [usize; 2] = [32, 36];
-    pub const FIELD_COUNT: usize = 2;
-    pub fn pcts_hash(mut self, v: Byte32) -> Self {
-        self.pcts_hash = v;
-        self
-    }
-    pub fn thread_token(mut self, v: ChannelToken) -> Self {
-        self.thread_token = v;
-        self
-    }
-}
-impl molecule::prelude::Builder for PFLSArgsBuilder {
-    type Entity = PFLSArgs;
-    const NAME: &'static str = "PFLSArgsBuilder";
-    fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(self.pcts_hash.as_slice())?;
-        writer.write_all(self.thread_token.as_slice())?;
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        PFLSArgs::new_unchecked(inner.into())
     }
 }
