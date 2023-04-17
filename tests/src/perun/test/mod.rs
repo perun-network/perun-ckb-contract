@@ -11,3 +11,5 @@ pub use channel_id::*;
 pub mod keys;
 
 pub mod transaction;
+
+pub mod cell;
