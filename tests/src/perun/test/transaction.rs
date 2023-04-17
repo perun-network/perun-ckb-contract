@@ -34,11 +34,8 @@ pub struct OpenArgs {
     pub my_funds_outpoint: OutPoint,
     pub my_available_funds: Capacity,
     pub party_index: u8,
-    pub pcls_code_hash: Byte32,
     pub pcls_script: Script,
-    pub pcts_code_hash: Byte32,
     pub pcts_script: Script,
-    pub pfls_code_hash: Byte32,
     pub pfls_script: Script,
 }
 

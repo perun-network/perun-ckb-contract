@@ -64,9 +64,6 @@ impl Client {
         let pcls_code_hash = ctx
             .get_cell_data_hash(&env.pcls_out_point)
             .expect("pcls hash");
-        let pcts_code_hash = ctx
-            .get_cell_data_hash(&env.pcts_out_point)
-            .expect("pcts hash");
         let pfls_code_hash = ctx
             .get_cell_data_hash(&env.pfls_out_point)
             .expect("pfls hash");
@@ -112,11 +109,8 @@ impl Client {
             my_funds_outpoint: my_funds_outpoint.clone(),
             my_available_funds: my_funds,
             party_index: self.index,
-            pcls_code_hash,
             pcls_script: pcls,
-            pcts_code_hash,
             pcts_script: pcts,
-            pfls_code_hash,
             pfls_script: pfls,
         };
         let or = transaction::mk_open(ctx, env, args)?;

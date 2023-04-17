@@ -26,9 +26,9 @@ pub struct Env {
     // Auxiliary contracts.
     pub always_success_out_point: OutPoint,
     // Perun scripts.
-    pub pcls_script: Script,
-    pub pcts_script: Script,
-    pub pfls_script: Script,
+    pcls_script: Script,
+    pcts_script: Script,
+    pfls_script: Script,
     pub pcls_script_dep: CellDep,
     pub pcts_script_dep: CellDep,
     pub pfls_script_dep: CellDep,
@@ -186,6 +186,8 @@ impl Env {
         )
     }
 
+    /// create_funds_for_index creates a new cell with the funds for the given party index locked
+    /// by the always_success_script parameterized on the party index.
     pub fn create_funds_for_index(
         &self,
         context: &mut Context,
@@ -221,13 +223,12 @@ impl Env {
             }
         };
         // Create cell containing the required funds for this party.
-        let cell = context.create_cell(
-            CellOutput::new_builder()
-                .capacity(required_funds.pack())
-                .lock(self.always_success_script.clone())
-                .build(),
-            Bytes::default(),
-        );
+        let my_output = CellOutput::new_builder()
+            .capacity(required_funds.pack())
+            // Lock cell using the correct party index.
+            .lock(self.build_lock_script(context, Bytes::from(vec![party_index])))
+            .build();
+        let cell = context.create_cell(my_output, Bytes::default());
         Ok((cell, required_funds.into_capacity()))
     }
 

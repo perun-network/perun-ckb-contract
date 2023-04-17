@@ -64,8 +64,15 @@ impl FundingAgreement {
                     )
                     .expect("script");
                 ParticipantBuilder::default()
+                    // The payment script hash used to lock the funds after a channel close for
+                    // this party.
                     .payment_script_hash(payment_lock_script.clone())
+                    // The minimum capacity required for the payment cell to be valid.
                     .payment_min_capacity(payment_min_capacity.pack())
+                    // The unlock script hash used to identify this party. Normally this would be
+                    // the lock args for a secp256k1 script or similar. Since we use the always
+                    // success script, we will use the hash of said script parameterized by the
+                    // party index.
                     .unlock_script_hash(unlock_script.calc_script_hash())
                     .pub_key(sec1_pub_key)
                     .build()
