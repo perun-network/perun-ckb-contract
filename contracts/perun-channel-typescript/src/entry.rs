@@ -16,7 +16,7 @@ use ckb_std::{
     debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
-        load_header, load_script, load_transaction, load_witness_args,
+        load_header, load_script, load_script_hash, load_transaction, load_witness_args,
     },
 };
 use perun_common::{
@@ -24,7 +24,7 @@ use perun_common::{
     helpers::{blake2b256, is_matching_output},
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
-        ChannelWitness, ChannelWitnessUnion, PFLSArgs, SEC1EncodedPubKey,
+        ChannelWitness, ChannelWitnessUnion, SEC1EncodedPubKey,
     },
     sig::verify_signature,
 };
@@ -58,11 +58,6 @@ pub enum ChannelAction {
     Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
 }
 
-// TODO: consider hash_type field of scripts instead of just comparing the code_hashes throughout the contract.
-// Also, it would probably be better to use the `Script` type, whenever we want to generalize a script instead of
-// using the hash and the args (and the hash_type) separately. For example:
-// instead of payment_script_hash: Byte32, payment_script_args: Bytes, (payment_script_hash_type)
-// we could use payment_script: Script
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
@@ -78,30 +73,24 @@ pub fn main() -> Result<(), Error> {
     verify_max_one_channel(&script.code_hash().unpack(), &args)?;
     debug!("verify_max_one_channel passed");
 
-
-    // The channel constants do not change during the lifetime of a channel. They are located in the 
+    // The channel constants do not change during the lifetime of a channel. They are located in the
     // args field of the pcts.
     let channel_constants =
         ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParameters");
-        debug!("parsing channel constants passed");
-
+    debug!("parsing channel constants passed");
 
     // Verify that the channel parameters are compatible with the currently supported
     // features of perun channels.
     verify_channel_params_compatibility(&channel_constants.params())?;
     debug!("verify_channel_params_compatibility passed");
 
-
     // Next, we determine whether the transaction starts, progresses or closes the channel and fetch
     // the respective old and/or new channel status.
     let channel_action = get_channel_action()?;
     debug!("get_channel_action passed");
 
-
     match channel_action {
-        ChannelAction::Start { new_status } => {
-            check_valid_start(&new_status, &channel_constants, &script)
-        }
+        ChannelAction::Start { new_status } => check_valid_start(&new_status, &channel_constants),
         ChannelAction::Progress {
             old_status,
             new_status,
@@ -125,7 +114,6 @@ pub fn main() -> Result<(), Error> {
 pub fn check_valid_start(
     new_status: &ChannelStatus,
     channel_constants: &ChannelConstants,
-    own_script: &Script,
 ) -> Result<(), Error> {
     // Upon start of a channel, the channel constants are stored in the args field of the pcts output.
     // We uniquely identify a channel through the combination of the channel id (hash of ChannelParameters,
@@ -133,13 +121,12 @@ pub fn check_valid_start(
     // The thread token contains an OutPoint and the channel type script verifies, that that outpoint is
     // consumed in the inputs of the transaction that starts the channel.
     // This means: Once a (pcts-hash, channel-id, thread-token) tuple appears once on chain and is recognized
-    // as the on-chain representation of this channel by all peers, no other "copy" or "fake" of that channel 
-    // can be created on chain, as an OutPoint can only be consumed once. 
-    
+    // as the on-chain representation of this channel by all peers, no other "copy" or "fake" of that channel
+    // can be created on chain, as an OutPoint can only be consumed once.
+
     // here, we verify that the OutPoint in the thread token is actually consumed.
     verify_thread_token_integrity(&channel_constants.thread_token())?;
     debug!("verify_thread_token_integrity passed");
-
 
     // We verify that the channel id is the hash of the channel parameters.
     verify_channel_id_integrity(
@@ -148,23 +135,20 @@ pub fn check_valid_start(
     )?;
     debug!("verify_channel_id_integrity passed");
 
-
     // We verify that the pcts is guarded by the pcls script specified in the channel constants
     verify_valid_lock_script(channel_constants)?;
     debug!("verify_valid_lock_script passed");
 
     // We verify that the channel participants have different payment addresses
-    // For this purpose we consider a payment address to be the tuple of (payment lock script, payment lock script args).
+    // For this purpose we consider a payment address to be the script hash of the lock script used for payments to that party
     verify_different_payment_addresses(channel_constants)?;
     debug!("verify_different_payment_addresses passed");
-
 
     // We verify that there are no funds locked by the pfls hash of this channel in the inputs of the transaction.
     // This check is not strictly necessary for the current implementation of the pfls, but it is good practice to
     // verify this anyway, as there is no reason to include funds locked for any channel in the input of a transaction
     // that creates a new channel besides trying some kind of attack.
-    verify_no_funds_in_inputs(&channel_constants.pfls_hash())?;
-
+    verify_no_funds_in_inputs(channel_constants)?;
     debug!("verify_no_funds_in_inputs passed");
 
     // We verify that the state the channel starts with is valid according to the utxo-adaption of the perun protocol.
@@ -182,12 +166,7 @@ pub fn check_valid_start(
     // - The funds are actually locked to the pfls with correct args.
     verify_funding_in_status(0, &new_status.funding(), &new_status.state())?;
     verify_funding_is_zero_at_index(1, &new_status.funding())?;
-    verify_funding_in_outputs(
-        0,
-        &new_status.state().balances(),
-        channel_constants,
-        own_script,
-    )?;
+    verify_funding_in_outputs(0, &new_status.state().balances(), channel_constants)?;
 
     // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
     verify_funded_status(new_status)?;
@@ -212,8 +191,8 @@ pub fn check_valid_progress(
     // We check that both the old and the new state have the same channel id.
     verify_equal_channel_id(&old_status.state(), &new_status.state())?;
     // No kind of channel progression should pay out any funds locked by the pfls, so we just check
-    // that there are no funds locked by the pfls hash in the inputs of the transaction.
-    verify_no_funds_in_inputs(&channel_constants.pfls_hash())?;
+    // that there are no funds locked by the pfls in the inputs of the transaction.
+    verify_no_funds_in_inputs(channel_constants)?;
     // Here, we verify that there is exactly one cell in the outputs with the exact same pcts as type script.
     // (this also compares the args field and therefore the integrity of the channel constants). We also
     // verify that said cell is guarded by the pcls script specified in the channel constants.
@@ -243,7 +222,6 @@ pub fn check_valid_progress(
                 f.index().to_idx(),
                 &old_status.state().balances(),
                 channel_constants,
-                own_script,
             )?;
             // Funding a disputed status is invalid. This should not be able to happen anyway, but we check
             // it nontheless.
@@ -411,10 +389,11 @@ pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
 
     let mut found_match = false;
     for output in outputs.into_iter() {
-        if is_matching_output(&output, &corresponding_lock_script, own_script) && !found_match {
+        let is_matching_output =
+            is_matching_output(&output, &corresponding_lock_script, own_script);
+        if is_matching_output && !found_match {
             found_match = true;
-        } else if is_matching_output(&output, &corresponding_lock_script, own_script) && found_match
-        {
+        } else if is_matching_output && found_match {
             return Err(Error::MultipleMatchingOutputs);
         }
     }
@@ -425,11 +404,13 @@ pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
     return Err(Error::ChannelDoesNotContinue);
 }
 
-pub fn verify_no_funds_in_inputs(pfls_hash: &Byte32) -> Result<(), Error> {
+pub fn verify_no_funds_in_inputs(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let num_inputs = load_transaction()?.raw().inputs().len();
     for i in 0..num_inputs {
-        let cell_lock_hash = load_cell_lock_hash(i, Source::Input)?;
-        if cell_lock_hash[..] == pfls_hash.unpack() {
+        let cell_lock_hash = load_cell_lock(i, Source::Input)?;
+        if cell_lock_hash.code_hash().unpack()[..]
+            == channel_constants.pfls_code_hash().unpack()[..]
+        {
             return Err(Error::FundsInInputs);
         }
     }
@@ -474,24 +455,29 @@ pub fn verify_funding_in_outputs(
     idx: usize,
     initial_balance: &Balances,
     channel_constants: &ChannelConstants,
-    own_script: &Script,
 ) -> Result<(), Error> {
     let to_fund = initial_balance.get(idx)?;
     if to_fund == 0 {
         return Ok(());
     }
-    let actual_pcts_hash = own_script.code_hash().unpack();
+    let expected_pcts_script_hash = load_script_hash()?;
     let outputs = load_transaction()?.raw().outputs();
-    let pfls_hash = channel_constants.pfls_hash().unpack();
+    let expected_pfls_code_hash = channel_constants.pfls_code_hash().unpack();
+    let expected_pfls_hash_type = channel_constants.pfls_hash_type();
     let mut capacity_sum: u128 = 0;
     for output in outputs.into_iter() {
-        if output.lock().code_hash().unpack()[..] == pfls_hash[..] {
+        if output.lock().code_hash().unpack()[..] == expected_pfls_code_hash[..]
+            && output.lock().hash_type().eq(&expected_pfls_hash_type)
+        {
+            // Currently we only support CKBytes as asset and CKBytes locked to the channel
+            // with the pfls may not have a type script.
+            if output.type_().is_some() {
+                return Err(Error::TypeScriptInPFLSOutput);
+            }
+
             let output_lock_args: Bytes = output.lock().args().unpack();
-            let pfls_args = PFLSArgs::from_slice(&output_lock_args)?;
-            if pfls_args.pcts_hash().unpack()[..] == actual_pcts_hash[..]
-                && pfls_args.thread_token().as_slice()[..]
-                    == channel_constants.thread_token().as_slice()[..]
-            {
+            let script_hash_in_pfls_args = Byte32::from_slice(&output_lock_args)?.unpack();
+            if script_hash_in_pfls_args[..] == expected_pcts_script_hash[..] {
                 capacity_sum += u128::from(output.capacity().unpack());
             } else {
                 return Err(Error::InvalidPFLSInOutputs);
@@ -592,27 +578,25 @@ pub fn verify_state_valid_as_start(
     debug!("Balance A: {}", balance_a);
     debug!("Balance B: {}", balance_b);
     debug!("Min balance: {}", min_balance);
-    if balance_a < min_balance &&
-        balance_a != 0 {
+    if balance_a < min_balance && balance_a != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
-    if balance_b < min_balance &&
-        balance_b != 0 {
+    if balance_b < min_balance && balance_b != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
     Ok(())
 }
 
-pub fn verify_valid_lock_script(
-    channel_constants: &ChannelConstants,
-) -> Result<(), Error> {
+pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let lock_script = load_cell_lock(0, Source::GroupOutput)?;
-    let lock_script_args: Bytes = lock_script.args().unpack();
-    if lock_script.code_hash().unpack()[..] != channel_constants.pcls_hash().unpack()[..] {
-        return Err(Error::InvalidPCLSHash);
+    if lock_script.code_hash().unpack()[..] != channel_constants.pcls_code_hash().unpack()[..] {
+        return Err(Error::InvalidPCLSCodeHash);
     }
-    if !lock_script_args.is_empty() {
-        return Err(Error::PCLSWithArgs);
+    if !lock_script
+        .hash_type()
+        .eq(&channel_constants.pcls_hash_type())
+    {
+        return Err(Error::InvalidPCLSHashType);
     }
     Ok(())
 }
@@ -658,39 +642,46 @@ pub fn verify_all_payed(
             .unpack(),
     );
     let balance_fst: u128 = final_balance.get(0)? + u128::from(channel_capacity);
-    let payment_args_fst: Bytes = channel_constants.params().party_a().payment_args().unpack();
-
-    let balance_snd: u128 = final_balance.get(1)?;
-    let payment_args_snd: Bytes = channel_constants.params().party_b().payment_args().unpack();
-
-    let payment_lock_hash_fst = channel_constants
+    let payment_script_hash_fst = channel_constants
         .params()
         .party_a()
-        .payment_lock_hash()
+        .payment_script_hash()
         .unpack();
-    let payment_lock_hash_snd = channel_constants
+
+    let balance_snd: u128 = final_balance.get(1)?;
+    let payment_script_hash_snd = channel_constants
         .params()
         .party_b()
-        .payment_lock_hash()
+        .payment_script_hash()
         .unpack();
 
     let mut outputs_fst = 0;
     let mut outputs_snd = 0;
 
-    let outputs = load_transaction()?.raw().outputs();
+    let outputs_len = load_transaction()?.raw().outputs().len();
 
     // TODO: Maybe we want to check that there is only one paying output per party?
-    for output in outputs.into_iter() {
-        if output.type_().to_opt().is_some() {
-            continue;
+    for i in 0..outputs_len {
+        let output_lock_script_hash = load_cell_lock_hash(i, Source::Output)?;
+        let output_cap = u128::from(load_cell_capacity(i, Source::Output)?);
+
+        // Note: We asserted that the payment_script_hashes of the parties differ upon channel
+        // creation.
+        if output_lock_script_hash[..] == payment_script_hash_fst[..] {
+            // Note: We currently only support CKBytes as asset, so any type script in a payment
+            // is considered malicious
+            if load_cell_type(i, Source::Output)?.is_some() {
+                return Err(Error::TypeScriptInPaymentOutput);
+            }
+            outputs_fst = output_cap;
         }
-        let lock_hash = output.lock().code_hash().unpack();
-        let lock_args: Bytes = output.lock().args().unpack();
-        if lock_hash[..] == payment_lock_hash_fst[..] && lock_args[..] == payment_args_fst[..] {
-            outputs_fst += u128::from(output.capacity().unpack());
-        }
-        if lock_hash[..] == payment_lock_hash_snd[..] && lock_args[..] == payment_args_snd[..] {
-            outputs_snd += u128::from(output.capacity().unpack());
+        if output_lock_script_hash[..] == payment_script_hash_snd[..] {
+            // Note: We currently only support CKBytes as asset, so any type script in a payment
+            // is considered malicious
+            if load_cell_type(i, Source::Output)?.is_some() {
+                return Err(Error::TypeScriptInPaymentOutput);
+            }
+            outputs_snd = output_cap;
         }
     }
 
@@ -813,20 +804,16 @@ pub fn verify_channel_count(
 pub fn verify_different_payment_addresses(
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let payment_lock_hash_fst = channel_constants
+    if channel_constants
         .params()
         .party_a()
-        .payment_lock_hash()
-        .unpack();
-    let payment_lock_hash_snd = channel_constants
-        .params()
-        .party_b()
-        .payment_lock_hash()
-        .unpack();
-    let payment_args_fst: Bytes = channel_constants.params().party_a().payment_args().unpack();
-    let payment_args_snd: Bytes = channel_constants.params().party_b().payment_args().unpack();
-    if payment_lock_hash_fst[..] == payment_lock_hash_snd[..]
-        && payment_args_fst[..] == payment_args_snd[..]
+        .payment_script_hash()
+        .unpack()[..]
+        != channel_constants
+            .params()
+            .party_b()
+            .payment_script_hash()
+            .unpack()[..]
     {
         return Err(Error::SamePaymentAddress);
     }

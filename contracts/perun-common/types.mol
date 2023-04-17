@@ -23,18 +23,26 @@ union ParticipantIndex {
 
 option App (Bytes);
 
+// Terminology:
+// - script_hash: By script_hash we mean the results of the syscalls load_cell_lock_hash / load_cell_type_hash
+//                and the sdk function calc_script_hash. This is the hash of the script struct (code_hash, hash_type and args).
+// - code_hash:   By code_hash we mean the member of a script that hold the hash of the executed code (depending on the hash_type).
+//                See: https://docs.nervos.org/docs/reference/script/
+
+
+
 table Participant {
-  // payment_lock_hash specifies the script used to pay out channel participants
-  // Specifically this could be the secp256k1_blake160_sighash_all script.
-  payment_lock_hash: Byte32,
+  // payment_script_hash specifies the script-hash used
+  // to lock payments to this participant (upon channel close)
+  payment_script_hash:  Byte32,
   // payment_min_capacity specifies the minimum capacity of the payment lock script.
   payment_min_capacity: Uint64,
-  // unlock_args is the lock-script args which identify this channel participant.
-  // Specifically, this could be the payment args of this participant for a secp256k1_blake160_sighash_all script.
-  unlock_args: Bytes,
-  // payment_args is the lock-script args which must be used to pay out to this participant in the args field
-  // of an output with the payment_lock_hash agreed upon in the ChannelConstants.
-  payment_args: Bytes,
+
+  // unlock_script_hash specifies the script-hash that needs to be present in the inputs
+  // to a transaction to authorize the transaction to interact with the channel as
+  // this channel participant.
+  unlock_script_hash:   Byte32,
+
   pub_key: SEC1EncodedPubKey,
 }
 table ChannelParameters {
@@ -57,15 +65,17 @@ table ChannelParameters {
 // payment_min_capacity upon channel closing.
 table ChannelConstants {
   params: ChannelParameters,
-  // pfls_hash specifies the lock_script that guards funds for this channel.
-  // Specifically, this should be the perun-funding-lockscript.
-  pfls_hash:     Byte32,
+  // pfls__code_hash specifies the code hash of the lock_script that guards funds for this channel.
+  // Specifically, this should be the perun-funds-lockscript.
+  pfls_code_hash:     Byte32,
+  pfls_hash_type:     byte,
   pfls_min_capacity: Uint64,
+
   // pcls_hash specifies the lock_script used for this channel.
   // Specifically, this should be the perun-channel-lockscript.
-  pcls_hash:     Byte32,
-  // pcls_unlock_script_hash specifies the unlock script that must be present for the pcls to allow a transaction to interact with the channel.
-  pcls_unlock_script_hash: Byte32,
+  pcls_code_hash:     Byte32,
+  pcls_hash_type:     byte,
+
   thread_token: ChannelToken,
 }
 
@@ -112,9 +122,4 @@ table ChannelStatus {
 
 struct ChannelToken {
   out_point: OutPoint,
-}
-
-struct PFLSArgs {
-  pcts_hash: Byte32,
-  thread_token: ChannelToken,
 }
