@@ -73,7 +73,7 @@ impl Env {
             )
             .ok_or("perun-channel-typescript")?;
         let pfls_script = context
-            .build_script(&pfls_out_point, perun_types::PFLSArgs::default().as_bytes())
+            .build_script(&pfls_out_point, Default::default())
             .ok_or("perun-funds-lockscript")?;
         let pcls_script_dep = CellDep::new_builder()
             .out_point(pcls_out_point.clone())
@@ -104,7 +104,7 @@ impl Env {
             .capacity(0u64.pack())
             .lock(pfls_script.clone())
             .build();
-        let pfls_args_capacity = perun_types::PFLSArgs::default().as_bytes().len() as u64;
+        let pfls_args_capacity = pcts_script.calc_script_hash().as_bytes().len() as u64;
         let min_capacity_pfls = tmp_output.occupied_capacity(pfls_args_capacity.into_capacity())?;
 
         Ok(Env {

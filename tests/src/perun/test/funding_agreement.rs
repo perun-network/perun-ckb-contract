@@ -1,6 +1,8 @@
 use ckb_occupied_capacity::Capacity;
 use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32, BytesBuilder};
 use ckb_testtool::ckb_types::prelude::*;
+use ckb_testtool::context::Context;
+use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 use perun_common::perun_types::{
@@ -32,7 +34,9 @@ impl FundingAgreement {
 
     pub fn mk_participants(
         &self,
-        payment_lock_hash: Byte32,
+        ctx: &mut Context,
+        env: &perun::harness::Env,
+        payment_lock_script: Byte32,
         payment_min_capacity: Capacity,
     ) -> Vec<perun_types::Participant> {
         self.0
@@ -48,19 +52,21 @@ impl FundingAgreement {
                 let sec1_pub_key = SEC1EncodedPubKeyBuilder::default()
                     .set(sec1_encoded_bytes.try_into().unwrap())
                     .build();
-                let payment_args = BytesBuilder::default()
-                    .set(vec![entry.index.into()])
-                    .build();
+                let unlock_script = ctx
+                    .build_script(
+                        &env.always_success_out_point,
+                        // NOTE: To be able to make sure we can distinguish between the payout of
+                        // the participants, we will pass their corresponding index as an argument.
+                        // This will have no effect on the execution of the always_success_script,
+                        // because it does not bother checking its arguments, but will allow us to
+                        // assert the correct indices once a channel is concluded.
+                        Bytes::from(vec![entry.index]),
+                    )
+                    .expect("script");
                 ParticipantBuilder::default()
-                    .payment_lock_hash(payment_lock_hash.clone())
+                    .payment_script_hash(payment_lock_script.clone())
                     .payment_min_capacity(payment_min_capacity.pack())
-                    // The tests use always success scripts which do not receive any args.
-                    .unlock_args(Default::default())
-                    // NOTE: The tests will pay out to an "address" encoded by the index of each
-                    // participant for simplicity. This is relevant for the test-suite, because
-                    // Perun channels should only be opened between participants that pay out to
-                    // distinct addresses (i.e. distinct cells with distinct lockscripts).
-                    .payment_args(payment_args)
+                    .unlock_script_hash(unlock_script.calc_script_hash())
                     .pub_key(sec1_pub_key)
                     .build()
             })
