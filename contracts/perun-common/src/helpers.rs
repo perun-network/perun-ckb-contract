@@ -49,6 +49,18 @@ macro_rules! cfalse {
 }
 pub(crate) use cfalse;
 
+#[macro_export]
+macro_rules! redeemer {
+    ($name:ident) => {
+        $crate::perun_types::ChannelWitnessBuilder::default()
+            .set($crate::perun_types::ChannelWitnessUnion::$name(
+                Default::default(),
+            ))
+            .build()
+    };
+}
+pub(crate) use redeemer;
+
 impl ParticipantIndex {
     pub fn to_idx(&self) -> usize {
         match self.to_enum() {
