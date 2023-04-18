@@ -4,11 +4,16 @@ use blake2b_rs::Blake2bBuilder;
 use {ckb_occupied_capacity::Capacity, ckb_types::packed::*, ckb_types::prelude::*, std::vec::Vec};
 
 #[cfg(not(feature = "std"))]
-use {ckb_standalone_types::packed::*, ckb_standalone_types::prelude::*};
+use {
+    ckb_standalone_types::packed::*,
+    ckb_standalone_types::prelude::*,
+    molecule::prelude::{vec, Vec},
+};
 
 use crate::error::Error;
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelState, ChannelStatus, ParticipantIndex, ParticipantIndexUnion,
+    Balances, Bool, BoolUnion, ChannelParameters, ChannelState, ChannelStatus, ParticipantIndex,
+    ParticipantIndexUnion, SEC1EncodedPubKey,
 };
 
 impl Bool {
@@ -79,6 +84,20 @@ macro_rules! fund {
     };
 }
 pub(crate) use fund;
+
+#[macro_export]
+macro_rules! close {
+    ($state:expr, $siga:expr, $sigb:expr) => {
+        $crate::perun_types::ChannelWitnessUnion::Close(
+            $crate::perun_types::Close::new_builder()
+                .state($state)
+                .sig_a($siga)
+                .sig_b($sigb)
+                .build(),
+        )
+    };
+}
+pub(crate) use close;
 
 impl ParticipantIndex {
     pub fn to_idx(&self) -> usize {
