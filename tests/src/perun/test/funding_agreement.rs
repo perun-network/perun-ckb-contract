@@ -11,7 +11,7 @@ use perun_common::perun_types::{
 
 use crate::perun;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FundingAgreement(Vec<FundingAgreementEntry>);
 
 impl FundingAgreement {
@@ -136,14 +136,14 @@ impl FundingAgreement {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FundingAgreementEntry {
     pub amounts: Vec<(Asset, u64)>,
     pub index: u8,
     pub pub_key: PublicKey,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Asset(pub u32);
 
 impl Asset {

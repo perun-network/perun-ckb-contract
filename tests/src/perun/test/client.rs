@@ -3,7 +3,7 @@ use ckb_testtool::ckb_types::bytes::Bytes;
 use ckb_testtool::ckb_types::core::{ScriptHashType, TransactionBuilder};
 use ckb_testtool::ckb_types::packed::{
     Byte32, Bytes as PackedBytes, BytesBuilder, CellInput, CellOutput, OutPoint, OutPointBuilder,
-    ScriptOptBuilder,
+    Script, ScriptOptBuilder,
 };
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
@@ -12,6 +12,7 @@ use perun_common::*;
 
 use ckb_occupied_capacity::{Capacity, IntoCapacity};
 use perun_common::helpers::blake2b256;
+use perun_common::perun_types::ChannelStatus;
 
 use crate::perun;
 use crate::perun::harness;
@@ -26,6 +27,7 @@ use k256::{
 };
 
 use super::cell::FundingCell;
+use super::transaction::FundResult;
 use super::ChannelId;
 
 #[derive(Clone, Debug)]
@@ -124,10 +126,31 @@ impl Client {
         &self,
         ctx: &mut Context,
         env: &harness::Env,
-        cid: test::ChannelId,
+        _cid: test::ChannelId,
         funding_agreement: &test::FundingAgreement,
-    ) -> Result<(), perun::Error> {
-        Ok(())
+        channel_cell: OutPoint,
+        channel_state: ChannelStatus,
+        pcts: Script,
+    ) -> Result<FundResult, perun::Error> {
+        // Prepare environment so that this party has the required funds.
+        let (my_funds_outpoint, my_available_funds) =
+            env.create_funds_for_index(ctx, self.index, funding_agreement)?;
+        let fr = transaction::mk_fund(
+            ctx,
+            env,
+            transaction::FundArgs {
+                channel_cell,
+                funding_agreement: funding_agreement.clone(),
+                party_index: self.index,
+                state: channel_state,
+                my_funds_outpoint,
+                my_available_funds,
+                pcts,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&fr.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(fr)
     }
 
     pub fn send(&self, ctx: &mut Context, env: &harness::Env) -> Result<(), perun::Error> {

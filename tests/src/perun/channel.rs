@@ -1,7 +1,7 @@
-use ckb_testtool::ckb_types::core::BlockBuilder;
-use ckb_testtool::ckb_types::packed::{CellOutput, HeaderBuilder, HeaderViewBuilder, OutPoint};
+use ckb_testtool::ckb_types::packed::{OutPoint, Script};
 use ckb_testtool::context::Context;
 use k256::ecdsa::SigningKey;
+use perun_common::perun_types::ChannelStatus;
 use rand_core::OsRng;
 
 use crate::perun;
@@ -31,8 +31,12 @@ where
     id: test::ChannelId,
     /// The cell which represents this channel on-chain.
     channel_cell: Option<OutPoint>,
+    /// The current state of this channel.
+    channel_state: ChannelStatus,
     /// The cells locking funds for this channel.
     funding_cells: Vec<FundingCell>,
+    /// The used Perun Channel Type Script.
+    pcts: Script,
     /// All available parties.
     parts: HashMap<String, test::Client>,
     /// The surrounding chain context.
@@ -97,7 +101,9 @@ where
             current_time: 0,
             ctx: context,
             env,
+            pcts: Script::default(),
             channel_cell: None,
+            channel_state: ChannelStatus::default(),
             funding_cells: Vec::new(),
             active_part: active.clone(),
             parts: m_parts.clone(),
@@ -129,13 +135,36 @@ where
         let mut fs = self.funding_cells.clone();
         fs.extend(or.funds_cells.iter().cloned());
         self.funding_cells = fs.to_vec();
+        self.pcts = or.pcts;
+        self.channel_state = or.state;
         Ok(())
     }
 
     /// fund a channel using the currently active participant set by `with(..)`
     /// with the value given in `funding_agreement`.
     pub fn fund(&mut self, funding_agreement: &test::FundingAgreement) -> Result<(), perun::Error> {
-        call_action!(self, fund, self.id, funding_agreement)
+        // TODO: Lift this check into the type-system to make this more readable and stick to DRY.
+        let res = match &self.channel_cell {
+            Some(channel_cell) => {
+                call_action!(
+                    self,
+                    fund,
+                    self.id,
+                    funding_agreement,
+                    channel_cell.clone(),
+                    self.channel_state.clone(),
+                    self.pcts.clone()
+                )
+            }
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        // TODO: DRY please.
+        self.channel_state = res.state;
+        self.channel_cell = Some(res.channel_cell);
+        let mut fs = self.funding_cells.clone();
+        fs.extend(res.funds_cells.iter().cloned());
+        self.funding_cells = fs.to_vec();
+        Ok(())
     }
 
     /// send a payment using the currently active participant set by `with(..)`
