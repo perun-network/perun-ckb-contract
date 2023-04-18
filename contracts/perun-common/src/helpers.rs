@@ -129,9 +129,9 @@ impl From<u8> for ParticipantIndex {
 }
 
 impl Balances {
-    pub fn sum(&self) -> u128 {
-        let a = self.nth0().unpack();
-        let b = self.nth1().unpack();
+    pub fn sum(&self) -> u64 {
+        let a: u64 = self.nth0().unpack();
+        let b: u64 = self.nth1().unpack();
         a + b
     }
 
@@ -139,7 +139,7 @@ impl Balances {
         self.as_slice()[..] == other.as_slice()[..]
     }
 
-    pub fn get(&self, i: usize) -> Result<u128, Error> {
+    pub fn get(&self, i: usize) -> Result<u64, Error> {
         match i {
             0 => Ok(self.nth0().unpack()),
             1 => Ok(self.nth1().unpack()),
@@ -149,10 +149,10 @@ impl Balances {
 }
 
 pub fn geq_components(fst: &Balances, snd: &Balances) -> bool {
-    let a_fst = fst.nth0().unpack();
-    let a_snd = snd.nth0().unpack();
-    let b_fst = fst.nth1().unpack();
-    let b_snd = snd.nth1().unpack();
+    let a_fst: u64 = fst.nth0().unpack();
+    let a_snd: u64 = snd.nth0().unpack();
+    let b_fst: u64 = fst.nth1().unpack();
+    let b_snd: u64 = snd.nth1().unpack();
     a_fst >= a_snd && b_fst >= b_snd
 }
 
@@ -189,8 +189,7 @@ impl ChannelStatus {
     /// set_funded sets the ChannelStatus to funded and fills the balances with the given amount.
     /// NOTE: This function expects the given amount to be for the last index!
     pub fn mk_funded(self, amount: u64) -> ChannelStatus {
-        let amount128 = amount as u128;
-        let funding = self.funding().as_builder().nth1(amount128.pack()).build();
+        let funding = self.funding().as_builder().nth1(amount.pack()).build();
         self.clone()
             .as_builder()
             .funding(funding)
@@ -216,8 +215,8 @@ impl ChannelState {
 #[cfg(feature = "std")]
 impl Balances {
     pub fn mk_close_outputs(self, mut mk_lock_script: impl FnMut(u8) -> Script) -> Vec<CellOutput> {
-        let a = Capacity::shannons(self.nth0().unpack() as u64);
-        let b = Capacity::shannons(self.nth1().unpack() as u64);
+        let a = Capacity::shannons(self.nth0().unpack());
+        let b = Capacity::shannons(self.nth1().unpack());
         // TODO: Outputs should contain min-capacity for script size...
         vec![
             CellOutput::new_builder()

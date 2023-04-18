@@ -464,7 +464,7 @@ pub fn verify_funding_in_outputs(
     let outputs = load_transaction()?.raw().outputs();
     let expected_pfls_code_hash = channel_constants.pfls_code_hash().unpack();
     let expected_pfls_hash_type = channel_constants.pfls_hash_type();
-    let mut capacity_sum: u128 = 0;
+    let mut capacity_sum: u64 = 0;
     for output in outputs.into_iter() {
         if output.lock().code_hash().unpack()[..] == expected_pfls_code_hash[..]
             && output.lock().hash_type().eq(&expected_pfls_hash_type)
@@ -478,7 +478,7 @@ pub fn verify_funding_in_outputs(
             let output_lock_args: Bytes = output.lock().args().unpack();
             let script_hash_in_pfls_args = Byte32::from_slice(&output_lock_args)?.unpack();
             if script_hash_in_pfls_args[..] == expected_pcts_script_hash[..] {
-                capacity_sum += u128::from(output.capacity().unpack());
+                capacity_sum += output.capacity().unpack();
             } else {
                 return Err(Error::InvalidPFLSInOutputs);
             }
@@ -572,16 +572,15 @@ pub fn verify_state_valid_as_start(
 
     // We verify that each participant's initial balance is at least the minimum capacity of a PFLS (or zero),
     // to ensure that funding is possible for the initial balance distribution.
-    let min_balance = u128::from(pfls_min_capacity);
     let balance_a = state.balances().get(0)?;
     let balance_b = state.balances().get(1)?;
     debug!("Balance A: {}", balance_a);
     debug!("Balance B: {}", balance_b);
-    debug!("Min balance: {}", min_balance);
-    if balance_a < min_balance && balance_a != 0 {
+    debug!("Min balance: {}", pfls_min_capacity);
+    if balance_a < pfls_min_capacity && balance_a != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
-    if balance_b < min_balance && balance_b != 0 {
+    if balance_b < pfls_min_capacity && balance_b != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
     Ok(())
@@ -627,28 +626,26 @@ pub fn verify_all_payed(
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let minimum_payment_fst = u128::from(
+    let minimum_payment_fst = 
         channel_constants
             .params()
             .party_a()
             .payment_min_capacity()
-            .unpack(),
-    );
-    let minimum_payment_snd = u128::from(
+            .unpack();
+    let minimum_payment_snd = 
         channel_constants
             .params()
             .party_b()
             .payment_min_capacity()
-            .unpack(),
-    );
-    let balance_fst: u128 = final_balance.get(0)? + u128::from(channel_capacity);
+            .unpack();
+    let balance_fst = final_balance.get(0)? + channel_capacity;
     let payment_script_hash_fst = channel_constants
         .params()
         .party_a()
         .payment_script_hash()
         .unpack();
 
-    let balance_snd: u128 = final_balance.get(1)?;
+    let balance_snd = final_balance.get(1)?;
     let payment_script_hash_snd = channel_constants
         .params()
         .party_b()
@@ -663,7 +660,7 @@ pub fn verify_all_payed(
     // TODO: Maybe we want to check that there is only one paying output per party?
     for i in 0..outputs_len {
         let output_lock_script_hash = load_cell_lock_hash(i, Source::Output)?;
-        let output_cap = u128::from(load_cell_capacity(i, Source::Output)?);
+        let output_cap = load_cell_capacity(i, Source::Output)?;
 
         // Note: We asserted that the payment_script_hashes of the parties differ upon channel
         // creation.

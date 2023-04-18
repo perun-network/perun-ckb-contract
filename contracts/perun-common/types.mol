@@ -3,7 +3,7 @@ import blockchain;
 /* Perun Types */
 array SEC1EncodedPubKey [byte; 65];
 
-array Balances [Uint128; 2];
+array Balances [Uint64; 2];
 
 array True [byte; 1];
 array False [byte; 1];
