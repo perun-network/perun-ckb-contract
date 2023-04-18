@@ -165,3 +165,17 @@ pub fn blake2b256(data: &[u8]) -> [u8; 32] {
     blake2b.finalize(&mut result);
     result
 }
+
+impl ChannelStatus {
+    /// set_funded sets the ChannelStatus to funded and fills the balances with the given amount.
+    /// NOTE: This function expects the given amount to be for the last index!
+    pub fn mk_funded(self, amount: u64) -> ChannelStatus {
+        let amount128 = amount as u128;
+        let funding = self.funding().as_builder().nth1(amount128.pack()).build();
+        self.clone()
+            .as_builder()
+            .funding(funding)
+            .funded(ctrue!())
+            .build()
+    }
+}
