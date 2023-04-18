@@ -44,3 +44,9 @@ impl From<ckb_error::Error> for Error {
         Error::new(&err.to_string())
     }
 }
+
+impl From<k256::ecdsa::Error> for Error {
+    fn from(err: k256::ecdsa::Error) -> Error {
+        Error::new(&err.to_string())
+    }
+}
