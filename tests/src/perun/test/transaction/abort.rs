@@ -62,13 +62,13 @@ pub fn mk_abort(
         env.pcts_script_dep.clone(),
         env.always_success_script_dep.clone(),
     ];
-    let tx = TransactionBuilder::default()
+    let rtx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs)
         .cell_deps(cell_deps)
         .witness(witness_args.as_bytes().pack())
         .build();
     Ok(AbortResult {
-        tx: ctx.complete_tx(tx),
+        tx: ctx.complete_tx(rtx),
     })
 }
