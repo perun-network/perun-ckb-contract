@@ -1,3 +1,4 @@
+use molecule::error::VerificationError;
 use std::{error, fmt};
 
 use ckb_testtool::ckb_error;
@@ -48,5 +49,17 @@ impl From<ckb_error::Error> for Error {
 impl From<k256::ecdsa::Error> for Error {
     fn from(err: k256::ecdsa::Error) -> Error {
         Error::new(&err.to_string())
+    }
+}
+
+impl From<VerificationError> for Error {
+    fn from(err: VerificationError) -> Error {
+        Error::new(&err.to_string())
+    }
+}
+
+impl From<Vec<Vec<u8>>> for Error {
+    fn from(vs: Vec<Vec<u8>>) -> Error {
+        Error::new(&format!("converting from nested vectors: {:?}", vs))
     }
 }
