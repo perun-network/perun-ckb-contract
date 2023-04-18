@@ -56,9 +56,16 @@ pub fn mk_abort(
             .lock(env.build_lock_script(ctx, Bytes::from(vec![f.index])))
             .build()
     });
+
+    let cell_deps = vec![
+        env.pcls_script_dep.clone(),
+        env.pcts_script_dep.clone(),
+        env.always_success_script_dep.clone(),
+    ];
     let tx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs)
+        .cell_deps(cell_deps)
         .witness(witness_args.as_bytes().pack())
         .build();
     Ok(AbortResult {
