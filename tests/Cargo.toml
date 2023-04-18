@@ -10,6 +10,7 @@ ckb-testtool = "0.9"
 hex = "0.4.3"
 rand = "0.8.5"
 perun-common = { path = "../contracts/perun-common" }
+molecule = "0.7.3"
 ckb-types = { package = "ckb-standalone-types", version = "0.1.2" }
 k256 = { version = "0.11.6", default-features = false, features = ["ecdsa", "arithmetic"]}
 rand_core = { version = "0.6", features = ["getrandom"] }
