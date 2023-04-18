@@ -7,7 +7,9 @@ use {ckb_types::packed::*, ckb_types::prelude::*};
 use {ckb_standalone_types::packed::*, ckb_standalone_types::prelude::*};
 
 use crate::error::Error;
-use crate::perun_types::{Balances, Bool, BoolUnion, ParticipantIndex, ParticipantIndexUnion};
+use crate::perun_types::{
+    Balances, Bool, BoolUnion, ChannelStatus, ParticipantIndex, ParticipantIndexUnion,
+};
 
 impl Bool {
     pub fn to_bool(&self) -> bool {
@@ -58,8 +60,25 @@ macro_rules! redeemer {
             ))
             .build()
     };
+    ($x:expr) => {
+        $crate::perun_types::ChannelWitnessBuilder::default()
+            .set($x)
+            .build()
+    };
 }
 pub(crate) use redeemer;
+
+#[macro_export]
+macro_rules! fund {
+    ($index:expr) => {
+        $crate::perun_types::ChannelWitnessUnion::Fund(
+            $crate::perun_types::Fund::new_builder()
+                .index(ParticipantIndex::from($index))
+                .build(),
+        )
+    };
+}
+pub(crate) use fund;
 
 impl ParticipantIndex {
     pub fn to_idx(&self) -> usize {
