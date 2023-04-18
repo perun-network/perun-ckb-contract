@@ -1,14 +1,14 @@
 use blake2b_rs::Blake2bBuilder;
 
 #[cfg(feature = "std")]
-use {ckb_types::packed::*, ckb_types::prelude::*};
+use {ckb_occupied_capacity::Capacity, ckb_types::packed::*, ckb_types::prelude::*, std::vec::Vec};
 
 #[cfg(not(feature = "std"))]
 use {ckb_standalone_types::packed::*, ckb_standalone_types::prelude::*};
 
 use crate::error::Error;
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelStatus, ParticipantIndex, ParticipantIndexUnion,
+    Balances, Bool, BoolUnion, ChannelState, ChannelStatus, ParticipantIndex, ParticipantIndexUnion,
 };
 
 impl Bool {
@@ -177,5 +177,38 @@ impl ChannelStatus {
             .funding(funding)
             .funded(ctrue!())
             .build()
+    }
+
+    #[cfg(feature = "std")]
+    /// mk_close_outputs creates the outputs for a close transaction according to the current
+    /// channel state. It does not matter whether the ChannelState in question is finalized or not.
+    pub fn mk_close_outputs(self, mk_lock_script: impl Fn(u8) -> Script) -> Vec<CellOutput> {
+        self.state().mk_close_outputs(mk_lock_script)
+    }
+}
+
+#[cfg(feature = "std")]
+impl ChannelState {
+    pub fn mk_close_outputs(self, mk_lock_script: impl Fn(u8) -> Script) -> Vec<CellOutput> {
+        self.balances().mk_close_outputs(mk_lock_script)
+    }
+}
+
+#[cfg(feature = "std")]
+impl Balances {
+    pub fn mk_close_outputs(self, mk_lock_script: impl Fn(u8) -> Script) -> Vec<CellOutput> {
+        let a = Capacity::shannons(self.nth0().unpack() as u64);
+        let b = Capacity::shannons(self.nth1().unpack() as u64);
+        // TODO: Outputs should contain min-capacity for script size...
+        vec![
+            CellOutput::new_builder()
+                .capacity(a.pack())
+                .lock(mk_lock_script(0))
+                .build(),
+            CellOutput::new_builder()
+                .capacity(b.pack())
+                .lock(mk_lock_script(1))
+                .build(),
+        ]
     }
 }
