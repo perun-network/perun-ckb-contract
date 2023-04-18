@@ -73,7 +73,7 @@ macro_rules! fund {
     ($index:expr) => {
         $crate::perun_types::ChannelWitnessUnion::Fund(
             $crate::perun_types::Fund::new_builder()
-                .index(ParticipantIndex::from($index))
+                .index($crate::perun_types::ParticipantIndex::from($index))
                 .build(),
         )
     };
