@@ -1039,22 +1039,19 @@ impl ::core::fmt::Display for Balances {
 }
 impl ::core::default::Default for Balances {
     fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ];
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         Balances::new_unchecked(v.into())
     }
 }
 impl Balances {
-    pub const TOTAL_SIZE: usize = 32;
-    pub const ITEM_SIZE: usize = 16;
+    pub const TOTAL_SIZE: usize = 16;
+    pub const ITEM_SIZE: usize = 8;
     pub const ITEM_COUNT: usize = 2;
-    pub fn nth0(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(0..16))
+    pub fn nth0(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(0..8))
     }
-    pub fn nth1(&self) -> Uint128 {
-        Uint128::new_unchecked(self.0.slice(16..32))
+    pub fn nth1(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(8..16))
     }
     pub fn as_reader<'r>(&'r self) -> BalancesReader<'r> {
         BalancesReader::new_unchecked(self.as_slice())
@@ -1110,14 +1107,14 @@ impl<'r> ::core::fmt::Display for BalancesReader<'r> {
     }
 }
 impl<'r> BalancesReader<'r> {
-    pub const TOTAL_SIZE: usize = 32;
-    pub const ITEM_SIZE: usize = 16;
+    pub const TOTAL_SIZE: usize = 16;
+    pub const ITEM_SIZE: usize = 8;
     pub const ITEM_COUNT: usize = 2;
-    pub fn nth0(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[0..16])
+    pub fn nth0(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
     }
-    pub fn nth1(&self) -> Uint128Reader<'r> {
-        Uint128Reader::new_unchecked(&self.as_slice()[16..32])
+    pub fn nth1(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[8..16])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for BalancesReader<'r> {
@@ -1141,7 +1138,7 @@ impl<'r> molecule::prelude::Reader<'r> for BalancesReader<'r> {
         Ok(())
     }
 }
-pub struct BalancesBuilder(pub(crate) [Uint128; 2]);
+pub struct BalancesBuilder(pub(crate) [Uint64; 2]);
 impl ::core::fmt::Debug for BalancesBuilder {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:?})", Self::NAME, &self.0[..])
@@ -1149,22 +1146,22 @@ impl ::core::fmt::Debug for BalancesBuilder {
 }
 impl ::core::default::Default for BalancesBuilder {
     fn default() -> Self {
-        BalancesBuilder([Uint128::default(), Uint128::default()])
+        BalancesBuilder([Uint64::default(), Uint64::default()])
     }
 }
 impl BalancesBuilder {
-    pub const TOTAL_SIZE: usize = 32;
-    pub const ITEM_SIZE: usize = 16;
+    pub const TOTAL_SIZE: usize = 16;
+    pub const ITEM_SIZE: usize = 8;
     pub const ITEM_COUNT: usize = 2;
-    pub fn set(mut self, v: [Uint128; 2]) -> Self {
+    pub fn set(mut self, v: [Uint64; 2]) -> Self {
         self.0 = v;
         self
     }
-    pub fn nth0(mut self, v: Uint128) -> Self {
+    pub fn nth0(mut self, v: Uint64) -> Self {
         self.0[0] = v;
         self
     }
-    pub fn nth1(mut self, v: Uint128) -> Self {
+    pub fn nth1(mut self, v: Uint64) -> Self {
         self.0[1] = v;
         self
     }
@@ -4466,11 +4463,10 @@ impl ::core::fmt::Display for Close {
 impl ::core::default::Default for Close {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            121, 0, 0, 0, 16, 0, 0, 0, 113, 0, 0, 0, 117, 0, 0, 0, 97, 0, 0, 0, 20, 0, 0, 0, 52, 0,
-            0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            105, 0, 0, 0, 16, 0, 0, 0, 97, 0, 0, 0, 101, 0, 0, 0, 81, 0, 0, 0, 20, 0, 0, 0, 52, 0,
+            0, 0, 68, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         Close::new_unchecked(v.into())
     }
@@ -5311,10 +5307,9 @@ impl ::core::fmt::Display for ChannelState {
 impl ::core::default::Default for ChannelState {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            97, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            81, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 68, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelState::new_unchecked(v.into())
     }
@@ -5628,12 +5623,11 @@ impl ::core::fmt::Display for ChannelStatus {
 impl ::core::default::Default for ChannelStatus {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            159, 0, 0, 0, 20, 0, 0, 0, 117, 0, 0, 0, 122, 0, 0, 0, 154, 0, 0, 0, 97, 0, 0, 0, 20,
-            0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            127, 0, 0, 0, 20, 0, 0, 0, 101, 0, 0, 0, 106, 0, 0, 0, 122, 0, 0, 0, 81, 0, 0, 0, 20,
+            0, 0, 0, 52, 0, 0, 0, 68, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelStatus::new_unchecked(v.into())
     }
