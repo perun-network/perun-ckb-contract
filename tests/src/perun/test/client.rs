@@ -1,31 +1,24 @@
 use ckb_testtool::ckb_traits::CellDataProvider;
-use ckb_testtool::ckb_types::bytes::Bytes;
-use ckb_testtool::ckb_types::core::{ScriptHashType, TransactionBuilder};
-use ckb_testtool::ckb_types::packed::{
-    Byte32, Bytes as PackedBytes, BytesBuilder, CellInput, CellOutput, OutPoint, OutPointBuilder,
-    Script, ScriptOptBuilder,
-};
+
+use ckb_testtool::ckb_types::core::ScriptHashType;
+use ckb_testtool::ckb_types::packed::{OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 
 use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
-use ckb_occupied_capacity::{Capacity, IntoCapacity};
 use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{ChannelState, ChannelStatus};
 
 use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
+use crate::perun::test;
 use crate::perun::test::transaction::{AbortArgs, OpenResult};
-use crate::perun::test::{self, Asset};
 use crate::perun::test::{keys, transaction};
 
-use k256::{
-    ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey},
-    SecretKey,
-};
+use k256::ecdsa::{Signature, SigningKey};
 
 use super::cell::FundingCell;
 use super::transaction::FundResult;
@@ -181,7 +174,7 @@ impl Client {
         _cid: test::ChannelId,
         channel_cell: OutPoint,
         funds: Vec<FundingCell>,
-    ) -> Result<(), perun::Error> {
+    ) -> Result<transaction::AbortResult, perun::Error> {
         let ar = transaction::mk_abort(
             ctx,
             env,
@@ -192,7 +185,7 @@ impl Client {
         )?;
         let cycles = ctx.verify_tx(&ar.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
-        Ok(())
+        Ok(ar)
     }
 
     pub fn close(
@@ -200,8 +193,24 @@ impl Client {
         ctx: &mut Context,
         env: &harness::Env,
         cid: test::ChannelId,
-    ) -> Result<(), perun::Error> {
-        Ok(())
+        channel_cell: OutPoint,
+        funds_cells: Vec<FundingCell>,
+        state: ChannelState,
+        sigs: [Vec<u8>; 2],
+    ) -> Result<transaction::CloseResult, perun::Error> {
+        let cr = transaction::mk_close(
+            ctx,
+            env,
+            transaction::CloseArgs {
+                channel_cell,
+                funds_cells,
+                state,
+                sigs,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&cr.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(cr)
     }
 
     pub fn force_close(
