@@ -1,10 +1,18 @@
-use ckb_testtool::ckb_types::packed::{OutPoint, Script};
-use ckb_testtool::context::Context;
-use k256::ecdsa::SigningKey;
-use perun_common::perun_types::ChannelStatus;
+use ckb_testtool::{
+    ckb_types::{
+        packed::{OutPoint, Script},
+        prelude::Entity,
+    },
+    context::Context,
+};
+use k256::ecdsa::{SigningKey, VerifyingKey};
+use perun_common::perun_types::{ChannelConstants, ChannelStatus};
 use rand_core::OsRng;
 
-use crate::perun;
+use crate::perun::{
+    self,
+    test::{keys, Client},
+};
 use crate::perun::{harness, test};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
@@ -194,13 +202,56 @@ where
                 )
             }
             None => panic!("no channel cell, invalid test setup"),
-        }
+        }?;
+        Ok(())
     }
 
     /// close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn close(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, close, self.id)
+        let sigs = self.sigs_for_channel_state()?;
+        match self.channel_cell.clone() {
+            Some(channel_cell) => call_action!(
+                self,
+                close,
+                self.id,
+                channel_cell,
+                self.funding_cells.clone(),
+                self.channel_state.state(),
+                sigs
+            ),
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        Ok(())
+    }
+
+    fn sigs_for_channel_state(&self) -> Result<[Vec<u8>; 2], perun::Error> {
+        // We want to have the correct order of clients in an array to construct signatures. For
+        // consistency we use the ChannelConstants which are also used to construct the channel and
+        // look up the participants according to their public key identifier.
+        let s = ChannelConstants::from_slice(self.pcts.args().as_slice())?;
+        let resolve_client = |verifying_key_raw: Vec<u8>| -> Result<Client, perun::Error> {
+            let verifying_key = VerifyingKey::from_sec1_bytes(verifying_key_raw.as_slice())?;
+            let pubkey = keys::verifying_key_to_byte_array(&verifying_key);
+            self.parts
+                .values()
+                .cloned()
+                .find(|c| c.pubkey() == pubkey)
+                .ok_or("unknown participant in channel parameters".into())
+        };
+        let clients: Result<Vec<_>, _> = s
+            .params()
+            .mk_party_pubkeys()
+            .iter()
+            .cloned()
+            .map(resolve_client)
+            .collect();
+        let sigs: Result<Vec<_>, _> = clients?
+            .iter()
+            .map(|p| p.sign(self.channel_state.state()))
+            .collect();
+        let sig_arr: [Vec<u8>; 2] = sigs?.try_into()?;
+        Ok(sig_arr)
     }
 
     /// force_close a channel using the currently active participant set by
