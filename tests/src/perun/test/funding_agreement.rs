@@ -91,8 +91,7 @@ impl FundingAgreement {
                             // We found the index in the list of funded indices, we expect the required
                             // amount for assets to be funded.
                             if let Some((Asset(0), amount)) = entry.amounts.iter().next() {
-                                let amount128: u128 = (*amount).into();
-                                acc.push(amount128.pack());
+                                acc.push(amount.pack());
                                 return Ok(acc);
                             } else {
                                 return Err(perun::Error::from("unknown asset"));
@@ -101,7 +100,7 @@ impl FundingAgreement {
                         None => {
                             // We did not find the index in the list of funded indices, the client
                             // identified by this index did not fund, yet.
-                            acc.push(0u128.pack());
+                            acc.push(0u64.pack());
                             Ok(acc)
                         }
                     }
