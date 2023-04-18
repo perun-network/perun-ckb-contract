@@ -3,8 +3,7 @@ use crate::perun::random;
 use super::*;
 use ckb_occupied_capacity::Capacity;
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
-use ckb_testtool::{ckb_types::core::TransactionBuilder, context::Context};
-use k256::PublicKey;
+use ckb_testtool::context::Context;
 use perun;
 use perun::test;
 use perun_common::perun_types::{Balances, Bool, ChannelState, SEC1EncodedPubKey};
@@ -51,8 +50,10 @@ fn test_signature() {
 fn channel_test_bench() -> Result<(), perun::Error> {
     let res = [
         test_funding_abort,
-        test_multiple_disputes,
         test_successful_funding,
+        test_close,
+        test_force_close,
+        test_multiple_disputes,
     ]
     .iter()
     .map(|test| {
@@ -127,6 +128,62 @@ fn test_successful_funding(
         chan.with(bob)
             .fund(&funding_agreement)
             .expect("funding channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
+fn test_close(context: &mut Context, env: &perun::harness::Env) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(alice).close().expect("closing channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
+fn test_force_close(context: &mut Context, env: &perun::harness::Env) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(bob).dispute().expect("invalid channel dispute");
+
+        chan.delay(env.challenge_duration);
+
+        chan.with(bob).force_close().expect("force closing channel");
 
         chan.assert();
         Ok(())
