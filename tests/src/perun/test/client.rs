@@ -8,11 +8,12 @@ use ckb_testtool::ckb_types::packed::{
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 
+use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
 use ckb_occupied_capacity::{Capacity, IntoCapacity};
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::ChannelStatus;
+use perun_common::perun_types::{ChannelState, ChannelStatus};
 
 use crate::perun;
 use crate::perun::harness;
@@ -155,6 +156,13 @@ impl Client {
 
     pub fn send(&self, ctx: &mut Context, env: &harness::Env) -> Result<(), perun::Error> {
         Ok(())
+    }
+
+    pub fn sign(&self, state: ChannelState) -> Result<Vec<u8>, perun::Error> {
+        let s: Signature = self
+            .signing_key
+            .sign_prehash(&blake2b256(state.as_slice()))?;
+        Ok(Vec::from(s.to_der().as_bytes()))
     }
 
     pub fn dispute(
