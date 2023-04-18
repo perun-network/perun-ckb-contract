@@ -231,3 +231,19 @@ impl Balances {
         ]
     }
 }
+
+impl ChannelParameters {
+    /// mk_party_pubkeys creates a vector of each participants public key in the correct order.
+    pub fn mk_party_pubkeys(self) -> Vec<Vec<u8>> {
+        vec![
+            self.party_a().pub_key().to_vec(),
+            self.party_b().pub_key().to_vec(),
+        ]
+    }
+}
+
+impl SEC1EncodedPubKey {
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.as_bytes().to_vec()
+    }
+}
