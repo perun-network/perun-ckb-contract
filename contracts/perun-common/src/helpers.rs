@@ -95,6 +95,20 @@ impl ParticipantIndex {
     }
 }
 
+impl From<u8> for ParticipantIndex {
+    fn from(idx: u8) -> Self {
+        match idx {
+            0 => ParticipantIndex::new_builder()
+                .set(ParticipantIndexUnion::A(Default::default()))
+                .build(),
+            1 => ParticipantIndex::new_builder()
+                .set(ParticipantIndexUnion::B(Default::default()))
+                .build(),
+            _ => panic!("Invalid participant index"),
+        }
+    }
+}
+
 impl Balances {
     pub fn sum(&self) -> u128 {
         let a = self.nth0().unpack();
