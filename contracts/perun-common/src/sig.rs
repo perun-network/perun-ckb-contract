@@ -1,4 +1,4 @@
-use k256::ecdsa::{VerifyingKey, Signature, signature::{hazmat::PrehashVerifier}};
+use k256::ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
 
 use crate::{error::Error, helpers::blake2b256};
 

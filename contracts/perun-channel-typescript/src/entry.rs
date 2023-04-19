@@ -626,18 +626,16 @@ pub fn verify_all_payed(
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let minimum_payment_fst = 
-        channel_constants
-            .params()
-            .party_a()
-            .payment_min_capacity()
-            .unpack();
-    let minimum_payment_snd = 
-        channel_constants
-            .params()
-            .party_b()
-            .payment_min_capacity()
-            .unpack();
+    let minimum_payment_fst = channel_constants
+        .params()
+        .party_a()
+        .payment_min_capacity()
+        .unpack();
+    let minimum_payment_snd = channel_constants
+        .params()
+        .party_b()
+        .payment_min_capacity()
+        .unpack();
     let balance_fst = final_balance.get(0)? + channel_capacity;
     let payment_script_hash_fst = channel_constants
         .params()
