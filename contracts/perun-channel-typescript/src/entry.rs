@@ -18,6 +18,7 @@ use ckb_std::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
         load_header, load_script, load_script_hash, load_transaction, load_witness_args,
     },
+    syscalls::{self, SysError},
 };
 use perun_common::{
     error::Error,
@@ -724,32 +725,21 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
 }
 
 pub fn get_channel_action() -> Result<ChannelAction, Error> {
-    let mut input_status_opt: Option<ChannelStatus> = None;
-    let mut output_status_opt: Option<ChannelStatus> = None;
-
     // Hack: If load_cell_type succeeds, we know that this type script exists at least in an input of the transaction.
     // If it does not succeed, we know that it does not exist in any input of the transaction.
     // We do not actually care about the type script.
-    match load_cell_type(0, Source::GroupInput) {
-        Ok(_) => {
-            input_status_opt = Some(ChannelStatus::from_slice(
-                load_cell_data(0, Source::GroupInput)?.as_slice(),
-            )?);
-        }
-        Err(_) => {}
-    }
+    //
+    // > ian: I don't get the hack. The group only includes cells with the same type script and args, so the code is the same as calling load_cell_data directly.
+    let input_status_opt = load_cell_data(0, Source::GroupInput)
+        .ok()
+        .map(|data| ChannelStatus::from_slice(data.as_slice()))
+        .map_or(Ok(None), |v| v.map(Some))?;
 
-    // Hack: If load_cell_type succeeds, we know that this type script exists at least in an output of the transaction.
-    // If it does not succeed, we know that it does not exist in any output of the transaction.
-    // We do not actually care about the type script.
-    match load_cell_type(0, Source::GroupOutput) {
-        Ok(_) => {
-            output_status_opt = Some(ChannelStatus::from_slice(
-                load_cell_data(0, Source::GroupOutput)?.as_slice(),
-            )?);
-        }
-        Err(_) => {}
-    }
+    let output_status_opt = load_cell_data(0, Source::GroupOutput)
+        .ok()
+        .map(|data| ChannelStatus::from_slice(data.as_slice()))
+        .map_or(Ok(None), |v| v.map(Some))?;
+
     match (input_status_opt, output_status_opt) {
         (Some(old_status), Some(new_status)) => Ok(ChannelAction::Progress {
             old_status,
@@ -764,36 +754,28 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
 /// verify_channel_count verifies that there is at most one perun channel in the inputs of the transaction
 /// and at most one perun channel in the outputs of the transaction. It also verifies that each of those channels
 /// is the current channel.
+///
 pub fn verify_max_one_channel(own_hash: &[u8; 32], own_args: &Bytes) -> Result<(), Error> {
-    verify_channel_count(own_hash, own_args, Source::Input)?;
-    verify_channel_count(own_hash, own_args, Source::Output)
+    // > ian: When type scripts run, CKB already groups cells by type script and args, so just count cells in GroupInput and GroupOutput
+    if count_cells(Source::GroupInput)? <= 1 && count_cells(Source::GroupOutput)? <= 1 {
+        Ok(())
+    } else {
+        Err(Error::MoreThanOneChannel)
+    }
 }
 
-pub fn verify_channel_count(
-    own_hash: &[u8; 32],
-    own_args: &Bytes,
-    source: Source,
-) -> Result<(), Error> {
-    let mut channel_count = 0;
+pub fn count_cells(source: Source) -> Result<usize, Error> {
+    let mut null_buf: [u8; 0] = [];
     for i in 0.. {
-        match load_cell_type(i, source) {
-            Ok(Some(type_script)) => {
-                if type_script.code_hash().unpack()[..] == own_hash[..] {
-                    channel_count += 1;
-                    let input_args: Bytes = load_cell_type(i, source)?.unwrap().args().unpack();
-                    if input_args[..] != own_args[..] {
-                        return Err(Error::FoundDifferentChannel);
-                    }
-                }
-            }
-            Ok(None) => continue,
-            Err(_) => break,
+        match syscalls::load_cell(&mut null_buf, 0, i, source) {
+            Ok(_) => continue,
+            Err(SysError::LengthNotEnough(_)) => continue,
+            Err(SysError::IndexOutOfBound) => return Ok(i),
+            Err(err) => return Err(err.into()),
         }
     }
-    if channel_count > 1 {
-        return Err(Error::MoreThanOneChannel);
-    }
-    Ok(())
+
+    Ok(0)
 }
 
 pub fn verify_different_payment_addresses(
