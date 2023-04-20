@@ -99,6 +99,19 @@ macro_rules! close {
 }
 pub(crate) use close;
 
+#[macro_export]
+macro_rules! dispute {
+    ($siga:expr, $sigb:expr) => {
+        $crate::perun_types::ChannelWitnessUnion::Dispute(
+            $crate::perun_types::Dispute::new_builder()
+                .sig_a($siga)
+                .sig_b($sigb)
+                .build(),
+        )
+    };
+}
+pub(crate) use dispute;
+
 impl ParticipantIndex {
     pub fn to_idx(&self) -> usize {
         match self.to_enum() {
