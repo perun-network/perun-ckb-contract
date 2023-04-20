@@ -66,12 +66,7 @@ impl Client {
             .get_cell_data_hash(&env.always_success_out_point)
             .expect("always success hash");
 
-        let parties = funding_agreement.mk_participants(
-            ctx,
-            env,
-            always_success_hash.clone(),
-            env.min_capacity_no_script,
-        );
+        let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
 
         let chan_params = perun_types::ChannelParametersBuilder::default()
             .party_a(parties[0].clone())
