@@ -10,18 +10,18 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{
         bytes::Bytes,
-        packed::{Byte32, Script},
+        packed::Byte32,
         prelude::*,
     },
     debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
         load_header, load_script, load_script_hash, load_transaction, load_witness_args,
-    },
+    }, syscalls::{SysError, self},
 };
 use perun_common::{
     error::Error,
-    helpers::{blake2b256, is_matching_output},
+    helpers::blake2b256,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
         ChannelWitness, ChannelWitnessUnion, SEC1EncodedPubKey,
@@ -67,10 +67,8 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::NoArgs);
     }
 
-    // Currently, we do not support interacting with different channels in the same transaction.
-    // This also prevents that someone instantiates two channels with the same ChannelToken in one
-    // start transaction
-    verify_max_one_channel(&script.code_hash().unpack(), &args)?;
+    // We verify that there is at most one channel in the GroupInputs and GroupOutputs respectively.
+    verify_max_one_channel()?;
     debug!("verify_max_one_channel passed");
 
     // The channel constants do not change during the lifetime of a channel. They are located in the
@@ -101,7 +99,6 @@ pub fn main() -> Result<(), Error> {
                 &new_status,
                 &channel_witness,
                 &channel_constants,
-                &script,
             )
         }
         ChannelAction::Close { old_status } => {
@@ -181,7 +178,6 @@ pub fn check_valid_progress(
     new_status: &ChannelStatus,
     witness: &ChannelWitness,
     channel_constants: &ChannelConstants,
-    own_script: &Script,
 ) -> Result<(), Error> {
     // At this point we know that the transaction progresses the channel. There are two different
     // kinds of channel progression: Funding and Dispute. Which kind of progression is performed
@@ -193,10 +189,9 @@ pub fn check_valid_progress(
     // No kind of channel progression should pay out any funds locked by the pfls, so we just check
     // that there are no funds locked by the pfls in the inputs of the transaction.
     verify_no_funds_in_inputs(channel_constants)?;
-    // Here, we verify that there is exactly one cell in the outputs with the exact same pcts as type script.
-    // (this also compares the args field and therefore the integrity of the channel constants). We also
-    // verify that said cell is guarded by the pcls script specified in the channel constants.
-    verify_channel_continues(own_script)?;
+    // Here we verify that the cell with the PCTS in the outputs is locked by the same lock script
+    // as the input channel cell.
+    verify_channel_continues_locked()?;
 
     match witness.to_enum() {
         ChannelWitnessUnion::Fund(f) => {
@@ -383,25 +378,13 @@ pub fn verify_equal_sum_of_balances(
     Err(Error::SumOfBalancesNotEqual)
 }
 
-pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
-    let corresponding_lock_script = load_cell_lock(0, Source::GroupInput)?;
-    let outputs = load_transaction()?.raw().outputs();
-
-    let mut found_match = false;
-    for output in outputs.into_iter() {
-        let is_matching_output =
-            is_matching_output(&output, &corresponding_lock_script, own_script);
-        if is_matching_output && !found_match {
-            found_match = true;
-        } else if is_matching_output && found_match {
-            return Err(Error::MultipleMatchingOutputs);
-        }
+pub fn verify_channel_continues_locked() -> Result<(), Error> {
+    let input_lock_script = load_cell_lock(0, Source::Input)?;
+    let output_lock_script = load_cell_lock(0, Source::Output)?;
+    if input_lock_script.as_slice()[..] != output_lock_script.as_slice()[..] {
+        return Err(Error::ChannelDoesNotContinue);
     }
-
-    if found_match {
-        return Ok(());
-    }
-    return Err(Error::ChannelDoesNotContinue);
+    Ok(())
 }
 
 pub fn verify_no_funds_in_inputs(channel_constants: &ChannelConstants) -> Result<(), Error> {
@@ -427,13 +410,12 @@ pub fn verify_equal_channel_state(
     Err(Error::ChannelStateNotEqual)
 }
 
-// Note: idx is the acting party!
 pub fn verify_funding_unchanged(
-    idx: usize,
+    idx_of_peer: usize,
     old_funding: &Balances,
     new_funding: &Balances,
 ) -> Result<(), Error> {
-    if old_funding.get(idx)? != new_funding.get(idx)? {
+    if old_funding.get(idx_of_peer)? != new_funding.get(idx_of_peer)? {
         return Err(Error::FundingChanged);
     }
     Ok(())
@@ -574,9 +556,6 @@ pub fn verify_state_valid_as_start(
     // to ensure that funding is possible for the initial balance distribution.
     let balance_a = state.balances().get(0)?;
     let balance_b = state.balances().get(1)?;
-    debug!("Balance A: {}", balance_a);
-    debug!("Balance B: {}", balance_b);
-    debug!("Min balance: {}", pfls_min_capacity);
     if balance_a < pfls_min_capacity && balance_a != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
@@ -596,6 +575,10 @@ pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<
         .eq(&channel_constants.pcls_hash_type())
     {
         return Err(Error::InvalidPCLSHashType);
+    }
+
+    if !lock_script.args().is_empty() {
+        return Err(Error::PCLSWithArgs);
     }
     Ok(())
 }
@@ -626,34 +609,32 @@ pub fn verify_all_payed(
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let minimum_payment_fst = 
-        channel_constants
-            .params()
-            .party_a()
-            .payment_min_capacity()
-            .unpack();
-    let minimum_payment_snd = 
-        channel_constants
-            .params()
-            .party_b()
-            .payment_min_capacity()
-            .unpack();
-    let balance_fst = final_balance.get(0)? + channel_capacity;
-    let payment_script_hash_fst = channel_constants
+    let minimum_payment_a = channel_constants
+        .params()
+        .party_a()
+        .payment_min_capacity()
+        .unpack();
+    let minimum_payment_b: u64 = channel_constants
+        .params()
+        .party_b()
+        .payment_min_capacity()
+        .unpack();
+    let balance_a = final_balance.get(0)? + channel_capacity;
+    let payment_script_hash_a = channel_constants
         .params()
         .party_a()
         .payment_script_hash()
         .unpack();
 
-    let balance_snd = final_balance.get(1)?;
-    let payment_script_hash_snd = channel_constants
+    let balance_b = final_balance.get(1)?;
+    let payment_script_hash_b = channel_constants
         .params()
         .party_b()
         .payment_script_hash()
         .unpack();
 
-    let mut outputs_fst = 0;
-    let mut outputs_snd = 0;
+    let mut outputs_a = 0;
+    let mut outputs_b = 0;
 
     let outputs_len = load_transaction()?.raw().outputs().len();
 
@@ -664,28 +645,28 @@ pub fn verify_all_payed(
 
         // Note: We asserted that the payment_script_hashes of the parties differ upon channel
         // creation.
-        if output_lock_script_hash[..] == payment_script_hash_fst[..] {
+        if output_lock_script_hash[..] == payment_script_hash_a[..] {
             // Note: We currently only support CKBytes as asset, so any type script in a payment
             // is considered malicious
             if load_cell_type(i, Source::Output)?.is_some() {
                 return Err(Error::TypeScriptInPaymentOutput);
             }
-            outputs_fst = output_cap;
+            outputs_a = output_cap;
         }
-        if output_lock_script_hash[..] == payment_script_hash_snd[..] {
+        if output_lock_script_hash[..] == payment_script_hash_b[..] {
             // Note: We currently only support CKBytes as asset, so any type script in a payment
             // is considered malicious
             if load_cell_type(i, Source::Output)?.is_some() {
                 return Err(Error::TypeScriptInPaymentOutput);
             }
-            outputs_snd = output_cap;
+            outputs_b = output_cap;
         }
     }
 
     // Parties with balances below the minimum capacity of the payment script
     // are not required to be payed.
-    if (balance_fst > outputs_fst && balance_fst >= minimum_payment_fst)
-        || (balance_snd > outputs_snd && balance_snd >= minimum_payment_snd)
+    if (balance_a > outputs_a && balance_a >= minimum_payment_a)
+        || (balance_b > outputs_b && balance_b >= minimum_payment_b)
     {
         return Err(Error::NotAllPayed);
     }
@@ -726,32 +707,16 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
 }
 
 pub fn get_channel_action() -> Result<ChannelAction, Error> {
-    let mut input_status_opt: Option<ChannelStatus> = None;
-    let mut output_status_opt: Option<ChannelStatus> = None;
+    let input_status_opt = load_cell_data(0, Source::GroupInput)
+        .ok()
+        .map(|data| ChannelStatus::from_slice(data.as_slice()))
+        .map_or(Ok(None), |v| v.map(Some))?;
 
-    // Hack: If load_cell_type succeeds, we know that this type script exists at least in an input of the transaction.
-    // If it does not succeed, we know that it does not exist in any input of the transaction.
-    // We do not actually care about the type script.
-    match load_cell_type(0, Source::GroupInput) {
-        Ok(_) => {
-            input_status_opt = Some(ChannelStatus::from_slice(
-                load_cell_data(0, Source::GroupInput)?.as_slice(),
-            )?);
-        }
-        Err(_) => {}
-    }
+    let output_status_opt = load_cell_data(0, Source::GroupOutput)
+        .ok()
+        .map(|data| ChannelStatus::from_slice(data.as_slice()))
+        .map_or(Ok(None), |v| v.map(Some))?;
 
-    // Hack: If load_cell_type succeeds, we know that this type script exists at least in an output of the transaction.
-    // If it does not succeed, we know that it does not exist in any output of the transaction.
-    // We do not actually care about the type script.
-    match load_cell_type(0, Source::GroupOutput) {
-        Ok(_) => {
-            output_status_opt = Some(ChannelStatus::from_slice(
-                load_cell_data(0, Source::GroupOutput)?.as_slice(),
-            )?);
-        }
-        Err(_) => {}
-    }
     match (input_status_opt, output_status_opt) {
         (Some(old_status), Some(new_status)) => Ok(ChannelAction::Progress {
             old_status,
@@ -763,39 +728,26 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
     }
 }
 
-/// verify_channel_count verifies that there is at most one perun channel in the inputs of the transaction
-/// and at most one perun channel in the outputs of the transaction. It also verifies that each of those channels
-/// is the current channel.
-pub fn verify_max_one_channel(own_hash: &[u8; 32], own_args: &Bytes) -> Result<(), Error> {
-    verify_channel_count(own_hash, own_args, Source::Input)?;
-    verify_channel_count(own_hash, own_args, Source::Output)
+/// verify_max_one_channel verifies that there is at most one channel in the group input and group output respectively.
+pub fn verify_max_one_channel() -> Result<(), Error> {
+    if count_cells(Source::GroupInput)? > 1 || count_cells(Source::GroupOutput)? > 1 {
+        return Err(Error::MoreThanOneChannel);
+    } else {
+        return Ok(());
+    }
 }
 
-pub fn verify_channel_count(
-    own_hash: &[u8; 32],
-    own_args: &Bytes,
-    source: Source,
-) -> Result<(), Error> {
-    let mut channel_count = 0;
+pub fn count_cells(source: Source) -> Result<usize, Error> {
+    let mut null_buf: [u8; 0] = [];
     for i in 0.. {
-        match load_cell_type(i, source) {
-            Ok(Some(type_script)) => {
-                if type_script.code_hash().unpack()[..] == own_hash[..] {
-                    channel_count += 1;
-                    let input_args: Bytes = load_cell_type(i, source)?.unwrap().args().unpack();
-                    if input_args[..] != own_args[..] {
-                        return Err(Error::FoundDifferentChannel);
-                    }
-                }
-            }
-            Ok(None) => continue,
-            Err(_) => break,
+        match syscalls::load_cell(&mut null_buf, 0, i, source) {
+            Ok(_) => continue,
+            Err(SysError::LengthNotEnough(_)) => continue,
+            Err(SysError::IndexOutOfBound) => return Ok(i),
+            Err(err) => return Err(err.into()),
         }
     }
-    if channel_count > 1 {
-        return Err(Error::MoreThanOneChannel);
-    }
-    Ok(())
+    Ok(0)
 }
 
 pub fn verify_different_payment_addresses(
@@ -806,7 +758,7 @@ pub fn verify_different_payment_addresses(
         .party_a()
         .payment_script_hash()
         .unpack()[..]
-        != channel_constants
+        == channel_constants
             .params()
             .party_b()
             .payment_script_hash()

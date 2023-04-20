@@ -12,7 +12,7 @@ use ckb_std::{
 use perun_common::{error::Error, perun_types::ChannelConstants};
 
 // The perun-channel-lockscript (pcls) is used to lock access to interacting with a channel and is attached as lock script
-// to the cell containing the perun-channel-type-script (pcts).
+// to the channel-cell (the cell which uses the perun-channel-type-script (pcts) as its type script).
 // A channel defines two participants, each of which has their own unlock_script_hash (also defined in the ChannelConstants.params.{party_a,party_b}).
 // The pcls allows a transaction to interact with the channel, if at least one input cell is present with:
 // - cell's lock script hash == unlock_script_hash of party_a or
