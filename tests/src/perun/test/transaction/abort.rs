@@ -51,12 +51,21 @@ pub fn mk_abort(
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     // TODO: We are expecting the output amounts to be greater than the minimum amount necessary to
     // accomodate the space required for each output cell.
-    let outputs = args.funds.iter().cloned().map(|f| {
-        CellOutput::new_builder()
-            .capacity(f.amount.pack())
-            .lock(env.build_lock_script(ctx, Bytes::from(vec![f.index])))
-            .build()
-    });
+    let outputs: Vec<_> = args
+        .funds
+        .iter()
+        .cloned()
+        .map(|f| {
+            (
+                CellOutput::new_builder()
+                    .capacity(f.amount.pack())
+                    .lock(env.build_lock_script(ctx, Bytes::from(vec![f.index])))
+                    .build(),
+                Bytes::new(),
+            )
+        })
+        .collect();
+    let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let cell_deps = vec![
         env.pcls_script_dep.clone(),
@@ -66,7 +75,8 @@ pub fn mk_abort(
 
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
-        .outputs(outputs)
+        .outputs(outputs.iter().cloned().map(|o| o.0))
+        .outputs_data(outputs_data.pack())
         .cell_deps(cell_deps)
         .header_deps(headers)
         .witness(witness_args.as_bytes().pack())

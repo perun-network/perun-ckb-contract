@@ -64,13 +64,15 @@ pub fn mk_force_close(
     // Rust...
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
     let outputs = args.state.clone().mk_close_outputs(f);
+    let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let force_close_action = redeemer!(ForceClose);
     let witness_args = channel_witness!(force_close_action);
 
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
-        .outputs(outputs)
+        .outputs(outputs.iter().map(|o| o.0.clone()))
+        .outputs_data(outputs_data.pack())
         .header_deps(args.headers)
         .witness(witness_args.as_bytes().pack())
         .cell_deps(cell_deps)

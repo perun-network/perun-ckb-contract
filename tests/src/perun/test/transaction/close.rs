@@ -63,6 +63,7 @@ pub fn mk_close(
     // Rust...
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
     let outputs = args.state.clone().mk_close_outputs(f);
+    let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let close_action = redeemer!(close!(args.state, args.sigs[0].pack(), args.sigs[1].pack()));
     let witness_args = channel_witness!(close_action);
@@ -70,7 +71,8 @@ pub fn mk_close(
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
-        .outputs(outputs)
+        .outputs(outputs.iter().map(|o| o.0.clone()))
+        .outputs_data(outputs_data.pack())
         .witness(witness_args.as_bytes().pack())
         .cell_deps(cell_deps)
         .header_deps(headers)
