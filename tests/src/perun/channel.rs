@@ -201,7 +201,24 @@ where
     /// dispute a channel using the currently active participant set by
     /// `with(..)`.
     pub fn dispute(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, dispute, self.id)
+        let sigs = self.sigs_for_channel_state()?;
+        let res = match &self.channel_cell {
+            Some(channel_cell) => {
+                call_action!(
+                    self,
+                    dispute,
+                    self.id,
+                    channel_cell.clone(),
+                    self.channel_state.clone(),
+                    self.pcts.clone(),
+                    sigs,
+                )
+            }
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        self.channel_cell = Some(res.channel_cell.clone());
+        self.push_header_with_cell(res.channel_cell);
+        Ok(())
     }
 
     /// abort a channel using the currently active participant set by
