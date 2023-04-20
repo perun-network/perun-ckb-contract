@@ -11,6 +11,8 @@ use perun_common::{dispute, perun_types::ChannelStatus, redeemer};
 
 use crate::perun::{self, harness, test::transaction::common::channel_witness};
 
+use super::common::create_cells;
+
 #[derive(Debug, Clone)]
 pub struct DisputeArgs {
     /// The channel cell which tracks the channel on-chain.
@@ -76,8 +78,10 @@ pub fn mk_dispute(
         .witness(witness_args.as_bytes().pack())
         .cell_deps(cell_deps)
         .build();
+    let tx = ctx.complete_tx(rtx);
+    create_cells(ctx, tx.hash(), outputs);
     Ok(DisputeResult {
-        channel_cell: OutPoint::new(rtx.hash(), 0),
-        tx: ctx.complete_tx(rtx),
+        channel_cell: OutPoint::new(tx.hash(), 0),
+        tx,
     })
 }

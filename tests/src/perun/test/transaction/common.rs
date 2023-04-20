@@ -1,4 +1,9 @@
 use ckb_occupied_capacity::Capacity;
+use ckb_testtool::{
+    bytes,
+    ckb_types::packed::{Byte32, CellOutput, OutPoint},
+    context::Context,
+};
 
 use crate::perun;
 
@@ -17,4 +22,11 @@ pub fn create_funding_from(
     wanted_capacity: Capacity,
 ) -> Result<Capacity, perun::Error> {
     Ok(available_capacity.safe_sub(wanted_capacity)?)
+}
+
+pub fn create_cells(ctx: &mut Context, hash: Byte32, outputs: Vec<(CellOutput, bytes::Bytes)>) {
+    for (i, (output, data)) in outputs.into_iter().enumerate() {
+        let out_point = OutPoint::new(hash.clone(), i as u32);
+        ctx.create_cell_with_out_point(out_point, output, data);
+    }
 }

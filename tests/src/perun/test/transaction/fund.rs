@@ -15,7 +15,7 @@ use crate::perun::{
     test::{cell::FundingCell, FundingAgreement},
 };
 
-use super::common::{channel_witness, create_funding_from};
+use super::common::{channel_witness, create_cells, create_funding_from};
 
 #[derive(Debug, Clone)]
 pub struct FundArgs {
@@ -103,12 +103,13 @@ pub fn mk_fund(
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
         .witness(witness_args.as_bytes().pack())
-        .outputs(outputs.into_iter().map(|o| o.0.clone()))
+        .outputs(outputs.clone().into_iter().map(|o| o.0.clone()))
         .outputs_data(outputs_data.pack())
         .cell_deps(cell_deps)
         .header_deps(headers)
         .build();
     let tx = ctx.complete_tx(rtx);
+    create_cells(ctx, tx.hash(), outputs);
     Ok(FundResult {
         channel_cell: OutPoint::new(tx.hash(), 0),
         funds_cells: vec![FundingCell {

@@ -15,7 +15,7 @@ use crate::perun::{
     test::{cell::FundingCell, ChannelId, FundingAgreement},
 };
 
-use super::common::create_funding_from;
+use super::common::{create_cells, create_funding_from};
 
 #[derive(Clone)]
 pub struct OpenArgs {
@@ -106,6 +106,7 @@ pub fn mk_open(
         .cell_deps(cell_deps)
         .build();
     let tx = ctx.complete_tx(rtx);
+    create_cells(ctx, tx.hash(), outputs);
     Ok(OpenResult {
         // See NOTE above for magic indices.
         channel_cell: OutPoint::new(tx.hash(), 0),

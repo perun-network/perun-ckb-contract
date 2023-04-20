@@ -15,6 +15,8 @@ use crate::perun::{
     test::{cell::FundingCell, transaction::common::channel_witness},
 };
 
+use super::common::create_cells;
+
 #[derive(Debug, Clone)]
 pub struct ForceCloseArgs {
     /// The channel cell which tracks the channel on-chain.
@@ -77,7 +79,7 @@ pub fn mk_force_close(
         .witness(witness_args.as_bytes().pack())
         .cell_deps(cell_deps)
         .build();
-    Ok(ForceCloseResult {
-        tx: ctx.complete_tx(rtx),
-    })
+    let tx = ctx.complete_tx(rtx);
+    create_cells(ctx, tx.hash(), outputs);
+    Ok(ForceCloseResult { tx })
 }

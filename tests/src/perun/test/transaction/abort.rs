@@ -11,7 +11,7 @@ use perun_common::redeemer;
 
 use crate::perun::{self, harness, test::cell::FundingCell};
 
-use super::common::channel_witness;
+use super::common::{channel_witness, create_cells};
 
 #[derive(Debug, Clone)]
 pub struct AbortArgs {
@@ -81,7 +81,7 @@ pub fn mk_abort(
         .header_deps(headers)
         .witness(witness_args.as_bytes().pack())
         .build();
-    Ok(AbortResult {
-        tx: ctx.complete_tx(rtx),
-    })
+    let tx = ctx.complete_tx(rtx);
+    create_cells(ctx, tx.hash(), outputs);
+    Ok(AbortResult { tx })
 }
