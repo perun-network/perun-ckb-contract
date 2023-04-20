@@ -13,4 +13,7 @@ pub use close::*;
 mod force_close;
 pub use force_close::*;
 
+mod dispute;
+pub use dispute::*;
+
 mod common;
