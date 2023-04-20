@@ -23,6 +23,7 @@ pub struct DisputeArgs {
     pub sigs: [Vec<u8>; 2],
     /// The Perun channel type script used for the current channel.
     pub pcts_script: Script,
+    pub party_index: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -45,9 +46,15 @@ pub fn mk_dispute(
     env: &harness::Env,
     args: DisputeArgs,
 ) -> Result<DisputeResult, perun::Error> {
-    let inputs = vec![CellInput::new_builder()
-        .previous_output(args.channel_cell)
-        .build()];
+    let payment_input = env.create_min_cell_for_index(ctx, args.party_index);
+    let inputs = vec![
+        CellInput::new_builder()
+            .previous_output(args.channel_cell)
+            .build(),
+        CellInput::new_builder()
+            .previous_output(payment_input)
+            .build(),
+    ];
 
     let cell_deps = vec![
         env.pcls_script_dep.clone(),

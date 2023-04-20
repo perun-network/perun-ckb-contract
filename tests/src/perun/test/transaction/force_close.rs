@@ -27,6 +27,7 @@ pub struct ForceCloseArgs {
     pub funds_cells: Vec<FundingCell>,
     /// The channel state which shall be used for closing.
     pub state: ChannelState,
+    pub party_index: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -47,9 +48,15 @@ pub fn mk_force_close(
     env: &harness::Env,
     args: ForceCloseArgs,
 ) -> Result<ForceCloseResult, perun::Error> {
-    let mut inputs = vec![CellInput::new_builder()
-        .previous_output(args.channel_cell)
-        .build()];
+    let payment_input = env.create_min_cell_for_index(ctx, args.party_index);
+    let mut inputs = vec![
+        CellInput::new_builder()
+            .previous_output(args.channel_cell)
+            .build(),
+        CellInput::new_builder()
+            .previous_output(payment_input)
+            .build(),
+    ];
     inputs.extend(args.funds_cells.iter().cloned().map(|f| {
         CellInput::new_builder()
             .previous_output(f.out_point)

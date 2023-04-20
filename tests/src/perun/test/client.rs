@@ -51,7 +51,7 @@ impl Client {
     ) -> Result<(ChannelId, OpenResult), perun::Error> {
         // Prepare environment so that this party has the required funds.
         let (my_funds_outpoint, my_funds) =
-            env.create_funds_for_index(ctx, self.index, funding_agreement)?;
+            env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         // Create the channel token.
         let (channel_token, channel_token_outpoint) = env.create_channel_token(ctx);
 
@@ -122,7 +122,7 @@ impl Client {
     ) -> Result<transaction::FundResult, perun::Error> {
         // Prepare environment so that this party has the required funds.
         let (my_funds_outpoint, my_available_funds) =
-            env.create_funds_for_index(ctx, self.index, funding_agreement)?;
+            env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         let fr = transaction::mk_fund(
             ctx,
             env,
@@ -168,6 +168,7 @@ impl Client {
             transaction::DisputeArgs {
                 channel_cell,
                 state: channel_state,
+                party_index: self.index,
                 pcts_script: pcts,
                 sigs,
             },
@@ -191,6 +192,7 @@ impl Client {
             AbortArgs {
                 channel_cell,
                 funds,
+                party_index: self.index,
             },
         )?;
         let cycles = ctx.verify_tx(&ar.tx, env.max_cycles)?;
@@ -214,6 +216,7 @@ impl Client {
             transaction::CloseArgs {
                 channel_cell,
                 funds_cells,
+                party_index: self.index,
                 state,
                 sigs,
             },
@@ -240,6 +243,7 @@ impl Client {
             transaction::ForceCloseArgs {
                 headers: hs,
                 channel_cell,
+                party_index: self.index,
                 funds_cells,
                 state,
             },

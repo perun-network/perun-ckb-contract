@@ -86,7 +86,7 @@ impl Env {
             .build();
         // Auxiliary scripts.
         let always_success_script = context
-            .build_script(&always_success_out_point, Default::default())
+            .build_script(&always_success_out_point, Bytes::from(vec![0]))
             .expect("always_success");
         let always_success_script_dep = CellDep::new_builder()
             .out_point(always_success_out_point.clone())
@@ -186,9 +186,9 @@ impl Env {
         )
     }
 
-    /// create_funds_for_index creates a new cell with the funds for the given party index locked
+    /// create_funds_from_agreement creates a new cell with the funds for the given party index locked
     /// by the always_success_script parameterized on the party index.
-    pub fn create_funds_for_index(
+    pub fn create_funds_from_agreement(
         &self,
         context: &mut Context,
         party_index: u8,
@@ -222,6 +222,15 @@ impl Env {
                 _else => return Err("invalid asset in FundingAgreement".into()),
             }
         };
+        self.create_funds_for_index(context, party_index, required_funds)
+    }
+
+    pub fn create_funds_for_index(
+        &self,
+        context: &mut Context,
+        party_index: u8,
+        required_funds: u64,
+    ) -> Result<(OutPoint, Capacity), perun::Error> {
         // Create cell containing the required funds for this party.
         let my_output = CellOutput::new_builder()
             .capacity(required_funds.pack())
@@ -230,6 +239,14 @@ impl Env {
             .build();
         let cell = context.create_cell(my_output, Bytes::default());
         Ok((cell, required_funds.into_capacity()))
+    }
+
+    pub fn create_min_cell_for_index(&self, context: &mut Context, party_index: u8) -> OutPoint {
+        let my_output = CellOutput::new_builder()
+            .capacity(self.min_capacity_no_script.pack())
+            .lock(self.build_lock_script(context, Bytes::from(vec![party_index])))
+            .build();
+        context.create_cell(my_output, Bytes::default())
     }
 
     pub fn build_initial_channel_state(

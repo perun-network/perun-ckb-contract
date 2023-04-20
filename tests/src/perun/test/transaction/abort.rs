@@ -17,6 +17,7 @@ use super::common::{channel_witness, create_cells};
 pub struct AbortArgs {
     pub channel_cell: OutPoint,
     pub funds: Vec<FundingCell>,
+    pub party_index: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -37,11 +38,17 @@ pub fn mk_abort(
     env: &harness::Env,
     args: AbortArgs,
 ) -> Result<AbortResult, perun::Error> {
+    let payment_input = env.create_min_cell_for_index(ctx, args.party_index);
     let abort_action = redeemer!(Abort);
     let witness_args = channel_witness!(abort_action);
-    let mut inputs = vec![CellInput::new_builder()
-        .previous_output(args.channel_cell)
-        .build()];
+    let mut inputs = vec![
+        CellInput::new_builder()
+            .previous_output(args.channel_cell)
+            .build(),
+        CellInput::new_builder()
+            .previous_output(payment_input)
+            .build(),
+    ];
     inputs.extend(args.funds.iter().cloned().map(|op| {
         CellInput::new_builder()
             .previous_output(op.out_point)

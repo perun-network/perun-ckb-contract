@@ -26,6 +26,7 @@ pub struct CloseArgs {
     pub state: ChannelState,
     /// The DER encoded signatures for the channel state in proper order of parties.
     pub sigs: [Vec<u8>; 2],
+    pub party_index: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -46,9 +47,15 @@ pub fn mk_close(
     env: &harness::Env,
     args: CloseArgs,
 ) -> Result<CloseResult, perun::Error> {
-    let mut inputs = vec![CellInput::new_builder()
-        .previous_output(args.channel_cell)
-        .build()];
+    let payment_input = env.create_min_cell_for_index(ctx, args.party_index);
+    let mut inputs = vec![
+        CellInput::new_builder()
+            .previous_output(args.channel_cell)
+            .build(),
+        CellInput::new_builder()
+            .previous_output(payment_input)
+            .build(),
+    ];
     inputs.extend(args.funds_cells.iter().cloned().map(|f| {
         CellInput::new_builder()
             .previous_output(f.out_point)
