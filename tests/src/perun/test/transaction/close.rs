@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use ckb_testtool::{
     ckb_types::packed::{CellInput, OutPoint},
     ckb_types::{
@@ -9,11 +7,7 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use perun_common::{
-    close,
-    perun_types::{ChannelState, ChannelStatus, ChannelWitnessUnion, Close},
-    redeemer,
-};
+use perun_common::{close, perun_types::ChannelState, redeemer};
 
 use crate::perun::{
     self, harness,

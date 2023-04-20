@@ -64,7 +64,6 @@ pub fn mk_fund(
         .lock(pfls)
         .build();
     let exchange_cell = create_funding_from(args.my_available_funds, wanted.into_capacity())?;
-    // TODO: Finish building TX.
     let inputs = vec![
         CellInput::new_builder()
             .previous_output(args.channel_cell)

@@ -1,5 +1,5 @@
 use ckb_occupied_capacity::Capacity;
-use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32, BytesBuilder};
+use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 use ckb_types::bytes::Bytes;

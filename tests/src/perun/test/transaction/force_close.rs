@@ -2,17 +2,13 @@ use ckb_testtool::{
     ckb_types::packed::{CellInput, OutPoint},
     ckb_types::{
         bytes::Bytes,
-        core::{HeaderView, TransactionBuilder, TransactionView},
+        core::{TransactionBuilder, TransactionView},
         packed::Byte32,
         prelude::{Builder, Entity, Pack},
     },
     context::Context,
 };
-use perun_common::{
-    close,
-    perun_types::{ChannelState, ChannelStatus, ChannelWitnessUnion, Close},
-    redeemer,
-};
+use perun_common::{perun_types::ChannelState, redeemer};
 
 use crate::perun::{
     self, harness,

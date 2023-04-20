@@ -1,6 +1,6 @@
 use ckb_testtool::ckb_traits::CellDataProvider;
 
-use ckb_testtool::ckb_types::core::{HeaderView, ScriptHashType};
+use ckb_testtool::ckb_types::core::ScriptHashType;
 use ckb_testtool::ckb_types::packed::{OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
