@@ -1,7 +1,7 @@
 use ckb_testtool::{
     ckb_types::{
-        packed::{OutPoint, Script},
-        prelude::Entity,
+        packed::{Header, OutPoint, RawHeader, Script},
+        prelude::{Builder, Entity, Pack},
     },
     context::Context,
 };
@@ -65,7 +65,7 @@ where
 /// call_action! is a macro that calls the given action on the currently active
 /// participant. It also sets the validity of the next action to `Valid`.
 macro_rules! call_action {
-    ($self:ident, $action:ident $(, $x:expr)*) => (
+    ($self:ident, $action:ident $(, $x:expr)*$(,)*) => (
         {
             let res = match $self.validity {
                 ActionValidity::Valid => $self.active_part.$action($self.ctx, $self.env, $($x),*),
@@ -139,13 +139,28 @@ where
     pub fn open(&mut self, funding_agreement: &test::FundingAgreement) -> Result<(), perun::Error> {
         let (id, or) = call_action!(self, open, funding_agreement)?;
         self.id = id;
-        self.channel_cell = Some(or.channel_cell);
+        self.channel_cell = Some(or.channel_cell.clone());
+        // Make sure the channel cell is linked to a header with a timestamp.
+        self.push_header_with_cell(or.channel_cell);
         let mut fs = self.funding_cells.clone();
         fs.extend(or.funds_cells.iter().cloned());
         self.funding_cells = fs.to_vec();
         self.pcts = or.pcts;
         self.channel_state = or.state;
         Ok(())
+    }
+
+    fn push_header_with_cell(&mut self, cell: OutPoint) {
+        let header = Header::new_builder()
+            .raw(
+                RawHeader::new_builder()
+                    .timestamp(self.current_time.pack())
+                    .build(),
+            )
+            .build()
+            .into_view();
+        // We will always use 0 as the `tx_index`.
+        self.ctx.link_cell_with_block(cell, header.hash(), 0);
     }
 
     /// fund a channel using the currently active participant set by `with(..)`
@@ -168,7 +183,8 @@ where
         }?;
         // TODO: DRY please.
         self.channel_state = res.state;
-        self.channel_cell = Some(res.channel_cell);
+        self.channel_cell = Some(res.channel_cell.clone());
+        self.push_header_with_cell(res.channel_cell);
         let mut fs = self.funding_cells.clone();
         fs.extend(res.funds_cells.iter().cloned());
         self.funding_cells = fs.to_vec();
@@ -257,7 +273,29 @@ where
     /// force_close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn force_close(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, force_close, self.id)
+        let h = Header::new_builder()
+            .raw(
+                RawHeader::new_builder()
+                    .timestamp(self.current_time.pack())
+                    .build(),
+            )
+            .build()
+            .into_view();
+        // Push a header with the current time which can be used in force_close
+        // as for time validation purposes.
+        self.ctx.insert_header(h.clone());
+        match self.channel_cell.clone() {
+            Some(channel_cell) => call_action!(
+                self,
+                force_close,
+                self.id,
+                channel_cell,
+                self.funding_cells.clone(),
+                self.channel_state.state(),
+            ),
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        Ok(())
     }
 
     /// valid sets the validity of the next action to valid. (default)
