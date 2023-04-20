@@ -48,6 +48,7 @@ pub fn mk_abort(
             .build()
     }));
 
+    let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     // TODO: We are expecting the output amounts to be greater than the minimum amount necessary to
     // accomodate the space required for each output cell.
     let outputs = args.funds.iter().cloned().map(|f| {
@@ -62,10 +63,12 @@ pub fn mk_abort(
         env.pcts_script_dep.clone(),
         env.always_success_script_dep.clone(),
     ];
+
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs)
         .cell_deps(cell_deps)
+        .header_deps(headers)
         .witness(witness_args.as_bytes().pack())
         .build();
     Ok(AbortResult {

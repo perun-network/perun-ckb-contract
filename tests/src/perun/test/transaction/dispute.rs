@@ -67,10 +67,12 @@ pub fn mk_dispute(
     let dispute_action = redeemer!(dispute!(args.sigs[0].pack(), args.sigs[1].pack()));
     let witness_args = channel_witness!(dispute_action);
 
+    let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs.iter().map(|e| e.0.clone()))
         .outputs_data(outputs_data.pack())
+        .header_deps(headers)
         .witness(witness_args.as_bytes().pack())
         .cell_deps(cell_deps)
         .build();

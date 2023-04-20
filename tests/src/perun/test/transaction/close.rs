@@ -67,11 +67,13 @@ pub fn mk_close(
     let close_action = redeemer!(close!(args.state, args.sigs[0].pack(), args.sigs[1].pack()));
     let witness_args = channel_witness!(close_action);
 
+    let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
         .outputs(outputs)
         .witness(witness_args.as_bytes().pack())
         .cell_deps(cell_deps)
+        .header_deps(headers)
         .build();
     Ok(CloseResult {
         tx: ctx.complete_tx(rtx),

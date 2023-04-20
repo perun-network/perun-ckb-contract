@@ -99,12 +99,14 @@ pub fn mk_fund(
         env.pcts_script_dep.clone(),
         env.pcls_script_dep.clone(),
     ];
+    let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     let rtx = TransactionBuilder::default()
         .inputs(inputs)
         .witness(witness_args.as_bytes().pack())
         .outputs(outputs.into_iter().map(|o| o.0.clone()))
         .outputs_data(outputs_data.pack())
         .cell_deps(cell_deps)
+        .header_deps(headers)
         .build();
     let tx = ctx.complete_tx(rtx);
     Ok(FundResult {
