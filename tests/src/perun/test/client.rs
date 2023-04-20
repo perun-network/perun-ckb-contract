@@ -157,8 +157,24 @@ impl Client {
         ctx: &mut Context,
         env: &harness::Env,
         _cid: test::ChannelId,
-    ) -> Result<(), perun::Error> {
-        Ok(())
+        channel_cell: OutPoint,
+        channel_state: ChannelStatus,
+        pcts: Script,
+        sigs: [Vec<u8>; 2],
+    ) -> Result<transaction::DisputeResult, perun::Error> {
+        let dr = transaction::mk_dispute(
+            ctx,
+            env,
+            transaction::DisputeArgs {
+                channel_cell,
+                state: channel_state,
+                pcts_script: pcts,
+                sigs,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&dr.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(dr)
     }
 
     pub fn abort(
