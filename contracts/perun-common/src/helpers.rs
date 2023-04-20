@@ -1,7 +1,10 @@
 use blake2b_rs::Blake2bBuilder;
 
 #[cfg(feature = "std")]
-use {ckb_occupied_capacity::Capacity, ckb_types::packed::*, ckb_types::prelude::*, std::vec::Vec};
+use {
+    ckb_occupied_capacity::Capacity, ckb_types::bytes, ckb_types::packed::*, ckb_types::prelude::*,
+    std::vec::Vec,
+};
 
 #[cfg(not(feature = "std"))]
 use {
@@ -196,33 +199,48 @@ impl ChannelStatus {
     #[cfg(feature = "std")]
     /// mk_close_outputs creates the outputs for a close transaction according to the current
     /// channel state. It does not matter whether the ChannelState in question is finalized or not.
-    pub fn mk_close_outputs(self, mk_lock_script: impl FnMut(u8) -> Script) -> Vec<CellOutput> {
+    pub fn mk_close_outputs(
+        self,
+        mk_lock_script: impl FnMut(u8) -> Script,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
         self.state().mk_close_outputs(mk_lock_script)
     }
 }
 
 #[cfg(feature = "std")]
 impl ChannelState {
-    pub fn mk_close_outputs(self, mk_lock_script: impl FnMut(u8) -> Script) -> Vec<CellOutput> {
+    pub fn mk_close_outputs(
+        self,
+        mk_lock_script: impl FnMut(u8) -> Script,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
         self.balances().mk_close_outputs(mk_lock_script)
     }
 }
 
 #[cfg(feature = "std")]
 impl Balances {
-    pub fn mk_close_outputs(self, mut mk_lock_script: impl FnMut(u8) -> Script) -> Vec<CellOutput> {
+    pub fn mk_close_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
         let a = Capacity::shannons(self.nth0().unpack());
         let b = Capacity::shannons(self.nth1().unpack());
         // TODO: Outputs should contain min-capacity for script size...
         vec![
-            CellOutput::new_builder()
-                .capacity(a.pack())
-                .lock(mk_lock_script(0))
-                .build(),
-            CellOutput::new_builder()
-                .capacity(b.pack())
-                .lock(mk_lock_script(1))
-                .build(),
+            (
+                CellOutput::new_builder()
+                    .capacity(a.pack())
+                    .lock(mk_lock_script(0))
+                    .build(),
+                bytes::Bytes::new(),
+            ),
+            (
+                CellOutput::new_builder()
+                    .capacity(b.pack())
+                    .lock(mk_lock_script(1))
+                    .build(),
+                bytes::Bytes::new(),
+            ),
         ]
     }
 }
