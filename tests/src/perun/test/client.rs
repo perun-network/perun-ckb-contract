@@ -1,6 +1,6 @@
 use ckb_testtool::ckb_traits::CellDataProvider;
 
-use ckb_testtool::ckb_types::core::ScriptHashType;
+use ckb_testtool::ckb_types::core::{HeaderView, ScriptHashType};
 use ckb_testtool::ckb_types::packed::{OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
@@ -21,7 +21,6 @@ use crate::perun::test::{keys, transaction};
 use k256::ecdsa::{Signature, SigningKey};
 
 use super::cell::FundingCell;
-use super::transaction::FundResult;
 use super::ChannelId;
 
 #[derive(Clone, Debug)]
@@ -125,7 +124,7 @@ impl Client {
         channel_cell: OutPoint,
         channel_state: ChannelStatus,
         pcts: Script,
-    ) -> Result<FundResult, perun::Error> {
+    ) -> Result<transaction::FundResult, perun::Error> {
         // Prepare environment so that this party has the required funds.
         let (my_funds_outpoint, my_available_funds) =
             env.create_funds_for_index(ctx, self.index, funding_agreement)?;
@@ -162,7 +161,7 @@ impl Client {
         &self,
         ctx: &mut Context,
         env: &harness::Env,
-        cid: test::ChannelId,
+        _cid: test::ChannelId,
     ) -> Result<(), perun::Error> {
         Ok(())
     }
@@ -192,7 +191,7 @@ impl Client {
         &self,
         ctx: &mut Context,
         env: &harness::Env,
-        cid: test::ChannelId,
+        _cid: test::ChannelId,
         channel_cell: OutPoint,
         funds_cells: Vec<FundingCell>,
         state: ChannelState,
@@ -217,8 +216,25 @@ impl Client {
         &self,
         ctx: &mut Context,
         env: &harness::Env,
-        cid: test::ChannelId,
-    ) -> Result<(), perun::Error> {
-        Ok(())
+        _cid: test::ChannelId,
+        channel_cell: OutPoint,
+        funds_cells: Vec<FundingCell>,
+        state: ChannelState,
+    ) -> Result<transaction::ForceCloseResult, perun::Error> {
+        // We will pass all available headers to the force close transaction.
+        let hs = ctx.headers.keys().cloned().collect();
+        let fcr = transaction::mk_force_close(
+            ctx,
+            env,
+            transaction::ForceCloseArgs {
+                headers: hs,
+                channel_cell,
+                funds_cells,
+                state,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&fcr.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(fcr)
     }
 }
