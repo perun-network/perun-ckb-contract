@@ -231,6 +231,7 @@ where
                     self,
                     abort,
                     self.id,
+                    self.channel_state.clone(),
                     channel_cell.clone(),
                     self.funding_cells.clone()
                 )
@@ -251,7 +252,7 @@ where
                 self.id,
                 channel_cell,
                 self.funding_cells.clone(),
-                self.channel_state.state(),
+                self.channel_state.clone(),
                 sigs
             ),
             None => panic!("no channel cell, invalid test setup"),
@@ -309,7 +310,7 @@ where
                 self.id,
                 channel_cell,
                 self.funding_cells.clone(),
-                self.channel_state.state(),
+                self.channel_state.clone(),
             ),
             None => panic!("no channel cell, invalid test setup"),
         }?;

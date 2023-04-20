@@ -183,6 +183,7 @@ impl Client {
         ctx: &mut Context,
         env: &harness::Env,
         _cid: test::ChannelId,
+        state: ChannelStatus,
         channel_cell: OutPoint,
         funds: Vec<FundingCell>,
     ) -> Result<transaction::AbortResult, perun::Error> {
@@ -192,6 +193,7 @@ impl Client {
             AbortArgs {
                 channel_cell,
                 funds,
+                state,
                 party_index: self.index,
             },
         )?;
@@ -207,7 +209,7 @@ impl Client {
         _cid: test::ChannelId,
         channel_cell: OutPoint,
         funds_cells: Vec<FundingCell>,
-        state: ChannelState,
+        state: ChannelStatus,
         sigs: [Vec<u8>; 2],
     ) -> Result<transaction::CloseResult, perun::Error> {
         let cr = transaction::mk_close(
@@ -233,7 +235,7 @@ impl Client {
         _cid: test::ChannelId,
         channel_cell: OutPoint,
         funds_cells: Vec<FundingCell>,
-        state: ChannelState,
+        state: ChannelStatus,
     ) -> Result<transaction::ForceCloseResult, perun::Error> {
         // We will pass all available headers to the force close transaction.
         let hs = ctx.headers.keys().cloned().collect();

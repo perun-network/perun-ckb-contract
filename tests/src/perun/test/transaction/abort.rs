@@ -7,7 +7,7 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use perun_common::redeemer;
+use perun_common::{perun_types::ChannelStatus, redeemer};
 
 use crate::perun::{self, harness, test::cell::FundingCell};
 
@@ -17,6 +17,7 @@ use super::common::{channel_witness, create_cells};
 pub struct AbortArgs {
     pub channel_cell: OutPoint,
     pub funds: Vec<FundingCell>,
+    pub state: ChannelStatus,
     pub party_index: u8,
 }
 
@@ -62,16 +63,22 @@ pub fn mk_abort(
         .funds
         .iter()
         .cloned()
-        .map(|f| {
-            (
+        .enumerate()
+        .map(|(i, f)| {
+            let min_amount = env.min_capacity_for_channel(args.state.clone())?;
+            let amount = match i {
+                0 => f.amount + min_amount.as_u64(),
+                _ => f.amount,
+            };
+            Ok((
                 CellOutput::new_builder()
-                    .capacity(f.amount.pack())
+                    .capacity(amount.pack())
                     .lock(env.build_lock_script(ctx, Bytes::from(vec![f.index])))
                     .build(),
                 Bytes::new(),
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<Vec<_>, perun::Error>>()?;
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let cell_deps = vec![

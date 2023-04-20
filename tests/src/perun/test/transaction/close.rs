@@ -3,11 +3,11 @@ use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
         core::{TransactionBuilder, TransactionView},
-        prelude::{Builder, Entity, Pack},
+        prelude::{Builder, Entity, Pack, Unpack},
     },
     context::Context,
 };
-use perun_common::{close, perun_types::ChannelState, redeemer};
+use perun_common::{close, perun_types::ChannelStatus, redeemer};
 
 use crate::perun::{
     self, harness,
@@ -23,7 +23,7 @@ pub struct CloseArgs {
     /// All funding cells used to initially fund the channel.
     pub funds_cells: Vec<FundingCell>,
     /// The channel state which shall be used for closing.
-    pub state: ChannelState,
+    pub state: ChannelStatus,
     /// The DER encoded signatures for the channel state in proper order of parties.
     pub sigs: [Vec<u8>; 2],
     pub party_index: u8,
@@ -69,12 +69,29 @@ pub fn mk_close(
         env.always_success_script_dep.clone(),
     ];
 
-    // Rust...
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
-    let outputs = args.state.clone().mk_close_outputs(f);
+    let outputs = args.state.state().clone().mk_close_outputs(f);
+    let outputs = outputs
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(i, (op, d))| {
+            let cap: u64 = op.capacity().unpack();
+            let min_amount = env.min_capacity_for_channel(args.state.clone())?;
+            let amount = match i {
+                0 => cap + min_amount.as_u64(),
+                _ => cap,
+            };
+            Ok((op.as_builder().capacity(amount.pack()).build(), d))
+        })
+        .collect::<Result<Vec<_>, perun::Error>>()?;
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
-    let close_action = redeemer!(close!(args.state, args.sigs[0].pack(), args.sigs[1].pack()));
+    let close_action = redeemer!(close!(
+        args.state.state(),
+        args.sigs[0].pack(),
+        args.sigs[1].pack()
+    ));
     let witness_args = channel_witness!(close_action);
 
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();

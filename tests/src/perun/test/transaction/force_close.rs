@@ -4,11 +4,11 @@ use ckb_testtool::{
         bytes::Bytes,
         core::{TransactionBuilder, TransactionView},
         packed::Byte32,
-        prelude::{Builder, Entity, Pack},
+        prelude::{Builder, Entity, Pack, Unpack},
     },
     context::Context,
 };
-use perun_common::{perun_types::ChannelState, redeemer};
+use perun_common::{perun_types::ChannelStatus, redeemer};
 
 use crate::perun::{
     self, harness,
@@ -26,7 +26,7 @@ pub struct ForceCloseArgs {
     /// All funding cells used to initially fund the channel.
     pub funds_cells: Vec<FundingCell>,
     /// The channel state which shall be used for closing.
-    pub state: ChannelState,
+    pub state: ChannelStatus,
     pub party_index: u8,
 }
 
@@ -73,6 +73,20 @@ pub fn mk_force_close(
     // Rust...
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
     let outputs = args.state.clone().mk_close_outputs(f);
+    let outputs = outputs
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(i, (op, d))| {
+            let cap: u64 = op.capacity().unpack();
+            let min_amount = env.min_capacity_for_channel(args.state.clone())?;
+            let amount = match i {
+                0 => cap + min_amount.as_u64(),
+                _ => cap,
+            };
+            Ok((op.as_builder().capacity(amount.pack()).build(), d))
+        })
+        .collect::<Result<Vec<_>, perun::Error>>()?;
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let force_close_action = redeemer!(ForceClose);
