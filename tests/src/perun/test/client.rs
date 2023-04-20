@@ -27,12 +27,14 @@ use super::ChannelId;
 pub struct Client {
     index: u8,
     signing_key: SigningKey,
+    name: String,
 }
 
 impl Client {
-    pub fn new(idx: u8, sk: SigningKey) -> Client {
+    pub fn new(idx: u8, name: String, sk: SigningKey) -> Client {
         Client {
             index: idx,
+            name,
             signing_key: sk,
         }
     }
@@ -41,6 +43,10 @@ impl Client {
     // array.
     pub fn pubkey(&self) -> [u8; 65] {
         keys::verifying_key_to_byte_array(&self.signing_key.verifying_key())
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 
     pub fn open(
