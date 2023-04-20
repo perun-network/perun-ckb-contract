@@ -384,25 +384,17 @@ pub fn verify_equal_sum_of_balances(
     Err(Error::SumOfBalancesNotEqual)
 }
 
+// > ian: verify_max_one_channel and the match on channel_action has already ensured there is exactly one output in the transaction has the `own_script` as `type`. So we just need to compare that the lock script of the first input and the first output is the same in the group.
 pub fn verify_channel_continues(own_script: &Script) -> Result<(), Error> {
-    let corresponding_lock_script = load_cell_lock(0, Source::GroupInput)?;
-    let outputs = load_transaction()?.raw().outputs();
+    let input_lock_script = load_cell_lock(0, Source::GroupInput)?;
+    let output_lock_script = load_cell_lock(0, Source::GroupOutput)?;
 
-    let mut found_match = false;
-    for output in outputs.into_iter() {
-        let is_matching_output =
-            is_matching_output(&output, &corresponding_lock_script, own_script);
-        if is_matching_output && !found_match {
-            found_match = true;
-        } else if is_matching_output && found_match {
-            return Err(Error::MultipleMatchingOutputs);
-        }
+    if (input_lock_script.as_slice()[..] != output_lock_script.as_slice()[..])
+        || (input_lock_script.as_slice()[..] != own_script.as_slice()[..])
+    {
+        return Err(Error::ChannelDoesNotContinue);
     }
-
-    if found_match {
-        return Ok(());
-    }
-    return Err(Error::ChannelDoesNotContinue);
+    Ok(())
 }
 
 pub fn verify_no_funds_in_inputs(channel_constants: &ChannelConstants) -> Result<(), Error> {
@@ -429,12 +421,13 @@ pub fn verify_equal_channel_state(
 }
 
 // Note: idx is the acting party!
+// > ian: give the variable a more descriptive name
 pub fn verify_funding_unchanged(
-    idx: usize,
+    idx_of_peer: usize,
     old_funding: &Balances,
     new_funding: &Balances,
 ) -> Result<(), Error> {
-    if old_funding.get(idx)? != new_funding.get(idx)? {
+    if old_funding.get(idx_of_peer)? != new_funding.get(idx_of_peer)? {
         return Err(Error::FundingChanged);
     }
     Ok(())
@@ -598,6 +591,7 @@ pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<
     {
         return Err(Error::InvalidPCLSHashType);
     }
+    // > ian: Check args is empty in case we create a cell that can never be spent?
     Ok(())
 }
 
@@ -627,6 +621,7 @@ pub fn verify_all_payed(
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    // > ian: fst, snd are not consistent with a, b in other places. They are not readable either.
     let minimum_payment_fst = channel_constants
         .params()
         .party_a()
@@ -781,12 +776,13 @@ pub fn count_cells(source: Source) -> Result<usize, Error> {
 pub fn verify_different_payment_addresses(
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    // > ian: oops
     if channel_constants
         .params()
         .party_a()
         .payment_script_hash()
         .unpack()[..]
-        != channel_constants
+        == channel_constants
             .params()
             .party_b()
             .payment_script_hash()
