@@ -169,23 +169,6 @@ pub fn geq_components(fst: &Balances, snd: &Balances) -> bool {
     a_fst >= a_snd && b_fst >= b_snd
 }
 
-pub fn is_matching_output(
-    output: &CellOutput,
-    own_lock_script: &Script,
-    own_type_script: &Script,
-) -> bool {
-    let out_lock = output.lock();
-    let out_type = output.type_().to_opt();
-    if own_lock_script.as_slice()[..] != out_lock.as_slice()[..] {
-        return false;
-    }
-    if out_type.is_none() {
-        return false;
-    }
-    // This automatically checks the immutablity of the ChannelConstants in the args of the PCTS.
-    own_type_script.as_slice()[..] == out_type.unwrap().as_slice()[..]
-}
-
 pub const CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
 
 pub fn blake2b256(data: &[u8]) -> [u8; 32] {
