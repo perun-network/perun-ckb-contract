@@ -159,6 +159,7 @@ where
             )
             .build()
             .into_view();
+        self.ctx.insert_header(header.clone());
         // We will always use 0 as the `tx_index`.
         self.ctx.link_cell_with_block(cell, header.hash(), 0);
     }
