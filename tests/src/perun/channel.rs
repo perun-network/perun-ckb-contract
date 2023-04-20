@@ -67,6 +67,7 @@ where
 macro_rules! call_action {
     ($self:ident, $action:ident $(, $x:expr)*$(,)*) => (
         {
+            println!("calling action {} on {}", stringify!($action), $self.active_part.name());
             let res = match $self.validity {
                 ActionValidity::Valid => $self.active_part.$action($self.ctx, $self.env, $($x),*),
                 ActionValidity::Invalid => {
@@ -98,7 +99,7 @@ where
             .map(|(i, p)| {
                 (
                     p.name().clone(),
-                    perun::test::Client::new(i as u8, SigningKey::random(&mut OsRng)),
+                    perun::test::Client::new(i as u8, p.name(), SigningKey::random(&mut OsRng)),
                 )
             })
             .collect();
