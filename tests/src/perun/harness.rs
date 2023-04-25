@@ -242,11 +242,9 @@ impl Env {
     }
 
     pub fn create_min_cell_for_index(&self, context: &mut Context, party_index: u8) -> OutPoint {
-        let my_output = CellOutput::new_builder()
-            .capacity(self.min_capacity_no_script.pack())
-            .lock(self.build_lock_script(context, Bytes::from(vec![party_index])))
-            .build();
-        context.create_cell(my_output, Bytes::default())
+        self.create_funds_for_index(context, party_index, self.min_capacity_no_script.as_u64())
+            .unwrap()
+            .0
     }
 
     pub fn build_initial_channel_state(
