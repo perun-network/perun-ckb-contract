@@ -39,7 +39,7 @@ pub fn main() -> Result<(), Error> {
 
     let is_participant = verify_is_participant(
         &constants.params().party_a().unlock_script_hash().unpack(),
-        &constants.params().party_a().unlock_script_hash().unpack(),
+        &constants.params().party_b().unlock_script_hash().unpack(),
     )?;
 
     if !is_participant {
