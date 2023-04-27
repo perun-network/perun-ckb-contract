@@ -244,6 +244,15 @@ where
         Ok(())
     }
 
+    /// finalize finalizes the channel state in use. It has to be called for
+    /// before successful close actions.
+    pub fn finalize(&mut self) -> &mut Self {
+        let status = self.channel_state.clone();
+        let state = status.state().as_builder().is_final(ctrue!()).build();
+        self.channel_state = status.as_builder().state(state).build();
+        self
+    }
+
     /// close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn close(&mut self) -> Result<(), perun::Error> {

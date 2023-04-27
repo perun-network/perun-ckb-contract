@@ -150,7 +150,10 @@ fn test_close(context: &mut Context, env: &perun::harness::Env) -> Result<(), pe
             .fund(&funding_agreement)
             .expect("funding channel");
 
-        chan.with(alice).close().expect("closing channel");
+        chan.with(alice)
+            .finalize()
+            .close()
+            .expect("closing channel");
 
         chan.assert();
         Ok(())
