@@ -5,9 +5,11 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use k256::ecdsa::{SigningKey, VerifyingKey};
-use perun_common::perun_types::{ChannelConstants, ChannelStatus};
-use rand_core::OsRng;
+use k256::ecdsa::VerifyingKey;
+use perun_common::{
+    ctrue,
+    perun_types::{ChannelConstants, ChannelStatus},
+};
 
 use crate::perun::{
     self,
@@ -18,7 +20,7 @@ use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use super::test::cell::FundingCell;
+use super::{test::cell::FundingCell, Account};
 
 enum ActionValidity {
     Valid,
@@ -88,10 +90,10 @@ impl<'a, S> Channel<'a, S>
 where
     S: Default + perun::Applyable + Debug + PartialEq,
 {
-    pub fn new<P: perun::Account>(
+    pub fn new(
         context: &'a mut Context,
         env: &'a perun::harness::Env,
-        parts: &[P],
+        parts: &[perun::TestAccount],
     ) -> Self {
         let m_parts: HashMap<_, _> = parts
             .iter()
@@ -99,7 +101,7 @@ where
             .map(|(i, p)| {
                 (
                     p.name().clone(),
-                    perun::test::Client::new(i as u8, p.name(), SigningKey::random(&mut OsRng)),
+                    perun::test::Client::new(i as u8, p.name(), p.sk.clone()),
                 )
             })
             .collect();

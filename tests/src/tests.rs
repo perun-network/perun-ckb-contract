@@ -66,15 +66,12 @@ fn channel_test_bench() -> Result<(), perun::Error> {
     res.into_iter().collect()
 }
 
-fn create_channel_test<P>(
+fn create_channel_test(
     context: &mut Context,
     env: &perun::harness::Env,
-    parts: &[P],
+    parts: &[perun::TestAccount],
     test: impl Fn(&mut perun::channel::Channel<perun::State>) -> Result<(), perun::Error>,
-) -> Result<(), perun::Error>
-where
-    P: perun::Account,
-{
+) -> Result<(), perun::Error> {
     let mut chan = perun::channel::Channel::new(context, env, parts);
     test(&mut chan)
 }
