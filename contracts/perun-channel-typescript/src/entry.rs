@@ -94,6 +94,7 @@ pub fn main() -> Result<(), Error> {
             new_status,
         } => {
             let channel_witness = load_witness()?;
+            debug!("load_witness passed");
             check_valid_progress(
                 &old_status,
                 &new_status,
@@ -103,6 +104,7 @@ pub fn main() -> Result<(), Error> {
         }
         ChannelAction::Close { old_status } => {
             let channel_witness = load_witness()?;
+            debug!("load_witness passed");
             check_valid_close(&old_status, &channel_witness, &channel_constants)
         }
     }
@@ -112,6 +114,8 @@ pub fn check_valid_start(
     new_status: &ChannelStatus,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    debug!("check_valid_start");
+
     // Upon start of a channel, the channel constants are stored in the args field of the pcts output.
     // We uniquely identify a channel through the combination of the channel id (hash of ChannelParameters,
     // which is part of the ChannelConstants) and the "thread token".
@@ -154,6 +158,7 @@ pub fn check_valid_start(
         &new_status.state(),
         channel_constants.pfls_min_capacity().unpack(),
     )?;
+    debug!("verify_state_valid_as_start passed");
 
     // Here we verify that the first party completes its funding according to protocol.
     // This includes:
@@ -162,14 +167,19 @@ pub fn check_valid_start(
     // - The funding entry of the other party is untouched (=0).
     // - The funds are actually locked to the pfls with correct args.
     verify_funding_in_status(0, &new_status.funding(), &new_status.state())?;
+    debug!("verify_funding_in_status passed");
     verify_funding_is_zero_at_index(1, &new_status.funding())?;
+    debug!("verify_funding_is_zero_at_index passed");
     verify_funding_in_outputs(0, &new_status.state().balances(), channel_constants)?;
+    debug!("verify_funding_in_outputs passed");
 
     // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
     verify_funded_status(new_status)?;
+    debug!("verify_funded_status passed");
 
     // We verify that the channel status is not disputed upon start.
     verify_status_not_disputed(new_status)?;
+    debug!("verify_status_not_disputed passed");
     Ok(())
 }
 
@@ -179,6 +189,8 @@ pub fn check_valid_progress(
     witness: &ChannelWitness,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    debug!("check_valid_progress");
+
     // At this point we know that the transaction progresses the channel. There are two different
     // kinds of channel progression: Funding and Dispute. Which kind of progression is performed
     // depends on the witness.
@@ -186,26 +198,38 @@ pub fn check_valid_progress(
     // Some checks are common to both kinds of progression and are performed here.
     // We check that both the old and the new state have the same channel id.
     verify_equal_channel_id(&old_status.state(), &new_status.state())?;
+    debug!("verify_equal_channel_id passed");
+
     // No kind of channel progression should pay out any funds locked by the pfls, so we just check
     // that there are no funds locked by the pfls in the inputs of the transaction.
     verify_no_funds_in_inputs(channel_constants)?;
+    debug!("verify_no_funds_in_inputs passed");
     // Here we verify that the cell with the PCTS in the outputs is locked by the same lock script
     // as the input channel cell.
     verify_channel_continues_locked()?;
+    debug!("verify_channel_continues_locked passed");
 
     match witness.to_enum() {
         ChannelWitnessUnion::Fund(f) => {
+            debug!("ChannelWitnessUnion::Fund");
+
             // The funding array in a channel status reflects how much each party has funded up to that point.
             // Funding must not alter the channel's state.
             verify_equal_channel_state(&old_status.state(), &new_status.state())?;
+            debug!("verify_equal_channel_state passed");
+
             // Funding an already funded status is invalid.
             verify_status_not_funded(&old_status)?;
+            debug!("verify_status_not_funded passed");
+
             // Funding status of the peer must be untouched, funding for the other party is not allowed.
             verify_funding_unchanged(
                 f.index().idx_of_peer(),
                 &old_status.funding(),
                 &new_status.funding(),
             )?;
+            debug!("verify_funding_unchanged passed");
+
             // We verify that both the new status reflects that funding is complete for this party and that
             // the funds are actually locked to the pfls with correct args in the outputs of this transaction.
             verify_funding_in_status(
@@ -213,19 +237,28 @@ pub fn check_valid_progress(
                 &new_status.funding(),
                 &new_status.state(),
             )?;
+            debug!("verify_funding_in_status passed");
+
             verify_funding_in_outputs(
                 f.index().to_idx(),
                 &old_status.state().balances(),
                 channel_constants,
             )?;
+            debug!("verify_funding_in_outputs passed");
+
             // Funding a disputed status is invalid. This should not be able to happen anyway, but we check
             // it nontheless.
             verify_status_not_disputed(new_status)?;
+            debug!("verify_status_not_disputed passed");
+
             // We check that the funded bit in the channel status is set to true, iff the funding is complete.
             verify_funded_status(&new_status)?;
+            debug!("verify_funded_status passed");
             Ok(())
         }
         ChannelWitnessUnion::Dispute(d) => {
+            debug!("ChannelWitnessUnion::Dispute");
+
             // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
             // the channel. For this, the honest party needs to provide the latest state (in the "new" channel status)
             // as well as a valid signature by each party on that state (in the witness). After the expiration of the
@@ -240,12 +273,16 @@ pub fn check_valid_progress(
             // - sum of balances is equal
             // - old state is not final
             verify_channel_state_progression(&old_status.state(), &new_status.state())?;
+            debug!("verify_channel_state_progression passed");
 
             // One cannot dispute if funding is not complete.
             verify_status_funded(old_status)?;
+            debug!("verify_status_funded passed");
+
             // The disputed flag in the new status must be set. This indicates that the channel can be closed
             // forcibly after the expiration of the challenge duration in a later transaction.
             verify_status_disputed(new_status)?;
+            debug!("verify_status_disputed passed");
 
             // We verify that the signatures of both parties are valid on the new channel state.
             verify_valid_state_sigs(
@@ -255,6 +292,7 @@ pub fn check_valid_progress(
                 &channel_constants.params().party_a().pub_key(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
+            debug!("verify_valid_state_sigs passed");
             Ok(())
         }
         // Close, ForceClose and Abort may not happen as channel progression (if there is a continuing channel output).
@@ -278,22 +316,32 @@ pub fn check_valid_close(
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
     match channel_witness.to_enum() {
         ChannelWitnessUnion::Abort(_) => {
+            debug!("ChannelWitnessUnion::Abort");
+
             // An abort can be performed at any time by a channel participant on a channel for which funding
             // is not yet complete. It allows the initial party to reclaim its funds if e.g. the other party
             // refuses to fund the channel.
             verify_status_not_funded(old_status)?;
+            debug!("verify_status_not_funded passed");
+
             // We verify that every party is payed the amount of funds that it has locked to the channel so far.
             verify_all_payed(&old_status.funding(), channel_capacity, channel_constants)?;
+            debug!("verify_all_payed passed");
             Ok(())
         }
         ChannelWitnessUnion::ForceClose(_) => {
+            debug!("ChannelWitnessUnion::ForceClose");
             // A force close can be performed after the channel was disputed and the challenge duration has
             // expired. Upon force close, each party is payed according to the balance distribution in the
             // latest state.
             verify_status_funded(old_status)?;
+            debug!("verify_status_funded passed");
             verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
+            debug!("verify_time_lock_expired passed");
             verify_status_disputed(old_status)?;
+            debug!("verify_status_disputed passed");
             verify_all_payed(&old_status.funding(), channel_capacity, channel_constants)?;
+            debug!("verify_all_payed passed");
             Ok(())
         }
         ChannelWitnessUnion::Close(c) => {
@@ -317,6 +365,7 @@ pub fn check_valid_close(
             )?;
             // We verify that each party is payed according to the balance distribution in the final state.
             verify_all_payed(&c.state().balances(), channel_capacity, channel_constants)?;
+            debug!("verify_all_payed passed");
             Ok(())
         }
         ChannelWitnessUnion::Fund(_) => Err(Error::ChannelFundWithoutChannelOutput),
@@ -325,7 +374,8 @@ pub fn check_valid_close(
 }
 
 pub fn load_witness() -> Result<ChannelWitness, Error> {
-    // TODO: Verify that this is how we want to load witnesses!
+    debug!("load_witness");
+
     let witness_args = load_witness_args(0, Source::GroupInput)?;
     let witness_bytes: Bytes = witness_args
         .input_type()
@@ -649,7 +699,6 @@ pub fn verify_all_payed(
 
     // TODO: Maybe we want to check that there is only one paying output per party?
     for i in 0..outputs_len {
-        debug!("verify_all_payed: output {}", i);
         let output_lock_script_hash = load_cell_lock_hash(i, Source::Output)?;
         let output_cap = load_cell_capacity(i, Source::Output)?;
 
