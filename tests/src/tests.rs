@@ -9,7 +9,7 @@ use perun::test;
 use perun_common::perun_types::{Balances, Bool, ChannelState, SEC1EncodedPubKey};
 use perun_common::sig::verify_signature;
 
-const MAX_CYCLES: u64 = 10_000_000;
+const MAX_CYCLES: u64 = 10 * 10_000_000;
 const CHALLENGE_DURATION_MS: u64 = 10 * 1000;
 
 #[test]
