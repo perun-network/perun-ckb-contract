@@ -6,6 +6,7 @@ use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
 use perun::test;
+use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{Balances, Bool, ChannelState, SEC1EncodedPubKey};
 use perun_common::sig::verify_signature;
 
@@ -42,8 +43,9 @@ fn test_signature() {
         .version(10u64.pack())
         .build();
     let msg = channel_state.as_slice();
+    let msg_hash = blake2b256(msg);
 
-    verify_signature(msg, &sig_bytes, pubkey.as_slice()).expect("valid signature");
+    verify_signature(&msg_hash, &sig_bytes, pubkey.as_slice()).expect("valid signature");
 }
 
 #[test]
