@@ -248,14 +248,11 @@ pub fn check_valid_progress(
             verify_status_disputed(new_status)?;
 
             // We verify that the signatures of both parties are valid on the new channel state.
-            verify_valid_state_sig(
+            verify_valid_state_sigs(
                 &d.sig_a().unpack(),
-                &new_status.state(),
-                &channel_constants.params().party_a().pub_key(),
-            )?;
-            verify_valid_state_sig(
                 &d.sig_b().unpack(),
                 &new_status.state(),
+                &channel_constants.params().party_a().pub_key(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
             Ok(())
@@ -272,6 +269,8 @@ pub fn check_valid_close(
     channel_witness: &ChannelWitness,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    debug!("check_valid_close");
+
     // At this point we know that this transaction closes the channel. There are three different kinds of
     // closing: Abort, ForceClose and Close. Which kind of closing is performed depends on the witness.
     // Every channel closing transaction must pay out all funds the the channel participants. The amount
@@ -298,20 +297,22 @@ pub fn check_valid_close(
             Ok(())
         }
         ChannelWitnessUnion::Close(c) => {
+            debug!("check_valid_close: Close");
+
             // A channel can be closed by either party at any time after funding is complete.
             // For this the party needs to provide a final state (final bit set) and signatures
             // by all peers on that state.
             verify_equal_channel_id(&old_status.state(), &c.state())?;
+            debug!("check_valid_close: Channel id verified");
             verify_status_funded(old_status)?;
+            debug!("check_valid_close: Status funded verified");
             verify_state_finalized(&c.state())?;
-            verify_valid_state_sig(
+            debug!("check_valid_close: State finalized verified");
+            verify_valid_state_sigs(
                 &c.sig_a().unpack(),
-                &c.state(),
-                &channel_constants.params().party_a().pub_key(),
-            )?;
-            verify_valid_state_sig(
                 &c.sig_b().unpack(),
                 &c.state(),
+                &channel_constants.params().party_a().pub_key(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
             // We verify that each party is payed according to the balance distribution in the final state.
@@ -345,12 +346,18 @@ pub fn verify_increasing_version_number(
     Err(Error::VersionNumberNotIncreasing)
 }
 
-pub fn verify_valid_state_sig(
-    sig: &Bytes,
+pub fn verify_valid_state_sigs(
+    sig_a: &Bytes,
+    sig_b: &Bytes,
     state: &ChannelState,
-    pub_key: &SEC1EncodedPubKey,
+    pub_key_a: &SEC1EncodedPubKey,
+    pub_key_b: &SEC1EncodedPubKey,
 ) -> Result<(), Error> {
-    verify_signature(state.as_slice(), sig, pub_key.as_slice())?;
+    let msg_hash = blake2b256(state.as_slice());
+    verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
+    debug!("verify_valid_state_sigs: Signature A verified");
+    verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;
+    debug!("verify_valid_state_sigs: Signature B verified");
     Ok(())
 }
 
@@ -609,6 +616,8 @@ pub fn verify_all_payed(
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    debug!("verify_all_payed");
+
     let minimum_payment_a = channel_constants
         .params()
         .party_a()
@@ -640,6 +649,7 @@ pub fn verify_all_payed(
 
     // TODO: Maybe we want to check that there is only one paying output per party?
     for i in 0..outputs_len {
+        debug!("verify_all_payed: output {}", i);
         let output_lock_script_hash = load_cell_lock_hash(i, Source::Output)?;
         let output_cap = load_cell_capacity(i, Source::Output)?;
 
