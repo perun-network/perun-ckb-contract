@@ -74,7 +74,7 @@ pub fn main() -> Result<(), Error> {
     // The channel constants do not change during the lifetime of a channel. They are located in the
     // args field of the pcts.
     let channel_constants =
-        ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParameters");
+        ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelConstants");
     debug!("parsing channel constants passed");
 
     // Verify that the channel parameters are compatible with the currently supported
