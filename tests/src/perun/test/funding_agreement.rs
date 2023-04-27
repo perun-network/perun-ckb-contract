@@ -43,7 +43,7 @@ impl FundingAgreement {
             .map(|entry| {
                 let sec1_encoded_bytes: Vec<_> = entry
                     .pub_key
-                    .to_encoded_point(false)
+                    .to_encoded_point(true)
                     .as_bytes()
                     .iter()
                     .map(|b| PackedByte::new(*b))

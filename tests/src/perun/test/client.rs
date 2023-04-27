@@ -41,7 +41,7 @@ impl Client {
 
     // pubkey returns the public key of the client as a SEC1 encoded byte
     // array.
-    pub fn pubkey(&self) -> [u8; 65] {
+    pub fn pubkey(&self) -> [u8; 33] {
         keys::verifying_key_to_byte_array(&self.signing_key.verifying_key())
     }
 
