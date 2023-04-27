@@ -1,7 +1,7 @@
 use ckb_testtool::{
     ckb_types::{
         packed::{Header, OutPoint, RawHeader, Script},
-        prelude::{Builder, Entity, Pack},
+        prelude::{Builder, Entity, Pack, Unpack},
     },
     context::Context,
 };
@@ -205,6 +205,16 @@ where
     /// dispute a channel using the currently active participant set by
     /// `with(..)`.
     pub fn dispute(&mut self) -> Result<(), perun::Error> {
+        let current_state = self.channel_state.state();
+        let v: u64 = current_state.version().unpack();
+        let bumped_state = current_state.as_builder().version((v + 1).pack()).build();
+        self.channel_state = self
+            .channel_state
+            .clone()
+            .as_builder()
+            .disputed(ctrue!())
+            .state(bumped_state)
+            .build();
         let sigs = self.sigs_for_channel_state()?;
         let res = match &self.channel_cell {
             Some(channel_cell) => {
