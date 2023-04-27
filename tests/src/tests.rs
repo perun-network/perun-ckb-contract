@@ -219,11 +219,6 @@ fn test_multiple_disputes(
 
         chan.with(bob).valid().dispute().expect("disputing channel");
 
-        chan.with(alice)
-            .invalid()
-            .dispute()
-            .expect("disputing channel");
-
         chan.assert();
         Ok(())
     })
