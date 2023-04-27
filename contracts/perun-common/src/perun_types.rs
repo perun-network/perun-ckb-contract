@@ -36,16 +36,15 @@ impl ::core::default::Default for SEC1EncodedPubKey {
     fn default() -> Self {
         let v: Vec<u8> = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
         ];
         SEC1EncodedPubKey::new_unchecked(v.into())
     }
 }
 impl SEC1EncodedPubKey {
-    pub const TOTAL_SIZE: usize = 65;
+    pub const TOTAL_SIZE: usize = 33;
     pub const ITEM_SIZE: usize = 1;
-    pub const ITEM_COUNT: usize = 65;
+    pub const ITEM_COUNT: usize = 33;
     pub fn nth0(&self) -> Byte {
         Byte::new_unchecked(self.0.slice(0..1))
     }
@@ -145,102 +144,6 @@ impl SEC1EncodedPubKey {
     pub fn nth32(&self) -> Byte {
         Byte::new_unchecked(self.0.slice(32..33))
     }
-    pub fn nth33(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(33..34))
-    }
-    pub fn nth34(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(34..35))
-    }
-    pub fn nth35(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(35..36))
-    }
-    pub fn nth36(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(36..37))
-    }
-    pub fn nth37(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(37..38))
-    }
-    pub fn nth38(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(38..39))
-    }
-    pub fn nth39(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(39..40))
-    }
-    pub fn nth40(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(40..41))
-    }
-    pub fn nth41(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(41..42))
-    }
-    pub fn nth42(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(42..43))
-    }
-    pub fn nth43(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(43..44))
-    }
-    pub fn nth44(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(44..45))
-    }
-    pub fn nth45(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(45..46))
-    }
-    pub fn nth46(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(46..47))
-    }
-    pub fn nth47(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(47..48))
-    }
-    pub fn nth48(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(48..49))
-    }
-    pub fn nth49(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(49..50))
-    }
-    pub fn nth50(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(50..51))
-    }
-    pub fn nth51(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(51..52))
-    }
-    pub fn nth52(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(52..53))
-    }
-    pub fn nth53(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(53..54))
-    }
-    pub fn nth54(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(54..55))
-    }
-    pub fn nth55(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(55..56))
-    }
-    pub fn nth56(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(56..57))
-    }
-    pub fn nth57(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(57..58))
-    }
-    pub fn nth58(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(58..59))
-    }
-    pub fn nth59(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(59..60))
-    }
-    pub fn nth60(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(60..61))
-    }
-    pub fn nth61(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(61..62))
-    }
-    pub fn nth62(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(62..63))
-    }
-    pub fn nth63(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(63..64))
-    }
-    pub fn nth64(&self) -> Byte {
-        Byte::new_unchecked(self.0.slice(64..65))
-    }
     pub fn raw_data(&self) -> molecule::bytes::Bytes {
         self.as_bytes()
     }
@@ -304,38 +207,6 @@ impl molecule::prelude::Entity for SEC1EncodedPubKey {
             self.nth30(),
             self.nth31(),
             self.nth32(),
-            self.nth33(),
-            self.nth34(),
-            self.nth35(),
-            self.nth36(),
-            self.nth37(),
-            self.nth38(),
-            self.nth39(),
-            self.nth40(),
-            self.nth41(),
-            self.nth42(),
-            self.nth43(),
-            self.nth44(),
-            self.nth45(),
-            self.nth46(),
-            self.nth47(),
-            self.nth48(),
-            self.nth49(),
-            self.nth50(),
-            self.nth51(),
-            self.nth52(),
-            self.nth53(),
-            self.nth54(),
-            self.nth55(),
-            self.nth56(),
-            self.nth57(),
-            self.nth58(),
-            self.nth59(),
-            self.nth60(),
-            self.nth61(),
-            self.nth62(),
-            self.nth63(),
-            self.nth64(),
         ])
     }
 }
@@ -363,9 +234,9 @@ impl<'r> ::core::fmt::Display for SEC1EncodedPubKeyReader<'r> {
     }
 }
 impl<'r> SEC1EncodedPubKeyReader<'r> {
-    pub const TOTAL_SIZE: usize = 65;
+    pub const TOTAL_SIZE: usize = 33;
     pub const ITEM_SIZE: usize = 1;
-    pub const ITEM_COUNT: usize = 65;
+    pub const ITEM_COUNT: usize = 33;
     pub fn nth0(&self) -> ByteReader<'r> {
         ByteReader::new_unchecked(&self.as_slice()[0..1])
     }
@@ -465,102 +336,6 @@ impl<'r> SEC1EncodedPubKeyReader<'r> {
     pub fn nth32(&self) -> ByteReader<'r> {
         ByteReader::new_unchecked(&self.as_slice()[32..33])
     }
-    pub fn nth33(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[33..34])
-    }
-    pub fn nth34(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[34..35])
-    }
-    pub fn nth35(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[35..36])
-    }
-    pub fn nth36(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[36..37])
-    }
-    pub fn nth37(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[37..38])
-    }
-    pub fn nth38(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[38..39])
-    }
-    pub fn nth39(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[39..40])
-    }
-    pub fn nth40(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[40..41])
-    }
-    pub fn nth41(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[41..42])
-    }
-    pub fn nth42(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[42..43])
-    }
-    pub fn nth43(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[43..44])
-    }
-    pub fn nth44(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[44..45])
-    }
-    pub fn nth45(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[45..46])
-    }
-    pub fn nth46(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[46..47])
-    }
-    pub fn nth47(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[47..48])
-    }
-    pub fn nth48(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[48..49])
-    }
-    pub fn nth49(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[49..50])
-    }
-    pub fn nth50(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[50..51])
-    }
-    pub fn nth51(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[51..52])
-    }
-    pub fn nth52(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[52..53])
-    }
-    pub fn nth53(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[53..54])
-    }
-    pub fn nth54(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[54..55])
-    }
-    pub fn nth55(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[55..56])
-    }
-    pub fn nth56(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[56..57])
-    }
-    pub fn nth57(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[57..58])
-    }
-    pub fn nth58(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[58..59])
-    }
-    pub fn nth59(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[59..60])
-    }
-    pub fn nth60(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[60..61])
-    }
-    pub fn nth61(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[61..62])
-    }
-    pub fn nth62(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[62..63])
-    }
-    pub fn nth63(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[63..64])
-    }
-    pub fn nth64(&self) -> ByteReader<'r> {
-        ByteReader::new_unchecked(&self.as_slice()[64..65])
-    }
     pub fn raw_data(&self) -> &'r [u8] {
         self.as_slice()
     }
@@ -586,7 +361,7 @@ impl<'r> molecule::prelude::Reader<'r> for SEC1EncodedPubKeyReader<'r> {
         Ok(())
     }
 }
-pub struct SEC1EncodedPubKeyBuilder(pub(crate) [Byte; 65]);
+pub struct SEC1EncodedPubKeyBuilder(pub(crate) [Byte; 33]);
 impl ::core::fmt::Debug for SEC1EncodedPubKeyBuilder {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:?})", Self::NAME, &self.0[..])
@@ -628,46 +403,14 @@ impl ::core::default::Default for SEC1EncodedPubKeyBuilder {
             Byte::default(),
             Byte::default(),
             Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
-            Byte::default(),
         ])
     }
 }
 impl SEC1EncodedPubKeyBuilder {
-    pub const TOTAL_SIZE: usize = 65;
+    pub const TOTAL_SIZE: usize = 33;
     pub const ITEM_SIZE: usize = 1;
-    pub const ITEM_COUNT: usize = 65;
-    pub fn set(mut self, v: [Byte; 65]) -> Self {
+    pub const ITEM_COUNT: usize = 33;
+    pub fn set(mut self, v: [Byte; 33]) -> Self {
         self.0 = v;
         self
     }
@@ -803,134 +546,6 @@ impl SEC1EncodedPubKeyBuilder {
         self.0[32] = v;
         self
     }
-    pub fn nth33(mut self, v: Byte) -> Self {
-        self.0[33] = v;
-        self
-    }
-    pub fn nth34(mut self, v: Byte) -> Self {
-        self.0[34] = v;
-        self
-    }
-    pub fn nth35(mut self, v: Byte) -> Self {
-        self.0[35] = v;
-        self
-    }
-    pub fn nth36(mut self, v: Byte) -> Self {
-        self.0[36] = v;
-        self
-    }
-    pub fn nth37(mut self, v: Byte) -> Self {
-        self.0[37] = v;
-        self
-    }
-    pub fn nth38(mut self, v: Byte) -> Self {
-        self.0[38] = v;
-        self
-    }
-    pub fn nth39(mut self, v: Byte) -> Self {
-        self.0[39] = v;
-        self
-    }
-    pub fn nth40(mut self, v: Byte) -> Self {
-        self.0[40] = v;
-        self
-    }
-    pub fn nth41(mut self, v: Byte) -> Self {
-        self.0[41] = v;
-        self
-    }
-    pub fn nth42(mut self, v: Byte) -> Self {
-        self.0[42] = v;
-        self
-    }
-    pub fn nth43(mut self, v: Byte) -> Self {
-        self.0[43] = v;
-        self
-    }
-    pub fn nth44(mut self, v: Byte) -> Self {
-        self.0[44] = v;
-        self
-    }
-    pub fn nth45(mut self, v: Byte) -> Self {
-        self.0[45] = v;
-        self
-    }
-    pub fn nth46(mut self, v: Byte) -> Self {
-        self.0[46] = v;
-        self
-    }
-    pub fn nth47(mut self, v: Byte) -> Self {
-        self.0[47] = v;
-        self
-    }
-    pub fn nth48(mut self, v: Byte) -> Self {
-        self.0[48] = v;
-        self
-    }
-    pub fn nth49(mut self, v: Byte) -> Self {
-        self.0[49] = v;
-        self
-    }
-    pub fn nth50(mut self, v: Byte) -> Self {
-        self.0[50] = v;
-        self
-    }
-    pub fn nth51(mut self, v: Byte) -> Self {
-        self.0[51] = v;
-        self
-    }
-    pub fn nth52(mut self, v: Byte) -> Self {
-        self.0[52] = v;
-        self
-    }
-    pub fn nth53(mut self, v: Byte) -> Self {
-        self.0[53] = v;
-        self
-    }
-    pub fn nth54(mut self, v: Byte) -> Self {
-        self.0[54] = v;
-        self
-    }
-    pub fn nth55(mut self, v: Byte) -> Self {
-        self.0[55] = v;
-        self
-    }
-    pub fn nth56(mut self, v: Byte) -> Self {
-        self.0[56] = v;
-        self
-    }
-    pub fn nth57(mut self, v: Byte) -> Self {
-        self.0[57] = v;
-        self
-    }
-    pub fn nth58(mut self, v: Byte) -> Self {
-        self.0[58] = v;
-        self
-    }
-    pub fn nth59(mut self, v: Byte) -> Self {
-        self.0[59] = v;
-        self
-    }
-    pub fn nth60(mut self, v: Byte) -> Self {
-        self.0[60] = v;
-        self
-    }
-    pub fn nth61(mut self, v: Byte) -> Self {
-        self.0[61] = v;
-        self
-    }
-    pub fn nth62(mut self, v: Byte) -> Self {
-        self.0[62] = v;
-        self
-    }
-    pub fn nth63(mut self, v: Byte) -> Self {
-        self.0[63] = v;
-        self
-    }
-    pub fn nth64(mut self, v: Byte) -> Self {
-        self.0[64] = v;
-        self
-    }
 }
 impl molecule::prelude::Builder for SEC1EncodedPubKeyBuilder {
     type Entity = SEC1EncodedPubKey;
@@ -972,38 +587,6 @@ impl molecule::prelude::Builder for SEC1EncodedPubKeyBuilder {
         writer.write_all(self.0[30].as_slice())?;
         writer.write_all(self.0[31].as_slice())?;
         writer.write_all(self.0[32].as_slice())?;
-        writer.write_all(self.0[33].as_slice())?;
-        writer.write_all(self.0[34].as_slice())?;
-        writer.write_all(self.0[35].as_slice())?;
-        writer.write_all(self.0[36].as_slice())?;
-        writer.write_all(self.0[37].as_slice())?;
-        writer.write_all(self.0[38].as_slice())?;
-        writer.write_all(self.0[39].as_slice())?;
-        writer.write_all(self.0[40].as_slice())?;
-        writer.write_all(self.0[41].as_slice())?;
-        writer.write_all(self.0[42].as_slice())?;
-        writer.write_all(self.0[43].as_slice())?;
-        writer.write_all(self.0[44].as_slice())?;
-        writer.write_all(self.0[45].as_slice())?;
-        writer.write_all(self.0[46].as_slice())?;
-        writer.write_all(self.0[47].as_slice())?;
-        writer.write_all(self.0[48].as_slice())?;
-        writer.write_all(self.0[49].as_slice())?;
-        writer.write_all(self.0[50].as_slice())?;
-        writer.write_all(self.0[51].as_slice())?;
-        writer.write_all(self.0[52].as_slice())?;
-        writer.write_all(self.0[53].as_slice())?;
-        writer.write_all(self.0[54].as_slice())?;
-        writer.write_all(self.0[55].as_slice())?;
-        writer.write_all(self.0[56].as_slice())?;
-        writer.write_all(self.0[57].as_slice())?;
-        writer.write_all(self.0[58].as_slice())?;
-        writer.write_all(self.0[59].as_slice())?;
-        writer.write_all(self.0[60].as_slice())?;
-        writer.write_all(self.0[61].as_slice())?;
-        writer.write_all(self.0[62].as_slice())?;
-        writer.write_all(self.0[63].as_slice())?;
-        writer.write_all(self.0[64].as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -2639,12 +2222,11 @@ impl ::core::fmt::Display for Participant {
 impl ::core::default::Default for Participant {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         Participant::new_unchecked(v.into())
     }
@@ -2986,20 +2568,18 @@ impl ::core::fmt::Display for ChannelParameters {
 impl ::core::default::Default for ChannelParameters {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            140, 1, 0, 0, 32, 0, 0, 0, 189, 0, 0, 0, 90, 1, 0, 0, 122, 1, 0, 0, 130, 1, 0, 0, 130,
-            1, 0, 0, 135, 1, 0, 0, 157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0,
+            76, 1, 0, 0, 32, 0, 0, 0, 157, 0, 0, 0, 26, 1, 0, 0, 58, 1, 0, 0, 66, 1, 0, 0, 66, 1,
+            0, 0, 71, 1, 0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0,
+            0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 157, 0, 0, 0, 20, 0,
-            0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelParameters::new_unchecked(v.into())
     }
@@ -3398,17 +2978,14 @@ impl ::core::fmt::Display for ChannelConstants {
 impl ::core::default::Default for ChannelConstants {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            26, 2, 0, 0, 32, 0, 0, 0, 172, 1, 0, 0, 204, 1, 0, 0, 205, 1, 0, 0, 213, 1, 0, 0, 245,
-            1, 0, 0, 246, 1, 0, 0, 140, 1, 0, 0, 32, 0, 0, 0, 189, 0, 0, 0, 90, 1, 0, 0, 122, 1, 0,
-            0, 130, 1, 0, 0, 130, 1, 0, 0, 135, 1, 0, 0, 157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0,
-            60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            218, 1, 0, 0, 32, 0, 0, 0, 108, 1, 0, 0, 140, 1, 0, 0, 141, 1, 0, 0, 149, 1, 0, 0, 181,
+            1, 0, 0, 182, 1, 0, 0, 76, 1, 0, 0, 32, 0, 0, 0, 157, 0, 0, 0, 26, 1, 0, 0, 58, 1, 0,
+            0, 66, 1, 0, 0, 66, 1, 0, 0, 71, 1, 0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60,
+            0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 157, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 125, 0, 0,
+            0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3417,7 +2994,7 @@ impl ::core::default::Default for ChannelConstants {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelConstants::new_unchecked(v.into())
     }
