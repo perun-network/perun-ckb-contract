@@ -262,10 +262,14 @@ where
     }
 
     fn sigs_for_channel_state(&self) -> Result<[Vec<u8>; 2], perun::Error> {
+        // We have to unpack the ChannelConstants like this. Otherwise the molecule header is still
+        // part of the slice. On-chain we have no problem due to unpacking the arguments, but this
+        // does not seem possible in this scope.
+        let bytes = self.pcts.args().raw_data();
         // We want to have the correct order of clients in an array to construct signatures. For
         // consistency we use the ChannelConstants which are also used to construct the channel and
         // look up the participants according to their public key identifier.
-        let s = ChannelConstants::from_slice(self.pcts.args().as_slice())?;
+        let s = ChannelConstants::from_slice(&bytes)?;
         let resolve_client = |verifying_key_raw: Vec<u8>| -> Result<Client, perun::Error> {
             let verifying_key = VerifyingKey::from_sec1_bytes(verifying_key_raw.as_slice())?;
             let pubkey = keys::verifying_key_to_byte_array(&verifying_key);
