@@ -1,6 +1,8 @@
 use ckb_occupied_capacity::Capacity;
-use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32, BytesBuilder};
+use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32};
 use ckb_testtool::ckb_types::prelude::*;
+use ckb_testtool::context::Context;
+use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 use perun_common::perun_types::{
@@ -9,7 +11,7 @@ use perun_common::perun_types::{
 
 use crate::perun;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FundingAgreement(Vec<FundingAgreementEntry>);
 
 impl FundingAgreement {
@@ -32,7 +34,8 @@ impl FundingAgreement {
 
     pub fn mk_participants(
         &self,
-        payment_lock_hash: Byte32,
+        ctx: &mut Context,
+        env: &perun::harness::Env,
         payment_min_capacity: Capacity,
     ) -> Vec<perun_types::Participant> {
         self.0
@@ -40,7 +43,7 @@ impl FundingAgreement {
             .map(|entry| {
                 let sec1_encoded_bytes: Vec<_> = entry
                     .pub_key
-                    .to_encoded_point(false)
+                    .to_encoded_point(true)
                     .as_bytes()
                     .iter()
                     .map(|b| PackedByte::new(*b))
@@ -48,19 +51,29 @@ impl FundingAgreement {
                 let sec1_pub_key = SEC1EncodedPubKeyBuilder::default()
                     .set(sec1_encoded_bytes.try_into().unwrap())
                     .build();
-                let payment_args = BytesBuilder::default()
-                    .set(vec![entry.index.into()])
-                    .build();
+                let unlock_script = ctx
+                    .build_script(
+                        &env.always_success_out_point,
+                        // NOTE: To be able to make sure we can distinguish between the payout of
+                        // the participants, we will pass their corresponding index as an argument.
+                        // This will have no effect on the execution of the always_success_script,
+                        // because it does not bother checking its arguments, but will allow us to
+                        // assert the correct indices once a channel is concluded.
+                        Bytes::from(vec![entry.index]),
+                    )
+                    .expect("script");
+                let unlock_script_hash = unlock_script.calc_script_hash();
                 ParticipantBuilder::default()
-                    .payment_lock_hash(payment_lock_hash.clone())
+                    // The payment script hash used to lock the funds after a channel close for
+                    // this party.
+                    .payment_script_hash(unlock_script_hash.clone())
+                    // The minimum capacity required for the payment cell to be valid.
                     .payment_min_capacity(payment_min_capacity.pack())
-                    // The tests use always success scripts which do not receive any args.
-                    .unlock_args(Default::default())
-                    // NOTE: The tests will pay out to an "address" encoded by the index of each
-                    // participant for simplicity. This is relevant for the test-suite, because
-                    // Perun channels should only be opened between participants that pay out to
-                    // distinct addresses (i.e. distinct cells with distinct lockscripts).
-                    .payment_args(payment_args)
+                    // The unlock script hash used to identify this party. Normally this would be
+                    // the lock args for a secp256k1 script or similar. Since we use the always
+                    // success script, we will use the hash of said script parameterized by the
+                    // party index.
+                    .unlock_script_hash(unlock_script_hash.clone())
                     .pub_key(sec1_pub_key)
                     .build()
             })
@@ -78,8 +91,7 @@ impl FundingAgreement {
                             // We found the index in the list of funded indices, we expect the required
                             // amount for assets to be funded.
                             if let Some((Asset(0), amount)) = entry.amounts.iter().next() {
-                                let amount128: u128 = (*amount).into();
-                                acc.push(amount128.pack());
+                                acc.push(amount.pack());
                                 return Ok(acc);
                             } else {
                                 return Err(perun::Error::from("unknown asset"));
@@ -88,7 +100,7 @@ impl FundingAgreement {
                         None => {
                             // We did not find the index in the list of funded indices, the client
                             // identified by this index did not fund, yet.
-                            acc.push(0u128.pack());
+                            acc.push(0u64.pack());
                             Ok(acc)
                         }
                     }
@@ -123,14 +135,14 @@ impl FundingAgreement {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FundingAgreementEntry {
     pub amounts: Vec<(Asset, u64)>,
     pub index: u8,
     pub pub_key: PublicKey,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Asset(pub u32);
 
 impl Asset {

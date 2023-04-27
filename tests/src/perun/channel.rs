@@ -1,12 +1,26 @@
-use ckb_testtool::context::Context;
-use k256::ecdsa::SigningKey;
-use rand_core::OsRng;
+use ckb_testtool::{
+    ckb_types::{
+        packed::{Header, OutPoint, RawHeader, Script},
+        prelude::{Builder, Entity, Pack, Unpack},
+    },
+    context::Context,
+};
+use k256::ecdsa::VerifyingKey;
+use perun_common::{
+    ctrue,
+    perun_types::{ChannelConstants, ChannelStatus},
+};
 
-use crate::perun;
+use crate::perun::{
+    self,
+    test::{keys, Client},
+};
 use crate::perun::{harness, test};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Debug;
+
+use super::{test::cell::FundingCell, Account};
 
 enum ActionValidity {
     Valid,
@@ -25,6 +39,14 @@ where
     active_part: test::Client,
     /// The id of the channel.
     id: test::ChannelId,
+    /// The cell which represents this channel on-chain.
+    channel_cell: Option<OutPoint>,
+    /// The current state of this channel.
+    channel_state: ChannelStatus,
+    /// The cells locking funds for this channel.
+    funding_cells: Vec<FundingCell>,
+    /// The used Perun Channel Type Script.
+    pcts: Script,
     /// All available parties.
     parts: HashMap<String, test::Client>,
     /// The surrounding chain context.
@@ -45,8 +67,9 @@ where
 /// call_action! is a macro that calls the given action on the currently active
 /// participant. It also sets the validity of the next action to `Valid`.
 macro_rules! call_action {
-    ($self:ident, $action:ident $(, $x:expr)*) => (
+    ($self:ident, $action:ident $(, $x:expr)*$(,)*) => (
         {
+            println!("calling action {} on {}", stringify!($action), $self.active_part.name());
             let res = match $self.validity {
                 ActionValidity::Valid => $self.active_part.$action($self.ctx, $self.env, $($x),*),
                 ActionValidity::Invalid => {
@@ -67,10 +90,10 @@ impl<'a, S> Channel<'a, S>
 where
     S: Default + perun::Applyable + Debug + PartialEq,
 {
-    pub fn new<P: perun::Account>(
+    pub fn new(
         context: &'a mut Context,
         env: &'a perun::harness::Env,
-        parts: &[P],
+        parts: &[perun::TestAccount],
     ) -> Self {
         let m_parts: HashMap<_, _> = parts
             .iter()
@@ -78,7 +101,7 @@ where
             .map(|(i, p)| {
                 (
                     p.name().clone(),
-                    perun::test::Client::new(i as u8, SigningKey::random(&mut OsRng)),
+                    perun::test::Client::new(i as u8, p.name(), p.sk.clone()),
                 )
             })
             .collect();
@@ -89,6 +112,10 @@ where
             current_time: 0,
             ctx: context,
             env,
+            pcts: Script::default(),
+            channel_cell: None,
+            channel_state: ChannelStatus::default(),
+            funding_cells: Vec::new(),
             active_part: active.clone(),
             parts: m_parts.clone(),
             validity: ActionValidity::Valid,
@@ -113,15 +140,59 @@ where
     /// open a channel using the currently active participant set by `with(..)`
     /// with the value given in `funding_agreement`.
     pub fn open(&mut self, funding_agreement: &test::FundingAgreement) -> Result<(), perun::Error> {
-        let id = call_action!(self, open, funding_agreement)?;
+        let (id, or) = call_action!(self, open, funding_agreement)?;
         self.id = id;
+        self.channel_cell = Some(or.channel_cell.clone());
+        // Make sure the channel cell is linked to a header with a timestamp.
+        self.push_header_with_cell(or.channel_cell);
+        let mut fs = self.funding_cells.clone();
+        fs.extend(or.funds_cells.iter().cloned());
+        self.funding_cells = fs.to_vec();
+        self.pcts = or.pcts;
+        self.channel_state = or.state;
         Ok(())
+    }
+
+    fn push_header_with_cell(&mut self, cell: OutPoint) {
+        let header = Header::new_builder()
+            .raw(
+                RawHeader::new_builder()
+                    .timestamp(self.current_time.pack())
+                    .build(),
+            )
+            .build()
+            .into_view();
+        self.ctx.insert_header(header.clone());
+        // We will always use 0 as the `tx_index`.
+        self.ctx.link_cell_with_block(cell, header.hash(), 0);
     }
 
     /// fund a channel using the currently active participant set by `with(..)`
     /// with the value given in `funding_agreement`.
     pub fn fund(&mut self, funding_agreement: &test::FundingAgreement) -> Result<(), perun::Error> {
-        call_action!(self, fund, self.id, funding_agreement)
+        // TODO: Lift this check into the type-system to make this more readable and stick to DRY.
+        let res = match &self.channel_cell {
+            Some(channel_cell) => {
+                call_action!(
+                    self,
+                    fund,
+                    self.id,
+                    funding_agreement,
+                    channel_cell.clone(),
+                    self.channel_state.clone(),
+                    self.pcts.clone()
+                )
+            }
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        // TODO: DRY please.
+        self.channel_state = res.state;
+        self.channel_cell = Some(res.channel_cell.clone());
+        self.push_header_with_cell(res.channel_cell);
+        let mut fs = self.funding_cells.clone();
+        fs.extend(res.funds_cells.iter().cloned());
+        self.funding_cells = fs.to_vec();
+        Ok(())
     }
 
     /// send a payment using the currently active participant set by `with(..)`
@@ -134,25 +205,142 @@ where
     /// dispute a channel using the currently active participant set by
     /// `with(..)`.
     pub fn dispute(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, dispute, self.id)
+        let current_state = self.channel_state.state();
+        let v: u64 = current_state.version().unpack();
+        let bumped_state = current_state.as_builder().version((v + 1).pack()).build();
+        self.channel_state = self
+            .channel_state
+            .clone()
+            .as_builder()
+            .disputed(ctrue!())
+            .state(bumped_state)
+            .build();
+        let sigs = self.sigs_for_channel_state()?;
+        let res = match &self.channel_cell {
+            Some(channel_cell) => {
+                call_action!(
+                    self,
+                    dispute,
+                    self.id,
+                    channel_cell.clone(),
+                    self.channel_state.clone(),
+                    self.pcts.clone(),
+                    sigs,
+                )
+            }
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        self.channel_cell = Some(res.channel_cell.clone());
+        self.push_header_with_cell(res.channel_cell);
+        Ok(())
     }
 
     /// abort a channel using the currently active participant set by
     /// `with(..)`.
     pub fn abort(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, abort, self.id)
+        match &self.channel_cell {
+            Some(channel_cell) => {
+                call_action!(
+                    self,
+                    abort,
+                    self.id,
+                    self.channel_state.clone(),
+                    channel_cell.clone(),
+                    self.funding_cells.clone()
+                )
+            }
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        Ok(())
+    }
+
+    /// finalize finalizes the channel state in use. It has to be called for
+    /// before successful close actions.
+    pub fn finalize(&mut self) -> &mut Self {
+        let status = self.channel_state.clone();
+        let state = status.state().as_builder().is_final(ctrue!()).build();
+        self.channel_state = status.as_builder().state(state).build();
+        self
     }
 
     /// close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn close(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, close, self.id)
+        let sigs = self.sigs_for_channel_state()?;
+        match self.channel_cell.clone() {
+            Some(channel_cell) => call_action!(
+                self,
+                close,
+                self.id,
+                channel_cell,
+                self.funding_cells.clone(),
+                self.channel_state.clone(),
+                sigs
+            ),
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        Ok(())
+    }
+
+    fn sigs_for_channel_state(&self) -> Result<[Vec<u8>; 2], perun::Error> {
+        // We have to unpack the ChannelConstants like this. Otherwise the molecule header is still
+        // part of the slice. On-chain we have no problem due to unpacking the arguments, but this
+        // does not seem possible in this scope.
+        let bytes = self.pcts.args().raw_data();
+        // We want to have the correct order of clients in an array to construct signatures. For
+        // consistency we use the ChannelConstants which are also used to construct the channel and
+        // look up the participants according to their public key identifier.
+        let s = ChannelConstants::from_slice(&bytes)?;
+        let resolve_client = |verifying_key_raw: Vec<u8>| -> Result<Client, perun::Error> {
+            let verifying_key = VerifyingKey::from_sec1_bytes(verifying_key_raw.as_slice())?;
+            let pubkey = keys::verifying_key_to_byte_array(&verifying_key);
+            self.parts
+                .values()
+                .cloned()
+                .find(|c| c.pubkey() == pubkey)
+                .ok_or("unknown participant in channel parameters".into())
+        };
+        let clients: Result<Vec<_>, _> = s
+            .params()
+            .mk_party_pubkeys()
+            .iter()
+            .cloned()
+            .map(resolve_client)
+            .collect();
+        let sigs: Result<Vec<_>, _> = clients?
+            .iter()
+            .map(|p| p.sign(self.channel_state.state()))
+            .collect();
+        let sig_arr: [Vec<u8>; 2] = sigs?.try_into()?;
+        Ok(sig_arr)
     }
 
     /// force_close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn force_close(&mut self) -> Result<(), perun::Error> {
-        call_action!(self, force_close, self.id)
+        let h = Header::new_builder()
+            .raw(
+                RawHeader::new_builder()
+                    .timestamp(self.current_time.pack())
+                    .build(),
+            )
+            .build()
+            .into_view();
+        // Push a header with the current time which can be used in force_close
+        // as for time validation purposes.
+        self.ctx.insert_header(h.clone());
+        match self.channel_cell.clone() {
+            Some(channel_cell) => call_action!(
+                self,
+                force_close,
+                self.id,
+                channel_cell,
+                self.funding_cells.clone(),
+                self.channel_state.clone(),
+            ),
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        Ok(())
     }
 
     /// valid sets the validity of the next action to valid. (default)

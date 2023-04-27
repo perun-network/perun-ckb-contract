@@ -1039,6 +1039,7 @@ version = "0.1.0"
 dependencies = [
  "blake2b-rs",
  "buddy-alloc",
+ "ckb-occupied-capacity",
  "ckb-standalone-types",
  "ckb-std",
  "ckb-types",
@@ -1453,6 +1454,7 @@ dependencies = [
  "ckb-testtool",
  "hex",
  "k256",
+ "molecule",
  "perun-common",
  "rand 0.8.5",
  "rand_core 0.6.4",

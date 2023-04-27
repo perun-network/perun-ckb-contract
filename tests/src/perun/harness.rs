@@ -26,9 +26,9 @@ pub struct Env {
     // Auxiliary contracts.
     pub always_success_out_point: OutPoint,
     // Perun scripts.
-    pub pcls_script: Script,
-    pub pcts_script: Script,
-    pub pfls_script: Script,
+    pcls_script: Script,
+    pcts_script: Script,
+    pfls_script: Script,
     pub pcls_script_dep: CellDep,
     pub pcts_script_dep: CellDep,
     pub pfls_script_dep: CellDep,
@@ -73,7 +73,7 @@ impl Env {
             )
             .ok_or("perun-channel-typescript")?;
         let pfls_script = context
-            .build_script(&pfls_out_point, perun_types::PFLSArgs::default().as_bytes())
+            .build_script(&pfls_out_point, Default::default())
             .ok_or("perun-funds-lockscript")?;
         let pcls_script_dep = CellDep::new_builder()
             .out_point(pcls_out_point.clone())
@@ -86,7 +86,7 @@ impl Env {
             .build();
         // Auxiliary scripts.
         let always_success_script = context
-            .build_script(&always_success_out_point, Default::default())
+            .build_script(&always_success_out_point, Bytes::from(vec![0]))
             .expect("always_success");
         let always_success_script_dep = CellDep::new_builder()
             .out_point(always_success_out_point.clone())
@@ -104,7 +104,7 @@ impl Env {
             .capacity(0u64.pack())
             .lock(pfls_script.clone())
             .build();
-        let pfls_args_capacity = perun_types::PFLSArgs::default().as_bytes().len() as u64;
+        let pfls_args_capacity = pcts_script.calc_script_hash().as_bytes().len() as u64;
         let min_capacity_pfls = tmp_output.occupied_capacity(pfls_args_capacity.into_capacity())?;
 
         Ok(Env {
@@ -148,6 +148,13 @@ impl Env {
             .expect("perun-funds-lockscript")
     }
 
+    pub fn build_lock_script(&self, context: &mut Context, args: Bytes) -> Script {
+        let always_success_out_point = &self.always_success_out_point;
+        context
+            .build_script(always_success_out_point, args)
+            .expect("always_success")
+    }
+
     pub fn min_capacity_for_channel(&self, cs: ChannelStatus) -> Result<Capacity, perun::Error> {
         let tmp_output = CellOutput::new_builder()
             .capacity(0u64.pack())
@@ -179,7 +186,9 @@ impl Env {
         )
     }
 
-    pub fn create_funds_for_index(
+    /// create_funds_from_agreement creates a new cell with the funds for the given party index locked
+    /// by the always_success_script parameterized on the party index.
+    pub fn create_funds_from_agreement(
         &self,
         context: &mut Context,
         party_index: u8,
@@ -213,15 +222,29 @@ impl Env {
                 _else => return Err("invalid asset in FundingAgreement".into()),
             }
         };
+        self.create_funds_for_index(context, party_index, required_funds)
+    }
+
+    pub fn create_funds_for_index(
+        &self,
+        context: &mut Context,
+        party_index: u8,
+        required_funds: u64,
+    ) -> Result<(OutPoint, Capacity), perun::Error> {
         // Create cell containing the required funds for this party.
-        let cell = context.create_cell(
-            CellOutput::new_builder()
-                .capacity(required_funds.pack())
-                .lock(self.always_success_script.clone())
-                .build(),
-            Bytes::default(),
-        );
+        let my_output = CellOutput::new_builder()
+            .capacity(required_funds.pack())
+            // Lock cell using the correct party index.
+            .lock(self.build_lock_script(context, Bytes::from(vec![party_index])))
+            .build();
+        let cell = context.create_cell(my_output, Bytes::default());
         Ok((cell, required_funds.into_capacity()))
+    }
+
+    pub fn create_min_cell_for_index(&self, context: &mut Context, party_index: u8) -> OutPoint {
+        self.create_funds_for_index(context, party_index, self.min_capacity_no_script.as_u64())
+            .unwrap()
+            .0
     }
 
     pub fn build_initial_channel_state(
