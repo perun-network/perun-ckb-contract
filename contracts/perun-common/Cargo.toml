@@ -21,6 +21,7 @@ version = "0.7.3"
 default-features = false
 
 [features]
-default = ["std", "ckb-types", "ckb-occupied-capacity"]
+default = ["contract"]
+testing = ["std", "ckb-types", "ckb-occupied-capacity"]
 std = []
-no_std = ["ckb-standalone-types"]
+contract = ["ckb-standalone-types"]

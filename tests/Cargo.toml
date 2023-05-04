@@ -9,7 +9,7 @@ edition = "2021"
 ckb-testtool = "0.9"
 hex = "0.4.3"
 rand = "0.8.5"
-perun-common = { path = "../contracts/perun-common" }
+perun-common = { path = "../contracts/perun-common", default-features = false, features = ["testing"] }
 molecule = "0.7.3"
 ckb-types = { package = "ckb-standalone-types", version = "0.1.2" }
 k256 = { version = "0.11.6", default-features = false, features = ["ecdsa", "arithmetic"]}
