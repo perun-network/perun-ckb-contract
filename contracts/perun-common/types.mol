@@ -16,10 +16,6 @@ union Bool {
 array A [byte; 1];
 array B [byte; 1];
 
-union ParticipantIndex {
-  A,
-  B,
-}
 
 option App (Bytes);
 
@@ -79,10 +75,8 @@ table ChannelConstants {
   thread_token: ChannelToken,
 }
 
+array Fund [byte; 1];
 
-table Fund {
-  index: ParticipantIndex,
-}
 array Abort [byte; 1];
 
 table Dispute {

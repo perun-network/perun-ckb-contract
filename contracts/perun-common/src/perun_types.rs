@@ -1718,300 +1718,6 @@ impl molecule::prelude::Builder for BBuilder {
     }
 }
 #[derive(Clone)]
-pub struct ParticipantIndex(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for ParticipantIndex {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for ParticipantIndex {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for ParticipantIndex {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl ::core::default::Default for ParticipantIndex {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0, 0];
-        ParticipantIndex::new_unchecked(v.into())
-    }
-}
-impl ParticipantIndex {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> ParticipantIndexUnion {
-        let inner = self.0.slice(molecule::NUMBER_SIZE..);
-        match self.item_id() {
-            0 => A::new_unchecked(inner).into(),
-            1 => B::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> ParticipantIndexReader<'r> {
-        ParticipantIndexReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for ParticipantIndex {
-    type Builder = ParticipantIndexBuilder;
-    const NAME: &'static str = "ParticipantIndex";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        ParticipantIndex(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ParticipantIndexReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ParticipantIndexReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_enum())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct ParticipantIndexReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for ParticipantIndexReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for ParticipantIndexReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for ParticipantIndexReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl<'r> ParticipantIndexReader<'r> {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> ParticipantIndexUnionReader<'r> {
-        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
-        match self.item_id() {
-            0 => AReader::new_unchecked(inner).into(),
-            1 => BReader::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for ParticipantIndexReader<'r> {
-    type Entity = ParticipantIndex;
-    const NAME: &'static str = "ParticipantIndexReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        ParticipantIndexReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let item_id = molecule::unpack_number(slice);
-        let inner_slice = &slice[molecule::NUMBER_SIZE..];
-        match item_id {
-            0 => AReader::verify(inner_slice, compatible),
-            1 => BReader::verify(inner_slice, compatible),
-            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
-        }?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct ParticipantIndexBuilder(pub(crate) ParticipantIndexUnion);
-impl ParticipantIndexBuilder {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn set<I>(mut self, v: I) -> Self
-    where
-        I: ::core::convert::Into<ParticipantIndexUnion>,
-    {
-        self.0 = v.into();
-        self
-    }
-}
-impl molecule::prelude::Builder for ParticipantIndexBuilder {
-    type Entity = ParticipantIndex;
-    const NAME: &'static str = "ParticipantIndexBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE + self.0.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
-        writer.write_all(self.0.as_slice())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        ParticipantIndex::new_unchecked(inner.into())
-    }
-}
-#[derive(Debug, Clone)]
-pub enum ParticipantIndexUnion {
-    A(A),
-    B(B),
-}
-#[derive(Debug, Clone, Copy)]
-pub enum ParticipantIndexUnionReader<'r> {
-    A(AReader<'r>),
-    B(BReader<'r>),
-}
-impl ::core::default::Default for ParticipantIndexUnion {
-    fn default() -> Self {
-        ParticipantIndexUnion::A(::core::default::Default::default())
-    }
-}
-impl ::core::fmt::Display for ParticipantIndexUnion {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            ParticipantIndexUnion::A(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, A::NAME, item)
-            }
-            ParticipantIndexUnion::B(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, B::NAME, item)
-            }
-        }
-    }
-}
-impl<'r> ::core::fmt::Display for ParticipantIndexUnionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            ParticipantIndexUnionReader::A(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, A::NAME, item)
-            }
-            ParticipantIndexUnionReader::B(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, B::NAME, item)
-            }
-        }
-    }
-}
-impl ParticipantIndexUnion {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            ParticipantIndexUnion::A(ref item) => write!(f, "{}", item),
-            ParticipantIndexUnion::B(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl<'r> ParticipantIndexUnionReader<'r> {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            ParticipantIndexUnionReader::A(ref item) => write!(f, "{}", item),
-            ParticipantIndexUnionReader::B(ref item) => write!(f, "{}", item),
-        }
-    }
-}
-impl ::core::convert::From<A> for ParticipantIndexUnion {
-    fn from(item: A) -> Self {
-        ParticipantIndexUnion::A(item)
-    }
-}
-impl ::core::convert::From<B> for ParticipantIndexUnion {
-    fn from(item: B) -> Self {
-        ParticipantIndexUnion::B(item)
-    }
-}
-impl<'r> ::core::convert::From<AReader<'r>> for ParticipantIndexUnionReader<'r> {
-    fn from(item: AReader<'r>) -> Self {
-        ParticipantIndexUnionReader::A(item)
-    }
-}
-impl<'r> ::core::convert::From<BReader<'r>> for ParticipantIndexUnionReader<'r> {
-    fn from(item: BReader<'r>) -> Self {
-        ParticipantIndexUnionReader::B(item)
-    }
-}
-impl ParticipantIndexUnion {
-    pub const NAME: &'static str = "ParticipantIndexUnion";
-    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
-        match self {
-            ParticipantIndexUnion::A(item) => item.as_bytes(),
-            ParticipantIndexUnion::B(item) => item.as_bytes(),
-        }
-    }
-    pub fn as_slice(&self) -> &[u8] {
-        match self {
-            ParticipantIndexUnion::A(item) => item.as_slice(),
-            ParticipantIndexUnion::B(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            ParticipantIndexUnion::A(_) => 0,
-            ParticipantIndexUnion::B(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            ParticipantIndexUnion::A(_) => "A",
-            ParticipantIndexUnion::B(_) => "B",
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> ParticipantIndexUnionReader<'r> {
-        match self {
-            ParticipantIndexUnion::A(item) => item.as_reader().into(),
-            ParticipantIndexUnion::B(item) => item.as_reader().into(),
-        }
-    }
-}
-impl<'r> ParticipantIndexUnionReader<'r> {
-    pub const NAME: &'r str = "ParticipantIndexUnionReader";
-    pub fn as_slice(&self) -> &'r [u8] {
-        match self {
-            ParticipantIndexUnionReader::A(item) => item.as_slice(),
-            ParticipantIndexUnionReader::B(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            ParticipantIndexUnionReader::A(_) => 0,
-            ParticipantIndexUnionReader::B(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            ParticipantIndexUnionReader::A(_) => "A",
-            ParticipantIndexUnionReader::B(_) => "B",
-        }
-    }
-}
-#[derive(Clone)]
 pub struct App(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for App {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -3365,48 +3071,26 @@ impl ::core::fmt::Debug for Fund {
 }
 impl ::core::fmt::Display for Fund {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "index", self.index())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
+        use molecule::hex_string;
+        let raw_data = hex_string(&self.raw_data());
+        write!(f, "{}(0x{})", Self::NAME, raw_data)
     }
 }
 impl ::core::default::Default for Fund {
     fn default() -> Self {
-        let v: Vec<u8> = vec![13, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0];
+        let v: Vec<u8> = vec![0];
         Fund::new_unchecked(v.into())
     }
 }
 impl Fund {
-    pub const FIELD_COUNT: usize = 1;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
+    pub const TOTAL_SIZE: usize = 1;
+    pub const ITEM_SIZE: usize = 1;
+    pub const ITEM_COUNT: usize = 1;
+    pub fn nth0(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(0..1))
     }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn index(&self) -> ParticipantIndex {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[8..]) as usize;
-            ParticipantIndex::new_unchecked(self.0.slice(start..end))
-        } else {
-            ParticipantIndex::new_unchecked(self.0.slice(start..))
-        }
+    pub fn raw_data(&self) -> molecule::bytes::Bytes {
+        self.as_bytes()
     }
     pub fn as_reader<'r>(&'r self) -> FundReader<'r> {
         FundReader::new_unchecked(self.as_slice())
@@ -3434,7 +3118,7 @@ impl molecule::prelude::Entity for Fund {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().index(self.index())
+        Self::new_builder().set([self.nth0()])
     }
 }
 #[derive(Clone, Copy)]
@@ -3455,42 +3139,20 @@ impl<'r> ::core::fmt::Debug for FundReader<'r> {
 }
 impl<'r> ::core::fmt::Display for FundReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "index", self.index())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
+        use molecule::hex_string;
+        let raw_data = hex_string(&self.raw_data());
+        write!(f, "{}(0x{})", Self::NAME, raw_data)
     }
 }
 impl<'r> FundReader<'r> {
-    pub const FIELD_COUNT: usize = 1;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
+    pub const TOTAL_SIZE: usize = 1;
+    pub const ITEM_SIZE: usize = 1;
+    pub const ITEM_COUNT: usize = 1;
+    pub fn nth0(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[0..1])
     }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn index(&self) -> ParticipantIndexReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[8..]) as usize;
-            ParticipantIndexReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            ParticipantIndexReader::new_unchecked(&self.as_slice()[start..])
-        }
+    pub fn raw_data(&self) -> &'r [u8] {
+        self.as_slice()
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for FundReader<'r> {
@@ -3505,55 +3167,36 @@ impl<'r> molecule::prelude::Reader<'r> for FundReader<'r> {
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
         use molecule::verification_error as ve;
         let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
         }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        ParticipantIndexReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         Ok(())
     }
 }
-#[derive(Debug, Default)]
-pub struct FundBuilder {
-    pub(crate) index: ParticipantIndex,
+pub struct FundBuilder(pub(crate) [Byte; 1]);
+impl ::core::fmt::Debug for FundBuilder {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:?})", Self::NAME, &self.0[..])
+    }
+}
+impl ::core::default::Default for FundBuilder {
+    fn default() -> Self {
+        FundBuilder([Byte::default()])
+    }
 }
 impl FundBuilder {
-    pub const FIELD_COUNT: usize = 1;
-    pub fn index(mut self, v: ParticipantIndex) -> Self {
-        self.index = v;
+    pub const TOTAL_SIZE: usize = 1;
+    pub const ITEM_SIZE: usize = 1;
+    pub const ITEM_COUNT: usize = 1;
+    pub fn set(mut self, v: [Byte; 1]) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn nth0(mut self, v: Byte) -> Self {
+        self.0[0] = v;
         self
     }
 }
@@ -3561,18 +3204,10 @@ impl molecule::prelude::Builder for FundBuilder {
     type Entity = Fund;
     const NAME: &'static str = "FundBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1) + self.index.as_slice().len()
+        Self::TOTAL_SIZE
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.index.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.index.as_slice())?;
+        writer.write_all(self.0[0].as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -4489,7 +4124,7 @@ impl ::core::fmt::Display for ChannelWitness {
 }
 impl ::core::default::Default for ChannelWitness {
     fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0, 13, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0];
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0];
         ChannelWitness::new_unchecked(v.into())
     }
 }
