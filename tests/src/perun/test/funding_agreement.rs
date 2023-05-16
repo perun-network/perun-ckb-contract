@@ -1,12 +1,12 @@
 use ckb_occupied_capacity::Capacity;
-use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32};
+use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32, Uint64};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 use perun_common::perun_types::{
-    self, Balances, BalancesBuilder, ParticipantBuilder, SEC1EncodedPubKeyBuilder,
+    self, Balances, BalancesBuilder, ParticipantBuilder, SEC1EncodedPubKeyBuilder, CKByteDistribution,
 };
 
 use crate::perun;
@@ -83,7 +83,7 @@ impl FundingAgreement {
     /// mk_balances creates a Balances object from the funding agreement where the given indices
     /// already funded their part.
     pub fn mk_balances(&self, indices: Vec<u8>) -> Result<Balances, perun::Error> {
-        let uint128_balances = self.0.iter().fold(Ok(vec![]), |acc, entry| {
+        let uint64_balances: Vec<Uint64> = self.0.iter().fold(Ok(vec![]), |acc, entry| {
             match acc {
                 Ok(mut acc) => {
                     match indices.iter().find(|&&i| i == entry.index) {
@@ -108,11 +108,9 @@ impl FundingAgreement {
                 e => e,
             }
         })?;
-        let bals = match uint128_balances.try_into() {
-            Ok(bals) => bals,
-            Err(_) => return Err(perun::Error::from("could not convert balances")),
-        };
-        Ok(BalancesBuilder::default().set(bals).build())
+        let bals = CKByteDistribution::new_builder().nth0(uint64_balances.get(0).unwrap().clone()).nth1(uint64_balances.get(1).unwrap().clone()).build();
+
+        Ok(Balances::new_builder().ckbytes(bals).build())
     }
 
     pub fn expected_funding_for(&self, index: u8) -> Result<u64, perun::Error> {
