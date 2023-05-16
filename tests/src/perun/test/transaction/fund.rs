@@ -52,7 +52,7 @@ pub fn mk_fund(
     env: &harness::Env,
     args: FundArgs,
 ) -> Result<FundResult, perun::Error> {
-    let fund_action = redeemer!(fund!(args.party_index));
+    let fund_action = redeemer!(fund!());
     let witness_args = channel_witness!(fund_action);
     let wanted = args
         .funding_agreement
