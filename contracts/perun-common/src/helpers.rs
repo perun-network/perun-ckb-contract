@@ -15,8 +15,8 @@ use {
 
 use crate::error::Error;
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelState, ChannelStatus, ParticipantIndex,
-    ParticipantIndexUnion, SEC1EncodedPubKey,
+    Balances, Bool, BoolUnion, ChannelParameters, ChannelState, ChannelStatus,
+    SEC1EncodedPubKey,
 };
 
 impl Bool {
@@ -78,11 +78,9 @@ pub(crate) use redeemer;
 
 #[macro_export]
 macro_rules! fund {
-    ($index:expr) => {
+    () => {
         $crate::perun_types::ChannelWitnessUnion::Fund(
-            $crate::perun_types::Fund::new_builder()
-                .index($crate::perun_types::ParticipantIndex::from($index))
-                .build(),
+            $crate::perun_types::Fund::default(),
         )
     };
 }
@@ -115,34 +113,6 @@ macro_rules! dispute {
 }
 pub(crate) use dispute;
 
-impl ParticipantIndex {
-    pub fn to_idx(&self) -> usize {
-        match self.to_enum() {
-            ParticipantIndexUnion::A(_) => 0,
-            ParticipantIndexUnion::B(_) => 1,
-        }
-    }
-    pub fn idx_of_peer(&self) -> usize {
-        match self.to_enum() {
-            ParticipantIndexUnion::A(_) => 1,
-            ParticipantIndexUnion::B(_) => 0,
-        }
-    }
-}
-
-impl From<u8> for ParticipantIndex {
-    fn from(idx: u8) -> Self {
-        match idx {
-            0 => ParticipantIndex::new_builder()
-                .set(ParticipantIndexUnion::A(Default::default()))
-                .build(),
-            1 => ParticipantIndex::new_builder()
-                .set(ParticipantIndexUnion::B(Default::default()))
-                .build(),
-            _ => panic!("Invalid participant index"),
-        }
-    }
-}
 
 impl Balances {
     pub fn sum(&self) -> u64 {

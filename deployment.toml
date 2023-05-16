@@ -1,7 +1,18 @@
-# [[cells]]
-# name = "my_cell"
-# enable_type_id = false
-# location = { file = "build/release/my_cell" }
+[[cells]]
+name = "pcts"
+enable_type_id = false
+location = { file = "build/release/perun-channel-typescript" }
+
+[[cells]]
+name = "pcls"
+enable_type_id = false
+location = { file = "build/release/perun-channel-lockscript" }
+
+[[cells]]
+name = "pfls"
+enable_type_id = false
+location = { file = "build/release/perun-funds-lockscript" }
+
 #
 # # reference to on-chain cells
 # [[cells]]
@@ -20,8 +31,8 @@
 
 # # Replace with your own lock if you want to unlock deployed cells.
 # # For example the secp256k1 lock
-# [lock]
-# code_hash = "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8"
-# args = "0x0000000000000000000000000000000000000000"
-# hash_type = "type"
+[lock]
+code_hash = "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8"
+args = "0x826a847502a66ba161e4222840a300b2e2c98659"
+hash_type = "type"
 

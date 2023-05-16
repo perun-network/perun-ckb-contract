@@ -114,6 +114,9 @@ pub fn check_valid_start(
     new_status: &ChannelStatus,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
+    const FUNDER_INDEX: usize = 0;
+    const PEER_INDEX: usize = 1;
+
     debug!("check_valid_start");
 
     // Upon start of a channel, the channel constants are stored in the args field of the pcts output.
@@ -166,11 +169,11 @@ pub fn check_valid_start(
     //   initial state.
     // - The funding entry of the other party is untouched (=0).
     // - The funds are actually locked to the pfls with correct args.
-    verify_funding_in_status(0, &new_status.funding(), &new_status.state())?;
+    verify_funding_in_status(FUNDER_INDEX, &new_status.funding(), &new_status.state())?;
     debug!("verify_funding_in_status passed");
-    verify_funding_is_zero_at_index(1, &new_status.funding())?;
+    verify_funding_is_zero_at_index(PEER_INDEX, &new_status.funding())?;
     debug!("verify_funding_is_zero_at_index passed");
-    verify_funding_in_outputs(0, &new_status.state().balances(), channel_constants)?;
+    verify_funding_in_outputs(FUNDER_INDEX, &new_status.state().balances(), channel_constants)?;
     debug!("verify_funding_in_outputs passed");
 
     // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
@@ -210,7 +213,9 @@ pub fn check_valid_progress(
     debug!("verify_channel_continues_locked passed");
 
     match witness.to_enum() {
-        ChannelWitnessUnion::Fund(f) => {
+        ChannelWitnessUnion::Fund(_) => {
+            const FUNDER_INDEX: usize = 1;
+            const PEER_INDEX: usize = 0;
             debug!("ChannelWitnessUnion::Fund");
 
             // The funding array in a channel status reflects how much each party has funded up to that point.
@@ -224,7 +229,7 @@ pub fn check_valid_progress(
 
             // Funding status of the peer must be untouched, funding for the other party is not allowed.
             verify_funding_unchanged(
-                f.index().idx_of_peer(),
+                PEER_INDEX,
                 &old_status.funding(),
                 &new_status.funding(),
             )?;
@@ -233,14 +238,14 @@ pub fn check_valid_progress(
             // We verify that both the new status reflects that funding is complete for this party and that
             // the funds are actually locked to the pfls with correct args in the outputs of this transaction.
             verify_funding_in_status(
-                f.index().to_idx(),
+                FUNDER_INDEX,
                 &new_status.funding(),
                 &new_status.state(),
             )?;
             debug!("verify_funding_in_status passed");
 
             verify_funding_in_outputs(
-                f.index().to_idx(),
+                FUNDER_INDEX,
                 &old_status.state().balances(),
                 channel_constants,
             )?;
