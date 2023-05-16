@@ -13,7 +13,7 @@ use {
     molecule::prelude::{vec, Vec},
 };
 
-use crate::error::Error;
+use crate::{error::Error, perun_types::{CKByteDistribution, SUDTDistribution, SUDTAllocation}};
 use crate::perun_types::{
     Balances, Bool, BoolUnion, ChannelParameters, ChannelState, ChannelStatus,
     SEC1EncodedPubKey,
@@ -113,8 +113,117 @@ macro_rules! dispute {
 }
 pub(crate) use dispute;
 
+impl SUDTDistribution {
+    pub fn sum(&self) -> u128 {
+        let a: u128 = self.nth0().unpack();
+        let b: u128 = self.nth1().unpack();
+        a + b
+    }
+
+    pub fn equal(&self, other: &Balances) -> bool {
+        self.as_slice()[..] == other.as_slice()[..]
+    }
+
+    pub fn get(&self, i: usize) -> Result<u128, Error> {
+        match i {
+            0 => Ok(self.nth0().unpack()),
+            1 => Ok(self.nth1().unpack()),
+            _ => Err(Error::IndexOutOfBound),
+        }
+    }
+}
 
 impl Balances {
+    pub fn zero_at_index(&self, idx: usize) -> Result<bool, Error> {
+        if self.ckbytes().get(idx)? != 0u64 {
+            return Ok(false);
+        }
+        for sb in self.sudts().into_iter() {
+            if sb.distribution().get(idx)? != 0u128 {
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    }
+
+    pub fn equal_at_index(&self, other: &Balances, idx: usize) -> Result<bool, Error> {
+        if self.ckbytes().get(idx)? != other.ckbytes().get(idx)? {
+            return Ok(false);
+        }
+        if self.sudts().len() != other.sudts().len() {
+            return Ok(false);
+        }
+        for (i, sb) in self.sudts().into_iter().enumerate() {
+            let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
+            if sb.asset().as_slice() != other_sb.as_slice() {
+                return Ok(false);
+            }
+            if sb.distribution().get(idx)? != other_sb.distribution().get(idx)? {
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    }
+
+    pub fn equal_in_sum(&self, other: &Balances) -> Result<bool, Error> {
+        if self.ckbytes().sum() != other.ckbytes().sum() {
+            return Ok(false);
+        }
+        if self.sudts().len() != other.sudts().len() {
+            return Ok(false);
+        }
+        for (i, sb) in self.sudts().into_iter().enumerate() {
+            let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
+            if sb.asset().as_slice() != other_sb.as_slice() {
+                return Ok(false);
+            }
+            if sb.distribution().sum() != other_sb.distribution().sum() {
+                return Ok(false);
+            }
+        }
+        return Ok(true)
+    }
+
+    pub fn equal(&self, other: &Balances) -> bool {
+        self.as_slice()[..] == other.as_slice()[..]
+    }
+}
+
+impl SUDTAllocation {
+
+    pub fn get_locked_ckbytes(&self) -> u64 {
+        let mut sum: u64 = 0u64;
+        for sudt in self.clone().into_iter() {
+            let min_cap: u64 = sudt.asset().max_capacity().unpack();
+            sum += min_cap;
+        }
+        return sum;
+    }
+
+    pub fn get_distribution(&self, sudt: &Script) -> Result<(usize, SUDTDistribution), Error> {
+        for (i, sb) in self.clone().into_iter().enumerate() {
+            if sb.asset().type_script().as_slice() == sudt.as_slice() {
+                return Ok((i, sb.distribution()));
+            }
+        }
+        return Err(Error::InvalidSUDT);
+    }
+
+    pub fn fully_represented(&self, idx: usize, values: &[u128]) -> Result<bool, Error> {
+        if values.len() < self.len() {
+            return Ok(false)
+        }
+        for (i, sb) in self.clone().into_iter().enumerate() {
+            let v = sb.distribution().get(idx)?;
+            if values[i] < v {
+                return Ok(false)
+            }
+        }
+        return Ok(true)
+    }
+}
+
+impl CKByteDistribution {
     pub fn sum(&self) -> u64 {
         let a: u64 = self.nth0().unpack();
         let b: u64 = self.nth1().unpack();
@@ -134,7 +243,7 @@ impl Balances {
     }
 }
 
-pub fn geq_components(fst: &Balances, snd: &Balances) -> bool {
+pub fn geq_components(fst: &CKByteDistribution, snd: &CKByteDistribution) -> bool {
     let a_fst: u64 = fst.nth0().unpack();
     let a_snd: u64 = snd.nth0().unpack();
     let b_fst: u64 = fst.nth1().unpack();
@@ -158,7 +267,8 @@ impl ChannelStatus {
     /// set_funded sets the ChannelStatus to funded and fills the balances with the given amount.
     /// NOTE: This function expects the given amount to be for the last index!
     pub fn mk_funded(self, amount: u64) -> ChannelStatus {
-        let funding = self.funding().as_builder().nth1(amount.pack()).build();
+        let funding_ckbytes = self.funding().ckbytes().as_builder().nth1(amount.pack()).build();
+        let funding = self.funding().as_builder().ckbytes(funding_ckbytes).build();
         self.clone()
             .as_builder()
             .funding(funding)
@@ -183,12 +293,13 @@ impl ChannelState {
         self,
         mk_lock_script: impl FnMut(u8) -> Script,
     ) -> Vec<(CellOutput, bytes::Bytes)> {
-        self.balances().mk_close_outputs(mk_lock_script)
+        self.balances().ckbytes().mk_close_outputs(mk_lock_script)
+        // TODO: Add SUDT outputs
     }
 }
 
 #[cfg(feature = "std")]
-impl Balances {
+impl CKByteDistribution {
     pub fn mk_close_outputs(
         self,
         mut mk_lock_script: impl FnMut(u8) -> Script,
@@ -212,6 +323,40 @@ impl Balances {
                 bytes::Bytes::new(),
             ),
         ]
+    }
+}
+
+#[cfg(feature = "std")]
+impl SUDTAllocation {
+    pub fn mk_close_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        let mut outputs: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
+        for (i, balance) in self.into_iter().enumerate() {
+            let udt_type = balance.asset().type_script();
+            let udt_type_opt = ScriptOpt::new_builder().set(Some(udt_type)).build();
+            let cap: u64 = balance.asset().max_capacity().unpack();
+            outputs.push((
+                CellOutput::new_builder()
+                    .capacity(cap.pack())
+                    .lock(mk_lock_script(i as u8))
+                    .type_(udt_type_opt.clone())
+                    .build(),
+                bytes::Bytes::from(balance.distribution().nth0().unpack().to_le_bytes().to_vec()),
+            ));
+            outputs.push(
+                (
+                    CellOutput::new_builder()
+                        .capacity(cap.pack())
+                        .lock(mk_lock_script(i as u8))
+                        .type_(udt_type_opt.clone())
+                        .build(),
+                    bytes::Bytes::from(balance.distribution().nth1().unpack().to_le_bytes().to_vec()),
+                )
+            );
+        }
+        return outputs
     }
 }
 

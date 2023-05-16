@@ -1,8 +1,8 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+use core::{result::Result};
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc;
+use alloc::{self, vec};
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
@@ -10,12 +10,12 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{
         bytes::Bytes,
-        packed::Byte32,
+        packed::{Byte32, Script},
         prelude::*,
     },
     debug,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
+        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash,
         load_header, load_script, load_script_hash, load_transaction, load_witness_args,
     }, syscalls::{SysError, self},
 };
@@ -28,6 +28,8 @@ use perun_common::{
     },
     sig::verify_signature,
 };
+
+const SUDT_MIN_LEN: usize = 16;
 
 /// ChannelAction describes what kind of interaction with the channel is currently happening.
 ///
@@ -165,8 +167,8 @@ pub fn check_valid_start(
 
     // Here we verify that the first party completes its funding according to protocol.
     // This includes:
-    // - The funding entry of the first party in the new status is equal to the balance entry of the first party in the
-    //   initial state.
+    // - The funding of the first party in the new status is equal to the balance of the first party in the
+    //   initial state (across ckbytes and sudt assets).
     // - The funding entry of the other party is untouched (=0).
     // - The funds are actually locked to the pfls with correct args.
     verify_funding_in_status(FUNDER_INDEX, &new_status.funding(), &new_status.state())?;
@@ -177,7 +179,7 @@ pub fn check_valid_start(
     debug!("verify_funding_in_outputs passed");
 
     // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
-    verify_funded_status(new_status)?;
+    verify_funded_status(new_status, true)?;
     debug!("verify_funded_status passed");
 
     // We verify that the channel status is not disputed upon start.
@@ -257,7 +259,7 @@ pub fn check_valid_progress(
             debug!("verify_status_not_disputed passed");
 
             // We check that the funded bit in the channel status is set to true, iff the funding is complete.
-            verify_funded_status(&new_status)?;
+            verify_funded_status(&new_status, false)?;
             debug!("verify_funded_status passed");
             Ok(())
         }
@@ -330,7 +332,7 @@ pub fn check_valid_close(
             debug!("verify_status_not_funded passed");
 
             // We verify that every party is payed the amount of funds that it has locked to the channel so far.
-            verify_all_payed(&old_status.funding(), channel_capacity, channel_constants)?;
+            verify_all_payed(&old_status.funding(), channel_capacity, channel_constants, true)?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -345,7 +347,7 @@ pub fn check_valid_close(
             debug!("verify_time_lock_expired passed");
             verify_status_disputed(old_status)?;
             debug!("verify_status_disputed passed");
-            verify_all_payed(&old_status.funding(), channel_capacity, channel_constants)?;
+            verify_all_payed(&old_status.funding(), channel_capacity, channel_constants, false)?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -369,7 +371,7 @@ pub fn check_valid_close(
                 &channel_constants.params().party_b().pub_key(),
             )?;
             // We verify that each party is payed according to the balance distribution in the final state.
-            verify_all_payed(&c.state().balances(), channel_capacity, channel_constants)?;
+            verify_all_payed(&c.state().balances(), channel_capacity, channel_constants, false)?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -434,10 +436,10 @@ pub fn verify_equal_sum_of_balances(
     old_balances: &Balances,
     new_balances: &Balances,
 ) -> Result<(), Error> {
-    if old_balances.sum() == new_balances.sum() {
-        return Ok(());
+    if !old_balances.equal_in_sum(new_balances)? {
+        return Err(Error::SumOfBalancesNotEqual);
     }
-    Err(Error::SumOfBalancesNotEqual)
+    Ok(())
 }
 
 pub fn verify_channel_continues_locked() -> Result<(), Error> {
@@ -477,7 +479,7 @@ pub fn verify_funding_unchanged(
     old_funding: &Balances,
     new_funding: &Balances,
 ) -> Result<(), Error> {
-    if old_funding.get(idx_of_peer)? != new_funding.get(idx_of_peer)? {
+    if !old_funding.equal_at_index(new_funding, idx_of_peer)? {
         return Err(Error::FundingChanged);
     }
     Ok(())
@@ -488,37 +490,34 @@ pub fn verify_funding_in_status(
     new_funding: &Balances,
     initial_state: &ChannelState,
 ) -> Result<(), Error> {
-    if new_funding.get(idx)? != initial_state.balances().get(idx)? {
+    if !initial_state.balances().equal_at_index(new_funding, idx)? {
         return Err(Error::FundingNotInStatus);
     }
     Ok(())
 }
 
-// Note: To support UDT Assets, this function needs to be extended to check the presence of an amount of the asset instead of the capacity.
 pub fn verify_funding_in_outputs(
     idx: usize,
     initial_balance: &Balances,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let to_fund = initial_balance.get(idx)?;
+    let ckbytes_locked_for_sudts = initial_balance.sudts().get_locked_ckbytes();
+    let to_fund = initial_balance.ckbytes().get(idx)? + ckbytes_locked_for_sudts;
     if to_fund == 0 {
         return Ok(());
     }
+    
+    let mut udt_sum = vec![0u128, initial_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+
     let expected_pcts_script_hash = load_script_hash()?;
     let outputs = load_transaction()?.raw().outputs();
     let expected_pfls_code_hash = channel_constants.pfls_code_hash().unpack();
     let expected_pfls_hash_type = channel_constants.pfls_hash_type();
     let mut capacity_sum: u64 = 0;
-    for output in outputs.into_iter() {
+    for (i, output) in outputs.into_iter().enumerate() {
         if output.lock().code_hash().unpack()[..] == expected_pfls_code_hash[..]
             && output.lock().hash_type().eq(&expected_pfls_hash_type)
         {
-            // Currently we only support CKBytes as asset and CKBytes locked to the channel
-            // with the pfls may not have a type script.
-            if output.type_().is_some() {
-                return Err(Error::TypeScriptInPFLSOutput);
-            }
-
             let output_lock_args: Bytes = output.lock().args().unpack();
             let script_hash_in_pfls_args = Byte32::from_slice(&output_lock_args)?.unpack();
             if script_hash_in_pfls_args[..] == expected_pcts_script_hash[..] {
@@ -526,19 +525,30 @@ pub fn verify_funding_in_outputs(
             } else {
                 return Err(Error::InvalidPFLSInOutputs);
             }
+            if output.type_().is_some() {
+                let (sudt_idx, amount) = get_sudt_amout(initial_balance, i, &output.type_().to_opt().expect("checked above"))?;
+                udt_sum[sudt_idx] += amount;
+            }
         }
     }
     if capacity_sum != to_fund {
         return Err(Error::OwnFundingNotInOutputs);
     }
+    if !initial_balance.sudts().fully_represented(idx, &udt_sum)? {
+        return Err(Error::OwnFundingNotInOutputs);
+    }
+
     Ok(())
 }
 
-pub fn verify_funded_status(status: &ChannelStatus) -> Result<(), Error> {
-    if status.funded().to_bool() == status.state().balances().equal(&status.funding()) {
-        return Ok(());
+pub fn verify_funded_status(status: &ChannelStatus, is_start: bool) -> Result<(), Error> {
+    if status.funded().to_bool() != status.state().balances().equal(&status.funding()){
+        return Err(Error::FundedBitStatusNotCorrect);
     }
-    Err(Error::FundedBitStatusNotCorrect)
+    if is_start && status.funded().to_bool() && status.state().balances().sudts().len() != 0 {
+        return Err(Error::FundedBitStatusNotCorrect);
+    }
+    Ok(())
 }
 
 pub fn verify_status_not_funded(status: &ChannelStatus) -> Result<(), Error> {
@@ -616,8 +626,8 @@ pub fn verify_state_valid_as_start(
 
     // We verify that each participant's initial balance is at least the minimum capacity of a PFLS (or zero),
     // to ensure that funding is possible for the initial balance distribution.
-    let balance_a = state.balances().get(0)?;
-    let balance_b = state.balances().get(1)?;
+    let balance_a = state.balances().ckbytes().get(0)?;
+    let balance_b = state.balances().ckbytes().get(1)?;
     if balance_a < pfls_min_capacity && balance_a != 0 {
         return Err(Error::BalanceBelowPFLSMinCapacity);
     }
@@ -660,7 +670,8 @@ pub fn verify_status_disputed(status: &ChannelStatus) -> Result<(), Error> {
 }
 
 pub fn verify_funding_is_zero_at_index(idx: usize, funding: &Balances) -> Result<(), Error> {
-    if funding.get(idx)? != 0 {
+
+    if !funding.zero_at_index(idx)? {
         return Err(Error::FundingNotZero);
     }
     Ok(())
@@ -670,6 +681,7 @@ pub fn verify_all_payed(
     final_balance: &Balances,
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
+    is_abort: bool,
 ) -> Result<(), Error> {
     debug!("verify_all_payed");
 
@@ -683,58 +695,90 @@ pub fn verify_all_payed(
         .party_b()
         .payment_min_capacity()
         .unpack();
-    let balance_a = final_balance.get(0)? + channel_capacity;
+
+    let reimburse_a = final_balance.sudts().get_locked_ckbytes();
+    let mut reimburse_b = 0u64;
+    if !is_abort {
+        reimburse_b = reimburse_a;
+    }
+
+
+    let ckbytes_balance_a = final_balance.ckbytes().get(0)? + channel_capacity + reimburse_a;
     let payment_script_hash_a = channel_constants
         .params()
         .party_a()
         .payment_script_hash()
         .unpack();
 
-    let balance_b = final_balance.get(1)?;
+    let ckbytes_balance_b = final_balance.ckbytes().get(1)? + reimburse_b;
     let payment_script_hash_b = channel_constants
         .params()
         .party_b()
         .payment_script_hash()
         .unpack();
 
-    let mut outputs_a = 0;
-    let mut outputs_b = 0;
+    let mut ckbytes_outputs_a = 0;
+    let mut ckbytes_outputs_b = 0;
 
-    let outputs_len = load_transaction()?.raw().outputs().len();
+    let mut udt_outputs_a = vec![0u128, final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+    let mut udt_outputs_b = vec![0u128, final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
 
-    // TODO: Maybe we want to check that there is only one paying output per party?
-    for i in 0..outputs_len {
+    let outputs = load_transaction()?.raw().outputs();
+
+    // Note: Currently it is allowed to pay out a party's CKBytes in the capacity field of an
+    // output, that is used as SUDT payment.
+    for (i, output) in outputs.into_iter().enumerate() {
         let output_lock_script_hash = load_cell_lock_hash(i, Source::Output)?;
-        let output_cap = load_cell_capacity(i, Source::Output)?;
 
-        // Note: We asserted that the payment_script_hashes of the parties differ upon channel
-        // creation.
         if output_lock_script_hash[..] == payment_script_hash_a[..] {
-            // Note: We currently only support CKBytes as asset, so any type script in a payment
-            // is considered malicious
-            if load_cell_type(i, Source::Output)?.is_some() {
-                return Err(Error::TypeScriptInPaymentOutput);
+            if output.type_().is_some() {
+                let (sudt_idx, amount) = get_sudt_amout(final_balance, i, &output.type_().to_opt().expect("checked above"))?; 
+                udt_outputs_a[sudt_idx] += amount;
             }
-            outputs_a = output_cap;
+            ckbytes_outputs_a = output.capacity().unpack();
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
-            // Note: We currently only support CKBytes as asset, so any type script in a payment
-            // is considered malicious
-            if load_cell_type(i, Source::Output)?.is_some() {
-                return Err(Error::TypeScriptInPaymentOutput);
+            if output.type_().is_some() {
+                let (sudt_idx, amount) = get_sudt_amout(final_balance, i, &output.type_().to_opt().expect("checked above"))?; 
+                udt_outputs_b[sudt_idx] += amount;
             }
-            outputs_b = output_cap;
+            ckbytes_outputs_b = output.capacity().unpack();
         }
     }
 
     // Parties with balances below the minimum capacity of the payment script
     // are not required to be payed.
-    if (balance_a > outputs_a && balance_a >= minimum_payment_a)
-        || (balance_b > outputs_b && balance_b >= minimum_payment_b)
+    if (ckbytes_balance_a > ckbytes_outputs_a && ckbytes_balance_a >= minimum_payment_a)
+        || (ckbytes_balance_b > ckbytes_outputs_b && ckbytes_balance_b >= minimum_payment_b)
     {
         return Err(Error::NotAllPayed);
     }
+
+    if !final_balance.sudts().fully_represented(0, &udt_outputs_a)? {
+        return Err(Error::NotAllPayed);
+    }
+    if !final_balance.sudts().fully_represented(1, &udt_outputs_b)? {
+        return Err(Error::NotAllPayed);
+    }
     Ok(())
+}
+
+
+// TODO: We might want to verify that the capacity of the sudt output is at least the max_capacity of the SUDT asset.
+//      Not doing so may result in the ability to steal funds up to the 
+//      (max_capacity of the SUDT asset - actual occupied capacity of the SUDT type script), if the SUDT asset's max_capacity
+//      is smaller than the payment_min_capacity of the participant. We do not do this for now, because it is an extreme edge case
+//      and the max_capacity of an SUDT should never be set that low.
+pub fn get_sudt_amout(balances: &Balances, output_idx: usize, type_script: &Script) -> Result<(usize, u128), Error> {
+    let mut buf  = [0u8; SUDT_MIN_LEN];
+
+    let (sudt_idx, _) = balances.sudts().get_distribution(type_script)?;
+    let sudt_data = load_cell_data(output_idx, Source::Output)?;
+    if sudt_data.len() < SUDT_MIN_LEN {
+        return Err(Error::InvalidSUDTDataLength);
+    }
+    buf.copy_from_slice(&sudt_data[..SUDT_MIN_LEN]);
+    return Ok((sudt_idx, u128::from_le_bytes(buf)));
 }
 
 pub fn verify_time_lock_expired(time_lock: u64) -> Result<(), Error> {
