@@ -250,10 +250,10 @@ pub fn check_valid_progress(
 
             // First, we verify the integrity of the channel state. For this, the following must hold:
             // - channel id is equal
-            // - version number is strictly increasing
+            // - version number is increasing (see verify_increasing_version_number)
             // - sum of balances is equal
             // - old state is not final
-            verify_channel_state_progression(&old_status.state(), &new_status.state())?;
+            verify_channel_state_progression(old_status, &new_status.state())?;
             debug!("verify_channel_state_progression passed");
 
             // One cannot dispute if funding is not complete.
@@ -368,15 +368,16 @@ pub fn load_witness() -> Result<ChannelWitness, Error> {
 }
 
 pub fn verify_increasing_version_number(
-    old_state: &ChannelState,
+    old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    debug!("verify_increasing_version_number old: {},  new: {}", old_state.version(), new_state.version());
+    debug!("verify_increasing_version_number old_state disputed:  {}", old_status.disputed().to_bool());
+    debug!("verify_increasing_version_number old: {},  new: {}", old_status.state().version(), new_state.version());
     // Allow registering initial state
-    if old_state.version().unpack() == 0 && new_state.version().unpack() == 0 {
+    if !old_status.disputed().to_bool() && old_status.state().version().unpack() == 0 && new_state.version().unpack() == 0 {
         return Ok(());
     }
-    if old_state.version().unpack() < new_state.version().unpack() {
+    if old_status.state().version().unpack() < new_state.version().unpack() {
         return Ok(());
     }
     Err(Error::VersionNumberNotIncreasing)
@@ -452,29 +453,6 @@ pub fn verify_equal_channel_state(
     }
     Err(Error::ChannelStateNotEqual)
 }
-
-pub fn verify_funding_unchanged(
-    idx_of_peer: usize,
-    old_funding: &Balances,
-    new_funding: &Balances,
-) -> Result<(), Error> {
-    if !old_funding.equal_at_index(new_funding, idx_of_peer)? {
-        return Err(Error::FundingChanged);
-    }
-    Ok(())
-}
-
-/*pub fn verify_funding_in_status(
-    idx: usize,
-    new_funding: &Balances,
-    initial_state: &ChannelState,
-) -> Result<(), Error> {
-    if !initial_state.balances().equal_at_index(new_funding, idx)? {
-        return Err(Error::FundingNotInStatus);
-    }
-    Ok(())
-}
-*/
 
 pub fn verify_funding_in_outputs(
     idx: usize,
@@ -577,13 +555,13 @@ pub fn verify_equal_channel_id(
 }
 
 pub fn verify_channel_state_progression(
-    old_state: &ChannelState,
+    old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    verify_equal_channel_id(old_state, new_state)?;
-    verify_increasing_version_number(old_state, new_state)?;
-    verify_equal_sum_of_balances(&old_state.balances(), &new_state.balances())?;
-    verify_state_not_finalized(old_state)?;
+    verify_equal_channel_id(&old_status.state(), new_state)?;
+    verify_increasing_version_number(old_status, new_state)?;
+    verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
+    verify_state_not_finalized(&old_status.state())?;
     Ok(())
 }
 
@@ -662,31 +640,6 @@ pub fn verify_status_disputed(status: &ChannelStatus) -> Result<(), Error> {
         return Err(Error::StatusNotDisputed);
     }
     Ok(())
-}
-
-/*pub fn verify_funding_is_zero_at_index(idx: usize, funding: &Balances) -> Result<(), Error> {
-
-    if !balances_zero_at_index(funding, idx)? {
-        return Err(Error::FundingNotZero);
-    }
-    Ok(())
-}
-*/
-
-pub fn balances_zero_at_index(b: &Balances, idx: usize) -> Result<bool, Error> {
-    debug!("balances_zero_at_index");
-    debug!("idx: {}", idx);
-    debug!("ckbytes: {}", b.ckbytes().get(idx)?);
-    debug!("sudt-len: {}", b.sudts().len());
-    if b.ckbytes().get(idx)? != 0u64 {
-        return Ok(false);
-    }
-    for sb in b.sudts().into_iter() {
-        if sb.distribution().get(idx)? != 0u128 {
-            return Ok(false);
-        }
-    }
-    return Ok(true);
 }
 
 pub fn verify_all_payed(
