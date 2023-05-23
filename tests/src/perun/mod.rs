@@ -6,6 +6,8 @@ pub use error::*;
 
 pub mod channel;
 
+pub mod mutators;
+
 pub mod test;
 
 mod action;

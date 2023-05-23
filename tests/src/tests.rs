@@ -1,3 +1,4 @@
+use crate::perun::mutators::{nop, bump_version};
 use crate::perun::random;
 
 use super::*;
@@ -57,6 +58,7 @@ fn channel_test_bench() -> Result<(), perun::Error> {
         test_close,
         test_force_close,
         test_multiple_disputes,
+        test_multiple_disputes_same_version,
     ]
     .iter()
     .map(|test| {
@@ -193,6 +195,43 @@ fn test_force_close(context: &mut Context, env: &perun::harness::Env) -> Result<
     })
 }
 
+fn test_multiple_disputes_same_version(
+    context: &mut Context,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(alice)
+            .valid()
+            .dispute()
+            .expect("disputing channel");
+
+        chan.with(bob)
+            .invalid()
+            .dispute()
+            .expect("disputing channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
 fn test_multiple_disputes(
     context: &mut Context,
     env: &perun::harness::Env,
@@ -220,7 +259,11 @@ fn test_multiple_disputes(
             .dispute()
             .expect("disputing channel");
 
-        chan.with(bob).valid().dispute().expect("disputing channel");
+        chan.with(bob)
+            .valid()
+            .update(bump_version())
+            .dispute()
+            .expect("disputing channel");
 
         chan.assert();
         Ok(())
