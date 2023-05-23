@@ -79,6 +79,7 @@ pub enum Error {
     TypeScriptInPFLSOutput,
     InvalidSUDT,
     InvalidSUDTDataLength,
+    DecreasingAmount,
 }
 
 impl From<SysError> for Error {
