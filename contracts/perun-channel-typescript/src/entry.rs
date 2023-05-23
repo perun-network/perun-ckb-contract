@@ -165,16 +165,7 @@ pub fn check_valid_start(
     )?;
     debug!("verify_state_valid_as_start passed");
 
-    // Here we verify that the first party completes its funding according to protocol.
-    // This includes:
-    // - The funding of the first party in the new status is equal to the balance of the first party in the
-    //   initial state (across ckbytes and sudt assets).
-    // - The funding entry of the other party is untouched (=0).
-    // - The funds are actually locked to the pfls with correct args.
-    verify_funding_in_status(FUNDER_INDEX, &new_status.funding(), &new_status.state())?;
-    debug!("verify_funding_in_status passed");
-    verify_funding_is_zero_at_index(PEER_INDEX, &new_status.funding())?;
-    debug!("verify_funding_is_zero_at_index passed");
+    // Here we verify that the first party completes its funding and that itsfunds are actually locked to the pfls with correct args.
     verify_funding_in_outputs(FUNDER_INDEX, &new_status.state().balances(), channel_constants)?;
     debug!("verify_funding_in_outputs passed");
 
@@ -228,23 +219,6 @@ pub fn check_valid_progress(
             // Funding an already funded status is invalid.
             verify_status_not_funded(&old_status)?;
             debug!("verify_status_not_funded passed");
-
-            // Funding status of the peer must be untouched, funding for the other party is not allowed.
-            verify_funding_unchanged(
-                PEER_INDEX,
-                &old_status.funding(),
-                &new_status.funding(),
-            )?;
-            debug!("verify_funding_unchanged passed");
-
-            // We verify that both the new status reflects that funding is complete for this party and that
-            // the funds are actually locked to the pfls with correct args in the outputs of this transaction.
-            verify_funding_in_status(
-                FUNDER_INDEX,
-                &new_status.funding(),
-                &new_status.state(),
-            )?;
-            debug!("verify_funding_in_status passed");
 
             verify_funding_in_outputs(
                 FUNDER_INDEX,
@@ -332,7 +306,7 @@ pub fn check_valid_close(
             debug!("verify_status_not_funded passed");
 
             // We verify that every party is payed the amount of funds that it has locked to the channel so far.
-            verify_all_payed(&old_status.funding(), channel_capacity, channel_constants, true)?;
+            verify_all_payed(&old_status.state().balances().clear_index(1)?, channel_capacity, channel_constants, true)?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -347,7 +321,7 @@ pub fn check_valid_close(
             debug!("verify_time_lock_expired passed");
             verify_status_disputed(old_status)?;
             debug!("verify_status_disputed passed");
-            verify_all_payed(&old_status.funding(), channel_capacity, channel_constants, false)?;
+            verify_all_payed(&old_status.state().balances(), channel_capacity, channel_constants, false)?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -397,6 +371,11 @@ pub fn verify_increasing_version_number(
     old_state: &ChannelState,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
+    debug!("verify_increasing_version_number old: {},  new: {}", old_state.version(), new_state.version());
+    // Allow registering initial state
+    if old_state.version().unpack() == 0 && new_state.version().unpack() == 0 {
+        return Ok(());
+    }
     if old_state.version().unpack() < new_state.version().unpack() {
         return Ok(());
     }
@@ -485,7 +464,7 @@ pub fn verify_funding_unchanged(
     Ok(())
 }
 
-pub fn verify_funding_in_status(
+/*pub fn verify_funding_in_status(
     idx: usize,
     new_funding: &Balances,
     initial_state: &ChannelState,
@@ -495,6 +474,7 @@ pub fn verify_funding_in_status(
     }
     Ok(())
 }
+*/
 
 pub fn verify_funding_in_outputs(
     idx: usize,
@@ -542,10 +522,25 @@ pub fn verify_funding_in_outputs(
 }
 
 pub fn verify_funded_status(status: &ChannelStatus, is_start: bool) -> Result<(), Error> {
-    if status.funded().to_bool() != status.state().balances().equal(&status.funding()){
-        return Err(Error::FundedBitStatusNotCorrect);
+    if !is_start {
+        if !status.funded().to_bool() {
+            return Err(Error::FundedBitStatusNotCorrect);
+        }
+        return Ok(());
     }
-    if is_start && status.funded().to_bool() && status.state().balances().sudts().len() != 0 {
+    if status.state().balances().ckbytes().get(1)? != 0 {
+        if status.funded().to_bool() {
+            return Err(Error::FundedBitStatusNotCorrect);
+        }
+        return Ok(());
+    }
+    if status.state().balances().sudts().len() != 0 {
+        if status.funded().to_bool() {
+            return Err(Error::FundedBitStatusNotCorrect);
+        }
+        return Ok(());
+    }
+    if !status.funded().to_bool() {
         return Err(Error::FundedBitStatusNotCorrect);
     }
     Ok(())
@@ -669,12 +664,29 @@ pub fn verify_status_disputed(status: &ChannelStatus) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_funding_is_zero_at_index(idx: usize, funding: &Balances) -> Result<(), Error> {
+/*pub fn verify_funding_is_zero_at_index(idx: usize, funding: &Balances) -> Result<(), Error> {
 
-    if !funding.zero_at_index(idx)? {
+    if !balances_zero_at_index(funding, idx)? {
         return Err(Error::FundingNotZero);
     }
     Ok(())
+}
+*/
+
+pub fn balances_zero_at_index(b: &Balances, idx: usize) -> Result<bool, Error> {
+    debug!("balances_zero_at_index");
+    debug!("idx: {}", idx);
+    debug!("ckbytes: {}", b.ckbytes().get(idx)?);
+    debug!("sudt-len: {}", b.sudts().len());
+    if b.ckbytes().get(idx)? != 0u64 {
+        return Ok(false);
+    }
+    for sb in b.sudts().into_iter() {
+        if sb.distribution().get(idx)? != 0u128 {
+            return Ok(false);
+        }
+    }
+    return Ok(true);
 }
 
 pub fn verify_all_payed(

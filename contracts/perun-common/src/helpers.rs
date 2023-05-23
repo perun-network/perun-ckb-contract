@@ -13,7 +13,7 @@ use {
     molecule::prelude::{vec, Vec},
 };
 
-use crate::{error::Error, perun_types::{CKByteDistribution, SUDTDistribution, SUDTAllocation}};
+use crate::{error::Error, perun_types::{CKByteDistribution, SUDTDistribution, SUDTAllocation, SUDTBalances}};
 use crate::perun_types::{
     Balances, Bool, BoolUnion, ChannelParameters, ChannelState, ChannelStatus,
     SEC1EncodedPubKey,
@@ -131,9 +131,31 @@ impl SUDTDistribution {
             _ => Err(Error::IndexOutOfBound),
         }
     }
+
+    pub fn clear_index(&self, idx: usize) -> Result<SUDTDistribution, Error> {
+        match idx {
+            0 => Ok(self.clone().as_builder().nth0(0u128.pack()).build()),
+            1 => Ok(self.clone().as_builder().nth1(0u128.pack()).build()),
+            _ => Err(Error::IndexOutOfBound),
+        }
+    }
+
+    pub fn to_array(&self) -> [u128; 2] {
+        [self.nth0().unpack(), self.nth1().unpack()]
+    }
 }
 
 impl Balances {
+
+    pub fn clear_index(&self, idx: usize) -> Result<Balances, Error> {
+        let ckbytes = self.ckbytes().clear_index(idx)?;
+        let mut sudts: Vec<SUDTBalances> = Vec::new();
+        for sb in self.sudts().into_iter() {
+            sudts.push(sb.clone().as_builder().distribution(sb.distribution().clear_index(idx)?).build());
+        }
+        Ok(self.clone().as_builder().ckbytes(ckbytes).sudts(SUDTAllocation::new_builder().set(sudts).build()).build())
+    }
+
     pub fn zero_at_index(&self, idx: usize) -> Result<bool, Error> {
         if self.ckbytes().get(idx)? != 0u64 {
             return Ok(false);
@@ -241,6 +263,14 @@ impl CKByteDistribution {
             _ => Err(Error::IndexOutOfBound),
         }
     }
+
+    pub fn clear_index(&self, idx: usize) -> Result<CKByteDistribution, Error> {
+        match idx {
+            0 => Ok(self.clone().as_builder().nth0(0u64.pack()).build()),
+            1 => Ok(self.clone().as_builder().nth1(0u64.pack()).build()),
+            _ => Err(Error::IndexOutOfBound),
+        }
+    }
 }
 
 pub fn geq_components(fst: &CKByteDistribution, snd: &CKByteDistribution) -> bool {
@@ -266,12 +296,9 @@ pub fn blake2b256(data: &[u8]) -> [u8; 32] {
 impl ChannelStatus {
     /// set_funded sets the ChannelStatus to funded and fills the balances with the given amount.
     /// NOTE: This function expects the given amount to be for the last index!
-    pub fn mk_funded(self, amount: u64) -> ChannelStatus {
-        let funding_ckbytes = self.funding().ckbytes().as_builder().nth1(amount.pack()).build();
-        let funding = self.funding().as_builder().ckbytes(funding_ckbytes).build();
+    pub fn mk_funded(self) -> ChannelStatus {
         self.clone()
             .as_builder()
-            .funding(funding)
             .funded(ctrue!())
             .build()
     }
@@ -291,10 +318,12 @@ impl ChannelStatus {
 impl ChannelState {
     pub fn mk_close_outputs(
         self,
-        mk_lock_script: impl FnMut(u8) -> Script,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
     ) -> Vec<(CellOutput, bytes::Bytes)> {
-        self.balances().ckbytes().mk_close_outputs(mk_lock_script)
-        // TODO: Add SUDT outputs
+        let mut ckbytes = self.balances().ckbytes().mk_close_outputs(&mut mk_lock_script);
+        let mut sudts = self.balances().sudts().mk_close_outputs(mk_lock_script);
+        ckbytes.append(&mut sudts);
+        return ckbytes;
     }
 }
 
