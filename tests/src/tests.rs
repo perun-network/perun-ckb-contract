@@ -48,6 +48,7 @@ fn test_signature() {
     verify_signature(&msg_hash, &sig_bytes, pubkey.as_slice()).expect("valid signature");
 }
 
+// TODO: Add mutator to channel state that can be passed to dispute, and close.
 #[test]
 fn channel_test_bench() -> Result<(), perun::Error> {
     let res = [

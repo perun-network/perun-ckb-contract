@@ -1,35 +1,42 @@
+use std::collections::HashMap;
+
 use ckb_occupied_capacity::Capacity;
-use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32, Uint64};
+use ckb_testtool::ckb_types::packed::{Byte as PackedByte, Byte32, Uint64, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 use perun_common::perun_types::{
-    self, Balances, BalancesBuilder, ParticipantBuilder, SEC1EncodedPubKeyBuilder, CKByteDistribution,
+    self, Balances, BalancesBuilder, ParticipantBuilder, SEC1EncodedPubKeyBuilder, CKByteDistribution, SUDTAsset, SUDTAllocation, SUDTBalances, SUDTDistribution,
 };
 
 use crate::perun;
 
 #[derive(Debug, Clone)]
-pub struct FundingAgreement(Vec<FundingAgreementEntry>);
+pub struct FundingAgreement{
+    entries: Vec<FundingAgreementEntry>, 
+    register: AssetRegister,
+}
 
 impl FundingAgreement {
     pub fn new_with_capacities<P: perun::Account>(caps: Vec<(P, u64)>) -> Self {
-        FundingAgreement(
-            caps.iter()
+        FundingAgreement{
+            entries: caps.iter()
                 .enumerate()
                 .map(|(i, (acc, c))| FundingAgreementEntry {
-                    amounts: vec![(Asset::default(), *c)],
+                    ckbytes: *c,
+                    sudts: Vec::new(),
                     index: i as u8,
                     pub_key: acc.public_key(),
                 })
                 .collect(),
-        )
+            register: AssetRegister::new(),
+            }
     }
 
     pub fn content(&self) -> &Vec<FundingAgreementEntry> {
-        &self.0
+        &self.entries
     }
 
     pub fn mk_participants(
@@ -38,7 +45,7 @@ impl FundingAgreement {
         env: &perun::harness::Env,
         payment_min_capacity: Capacity,
     ) -> Vec<perun_types::Participant> {
-        self.0
+        self.entries
             .iter()
             .map(|entry| {
                 let sec1_encoded_bytes: Vec<_> = entry
@@ -83,64 +90,76 @@ impl FundingAgreement {
     /// mk_balances creates a Balances object from the funding agreement where the given indices
     /// already funded their part.
     pub fn mk_balances(&self, indices: Vec<u8>) -> Result<Balances, perun::Error> {
-        let uint64_balances: Vec<Uint64> = self.0.iter().fold(Ok(vec![]), |acc, entry| {
-            match acc {
-                Ok(mut acc) => {
-                    match indices.iter().find(|&&i| i == entry.index) {
-                        Some(_) => {
-                            // We found the index in the list of funded indices, we expect the required
-                            // amount for assets to be funded.
-                            if let Some((Asset(0), amount)) = entry.amounts.iter().next() {
-                                acc.push(amount.pack());
-                                return Ok(acc);
-                            } else {
-                                return Err(perun::Error::from("unknown asset"));
-                            };
-                        }
-                        None => {
-                            // We did not find the index in the list of funded indices, the client
-                            // identified by this index did not fund, yet.
-                            acc.push(0u64.pack());
-                            Ok(acc)
-                        }
-                    }
-                }
-                e => e,
+        let mut ckbytes = [0u64; 2];
+        let sudts = self.register.get_SUDTAssets();
+        let mut sudt_dist: Vec<[u128; 2]> = Vec::new();
+        for _ in 0..sudts.len() {
+            sudt_dist.push([0u128, 0]);
+        }
+        for fae in self.entries.iter() {
+            if indices.iter().find(|&&i| i == fae.index).is_none() {
+                continue;
             }
-        })?;
-        let bals = CKByteDistribution::new_builder().nth0(uint64_balances.get(0).unwrap().clone()).nth1(uint64_balances.get(1).unwrap().clone()).build();
 
-        Ok(Balances::new_builder().ckbytes(bals).build())
+            ckbytes[fae.index as usize] = fae.ckbytes;
+            for (asset, amount) in fae.sudts.iter() {
+                sudt_dist[asset.0 as usize][fae.index as usize] = *amount;
+            }
+        }
+        let mut sudt_alloc: Vec<SUDTBalances> = Vec::new();
+        for (i, asset) in sudts.iter().enumerate() {
+            sudt_alloc.push(SUDTBalances::new_builder()
+            .asset(asset.clone())
+            .distribution(SUDTDistribution::new_builder()
+                .nth0(sudt_dist[i][0].pack())
+                .nth1(sudt_dist[i][1].pack())
+                .build())
+            .build());
+        }
+        
+        println!("mkbalances ckbytes: {:?}", ckbytes);
+
+        Ok(Balances::new_builder()
+            .ckbytes(CKByteDistribution::new_builder()
+                        .nth0(ckbytes[0].pack())
+                        .nth1(ckbytes[1].pack())
+                        .build())
+            .sudts(SUDTAllocation::new_builder().set(sudt_alloc).build())
+            .build())
     }
 
-    pub fn expected_funding_for(&self, index: u8) -> Result<u64, perun::Error> {
+    pub fn expected_ckbytes_funding_for(&self, index: u8) -> Result<u64, perun::Error> {
         let entry = self
-            .0
+            .entries
             .iter()
             .find(|entry| entry.index == index)
             .ok_or("unknown index")?;
-        entry
-            .amounts
-            .iter()
-            .find_map(|e| {
-                if let (Asset(0), amount) = e {
-                    Some(*amount)
-                } else {
-                    None
-                }
-            })
-            .ok_or("unsupported asset".into())
+        Ok(entry.ckbytes)
     }
+    pub fn expected_sudts_funding_for(&self, index: u8) -> Result<Vec<(Script, Capacity, u128)>, perun::Error> {
+        let entry = self.entries
+            .iter()
+            .find(|entry| entry.index == index)
+            .ok_or("unknown index")?;
+        entry.sudts.iter().map(|(asset, amount)| {
+            let sudt_asset = self.register.get_SUDTAsset(asset).ok_or("unknown asset")?;
+            let sudt_script = sudt_asset.type_script();
+            let sudt_capacity = Capacity::shannons(sudt_asset.max_capacity().unpack());
+            Ok((sudt_script, sudt_capacity, *amount))
+        }).collect::<Result<Vec<(Script, Capacity, u128)>, perun::Error>>()
+    }
+
 }
 
 #[derive(Debug, Clone)]
 pub struct FundingAgreementEntry {
-    pub amounts: Vec<(Asset, u64)>,
+    pub ckbytes: u64,
+    pub sudts: Vec<(Asset, u128)>,
     pub index: u8,
     pub pub_key: PublicKey,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Asset(pub u32);
 
 impl Asset {
@@ -154,3 +173,32 @@ impl Default for Asset {
         Asset(0)
     }
 }
+
+#[derive(Debug, Clone)]
+struct AssetRegister {
+    counter: u32,
+    map: HashMap<Asset, SUDTAsset>,
+}
+
+impl AssetRegister {
+    fn new() -> Self {
+        AssetRegister {
+            counter: 0,
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn register_asset(&mut self, sudt_asset: SUDTAsset) -> Asset {
+        let asset = Asset(self.counter);
+        self.map.insert(asset, sudt_asset);
+        self.counter += 1;
+        return asset;
+    }
+    pub fn get_SUDTAsset(&self, asset: &Asset) -> Option<&SUDTAsset> {
+        self.map.get(asset)
+    }
+
+    pub fn get_SUDTAssets(&self) -> Vec<SUDTAsset> {
+        self.map.values().cloned().collect()
+    }
+} 

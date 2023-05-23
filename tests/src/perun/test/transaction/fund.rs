@@ -22,8 +22,7 @@ pub struct FundArgs {
     pub channel_cell: OutPoint,
     pub funding_agreement: FundingAgreement,
     pub party_index: u8,
-    pub my_funds_outpoint: OutPoint,
-    pub my_available_funds: Capacity,
+    pub inputs: Vec<(OutPoint, Capacity)>,
     pub pcts: Script,
     pub state: ChannelStatus,
 }
@@ -56,25 +55,26 @@ pub fn mk_fund(
     let witness_args = channel_witness!(fund_action);
     let wanted = args
         .funding_agreement
-        .expected_funding_for(args.party_index)?;
+        .expected_ckbytes_funding_for(args.party_index)?;
     let pfls = env.build_pfls(ctx, args.pcts.calc_script_hash().as_bytes());
     // TODO: Make sure enough funds available all cells!
     let fund_cell = CellOutput::new_builder()
         .capacity(wanted.into_capacity().pack())
         .lock(pfls)
         .build();
-    let exchange_cell = create_funding_from(args.my_available_funds, wanted.into_capacity())?;
-    let inputs = vec![
+    let my_available_funds = Capacity::shannons(args.inputs.iter().map(|(_, c)| c.as_u64()).sum());
+    let exchange_cell = create_funding_from(my_available_funds, wanted.into_capacity())?;
+    let mut inputs = vec![
         CellInput::new_builder()
             .previous_output(args.channel_cell)
             .build(),
-        CellInput::new_builder()
-            .previous_output(args.my_funds_outpoint)
-            .build(),
     ];
+    for (outpoint, _) in args.inputs.iter() {
+        inputs.push(CellInput::new_builder().previous_output(outpoint.clone()).build());
+    }
     // NOTE: mk_fund currently expects the be called for the last party funding the channel.
     // Otherwise the call to `mk_funded` returns a wrong channel state.
-    let updated_cs = args.state.mk_funded(wanted);
+    let updated_cs = args.state.mk_funded();
     let capacity_for_new_cs = env.min_capacity_for_channel(updated_cs.clone())?;
     let pcls = env.build_pcls(ctx, Default::default());
     let new_channel_cell = CellOutput::new_builder()

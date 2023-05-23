@@ -193,7 +193,10 @@ impl Env {
         context: &mut Context,
         party_index: u8,
         funding_agreement: &FundingAgreement,
-    ) -> Result<(OutPoint, Capacity), perun::Error> {
+    ) -> Result<Vec<(OutPoint, Capacity)>, perun::Error> {
+        // TODO: Handle UDT funds!
+        
+        /*
         let wanted_amounts = funding_agreement
             .content()
             .iter()
@@ -222,15 +225,18 @@ impl Env {
                 _else => return Err("invalid asset in FundingAgreement".into()),
             }
         };
-        self.create_funds_for_index(context, party_index, required_funds)
+        */
+        let mut funds = self.create_ckbytes_funds_for_index(context, party_index, funding_agreement.expected_ckbytes_funding_for(party_index)?)?;
+        funds.append(self.create_sudts_funds_for_index(context, party_index, funding_agreement.expected_sudts_funding_for(party_index)?)?.as_mut());
+        return Ok(funds);
     }
 
-    pub fn create_funds_for_index(
+    pub fn create_ckbytes_funds_for_index(
         &self,
         context: &mut Context,
         party_index: u8,
         required_funds: u64,
-    ) -> Result<(OutPoint, Capacity), perun::Error> {
+    ) -> Result<Vec<(OutPoint, Capacity)>, perun::Error> {
         // Create cell containing the required funds for this party.
         let my_output = CellOutput::new_builder()
             .capacity(required_funds.pack())
@@ -238,13 +244,28 @@ impl Env {
             .lock(self.build_lock_script(context, Bytes::from(vec![party_index])))
             .build();
         let cell = context.create_cell(my_output, Bytes::default());
-        Ok((cell, required_funds.into_capacity()))
+        Ok(vec!{(cell, required_funds.into_capacity())})
+    }
+
+    pub fn create_sudts_funds_for_index(&self, context: &mut Context, party_index: u8, required_funds: Vec<(Script, Capacity, u128)>) -> Result<Vec<(OutPoint, Capacity)>, perun::Error> {
+        let mut outs: Vec<(OutPoint, Capacity)> = Vec::new();
+        for (sudt_script, capacity, amount) in required_funds {
+            let my_output = CellOutput::new_builder()
+                .capacity(capacity.pack())
+                // Lock cell using the correct party index.
+                .lock(self.build_lock_script(context, Bytes::from(vec![party_index])))
+                .type_(Some(sudt_script).pack())
+                .build();
+            let cell = context.create_cell(my_output, Bytes::from(amount.to_le_bytes().to_vec()));
+            outs.push((cell, capacity));
+        }
+        Ok(outs)
     }
 
     pub fn create_min_cell_for_index(&self, context: &mut Context, party_index: u8) -> OutPoint {
-        self.create_funds_for_index(context, party_index, self.min_capacity_no_script.as_u64())
+        self.create_ckbytes_funds_for_index(context, party_index, self.min_capacity_no_script.as_u64())
             .unwrap()
-            .0
+            .get(0).unwrap().clone().0
     }
 
     pub fn build_initial_channel_state(
@@ -265,12 +286,10 @@ impl Env {
             .version(Default::default())
             .is_final(cfalse!())
             .build();
-        let funding_bals = funding_agreement.mk_balances([client_index].to_vec())?;
         let channel_status = ChannelStatusBuilder::default()
             .state(channel_state)
             .funded(cfalse!())
             .disputed(cfalse!())
-            .funding(funding_bals)
             .build();
         Ok(channel_status)
     }

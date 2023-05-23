@@ -22,8 +22,7 @@ pub struct OpenArgs {
     pub cid: ChannelId,
     pub funding_agreement: FundingAgreement,
     pub channel_token_outpoint: OutPoint,
-    pub my_funds_outpoint: OutPoint,
-    pub my_available_funds: Capacity,
+    pub inputs: Vec<(OutPoint, Capacity)>,
     pub party_index: u8,
     pub pcls_script: Script,
     pub pcts_script: Script,
@@ -55,14 +54,18 @@ pub fn mk_open(
     env: &harness::Env,
     args: OpenArgs,
 ) -> Result<OpenResult, perun::Error> {
-    let inputs = vec![
+    let mut inputs = vec![
         CellInput::new_builder()
             .previous_output(args.channel_token_outpoint)
             .build(),
-        CellInput::new_builder()
-            .previous_output(args.my_funds_outpoint)
-            .build(),
     ];
+    for (outpoint, _) in args.inputs.iter() {
+        inputs.push(
+            CellInput::new_builder()
+                .previous_output(outpoint.clone())
+                .build(),
+        );
+    }
     let initial_cs =
         env.build_initial_channel_state(args.cid, args.party_index, &args.funding_agreement)?;
     let capacity_for_cs = env.min_capacity_for_channel(initial_cs.clone())?;
@@ -73,13 +76,14 @@ pub fn mk_open(
         .build();
     let wanted = args
         .funding_agreement
-        .expected_funding_for(args.party_index)?;
+        .expected_ckbytes_funding_for(args.party_index)?;
     // TODO: Make sure enough funds available all cells!
     let fund_cell = CellOutput::new_builder()
         .capacity(wanted.into_capacity().pack())
         .lock(args.pfls_script)
         .build();
-    let exchange_cell = create_funding_from(args.my_available_funds, wanted.into_capacity())?;
+    let my_available_funds = Capacity::shannons(args.inputs.iter().map(|(_, c)| c.as_u64()).sum());
+    let exchange_cell = create_funding_from(my_available_funds, wanted.into_capacity())?;
     // NOTE: The ORDER here is important. We need to reference the outpoints later on by using the
     // correct index in the output array of the transaction we build.
     let outputs = vec![
