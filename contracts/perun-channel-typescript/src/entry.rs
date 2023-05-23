@@ -117,7 +117,6 @@ pub fn check_valid_start(
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
     const FUNDER_INDEX: usize = 0;
-    const PEER_INDEX: usize = 1;
 
     debug!("check_valid_start");
 
@@ -208,7 +207,6 @@ pub fn check_valid_progress(
     match witness.to_enum() {
         ChannelWitnessUnion::Fund(_) => {
             const FUNDER_INDEX: usize = 1;
-            const PEER_INDEX: usize = 0;
             debug!("ChannelWitnessUnion::Fund");
 
             // The funding array in a channel status reflects how much each party has funded up to that point.
@@ -297,6 +295,8 @@ pub fn check_valid_close(
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
     match channel_witness.to_enum() {
         ChannelWitnessUnion::Abort(_) => {
+            const PARTY_B_INDEX: usize = 1;
+
             debug!("ChannelWitnessUnion::Abort");
 
             // An abort can be performed at any time by a channel participant on a channel for which funding
@@ -306,7 +306,9 @@ pub fn check_valid_close(
             debug!("verify_status_not_funded passed");
 
             // We verify that every party is payed the amount of funds that it has locked to the channel so far.
-            verify_all_payed(&old_status.state().balances().clear_index(1)?, channel_capacity, channel_constants, true)?;
+            // If abourt is called, Party A must have fully funded the channel and Party B can not have funded
+            // the channel because of our funding protocol.
+            verify_all_payed(&old_status.state().balances().clear_index(PARTY_B_INDEX)?, channel_capacity, channel_constants, true)?;
             debug!("verify_all_payed passed");
             Ok(())
         }

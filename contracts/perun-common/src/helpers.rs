@@ -4,6 +4,7 @@ use blake2b_rs::Blake2bBuilder;
 use {
     ckb_occupied_capacity::Capacity, ckb_types::bytes, ckb_types::packed::*, ckb_types::prelude::*,
     std::vec::Vec,
+    crate::perun_types::ChannelState,
 };
 
 #[cfg(not(feature = "std"))]
@@ -15,7 +16,7 @@ use {
 
 use crate::{error::Error, perun_types::{CKByteDistribution, SUDTDistribution, SUDTAllocation, SUDTBalances}};
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelState, ChannelStatus,
+    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus,
     SEC1EncodedPubKey,
 };
 
@@ -74,7 +75,6 @@ macro_rules! redeemer {
             .build()
     };
 }
-pub(crate) use redeemer;
 
 #[macro_export]
 macro_rules! fund {
@@ -84,7 +84,6 @@ macro_rules! fund {
         )
     };
 }
-pub(crate) use fund;
 
 #[macro_export]
 macro_rules! close {
@@ -98,7 +97,6 @@ macro_rules! close {
         )
     };
 }
-pub(crate) use close;
 
 #[macro_export]
 macro_rules! dispute {
@@ -111,7 +109,6 @@ macro_rules! dispute {
         )
     };
 }
-pub(crate) use dispute;
 
 impl SUDTDistribution {
     pub fn sum(&self) -> u128 {
