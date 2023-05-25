@@ -4,7 +4,7 @@ use molecule::prelude::{Entity, Builder};
 use perun_common::perun_types::ChannelState;
 
 
-pub fn nop() -> impl Fn(&ChannelState) -> Result<ChannelState, perun::Error> {
+pub fn id() -> impl Fn(&ChannelState) -> Result<ChannelState, perun::Error> {
     |s| Ok(s.clone())
 }
 
