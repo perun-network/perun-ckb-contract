@@ -2,7 +2,7 @@ use blake2b_rs::Blake2bBuilder;
 
 #[cfg(feature = "std")]
 use {
-    ckb_occupied_capacity::Capacity, ckb_types::bytes, ckb_types::packed::*, ckb_types::prelude::*,
+    ckb_types::bytes, ckb_types::packed::*, ckb_types::prelude::*,
     std::vec::Vec,
     crate::perun_types::ChannelState,
 };
@@ -291,8 +291,7 @@ pub fn blake2b256(data: &[u8]) -> [u8; 32] {
 }
 
 impl ChannelStatus {
-    /// set_funded sets the ChannelStatus to funded and fills the balances with the given amount.
-    /// NOTE: This function expects the given amount to be for the last index!
+    // mk_funded creates a new ChannelStatus with the funded flag set to true.
     pub fn mk_funded(self) -> ChannelStatus {
         self.clone()
             .as_builder()
@@ -307,18 +306,29 @@ impl ChannelStatus {
         self,
         mk_lock_script: impl FnMut(u8) -> Script,
     ) -> Vec<(CellOutput, bytes::Bytes)> {
-        self.state().mk_close_outputs(mk_lock_script)
+        self.state().mk_outputs(mk_lock_script)
     }
 }
 
 #[cfg(feature = "std")]
 impl ChannelState {
-    pub fn mk_close_outputs(
+    pub fn mk_outputs(
+        self,
+        mk_lock_script: impl FnMut(u8) -> Script,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        return self.balances().mk_outputs(mk_lock_script, vec![0, 1]);
+    }
+}
+
+#[cfg(feature = "std")]
+impl Balances {
+    pub fn mk_outputs(
         self,
         mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>
     ) -> Vec<(CellOutput, bytes::Bytes)> {
-        let mut ckbytes = self.balances().ckbytes().mk_close_outputs(&mut mk_lock_script);
-        let mut sudts = self.balances().sudts().mk_close_outputs(mk_lock_script);
+        let mut ckbytes = self.ckbytes().mk_outputs(&mut mk_lock_script, indices.clone());
+        let mut sudts = self.sudts().mk_outputs(mk_lock_script, indices);
         ckbytes.append(&mut sudts);
         return ckbytes;
     }
@@ -326,61 +336,65 @@ impl ChannelState {
 
 #[cfg(feature = "std")]
 impl CKByteDistribution {
-    pub fn mk_close_outputs(
+    pub fn mk_outputs(
         self,
         mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>
     ) -> Vec<(CellOutput, bytes::Bytes)> {
-        let a = Capacity::shannons(self.nth0().unpack());
-        let b = Capacity::shannons(self.nth1().unpack());
         // TODO: Outputs should contain min-capacity for script size...
-        vec![
-            (
-                CellOutput::new_builder()
-                    .capacity(a.pack())
-                    .lock(mk_lock_script(0))
-                    .build(),
-                bytes::Bytes::new(),
-            ),
-            (
-                CellOutput::new_builder()
-                    .capacity(b.pack())
-                    .lock(mk_lock_script(1))
-                    .build(),
-                bytes::Bytes::new(),
-            ),
-        ]
+        indices.iter().fold(vec![], |mut acc: Vec<(CellOutput, bytes::Bytes)>, index|
+        {
+            let cap = self.get(index.clone() as usize).expect("invalid index");
+            acc.push(
+                (
+                    CellOutput::new_builder()
+                        .capacity(cap.pack())
+                        .lock(mk_lock_script(*index))
+                        .build(),
+                    bytes::Bytes::new(),
+                )
+            );
+            acc
+        })
+
     }
 }
 
 #[cfg(feature = "std")]
 impl SUDTAllocation {
-    pub fn mk_close_outputs(
+    pub fn mk_outputs(
         self,
         mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>
     ) -> Vec<(CellOutput, bytes::Bytes)> {
         let mut outputs: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
-        for (i, balance) in self.into_iter().enumerate() {
+        for (_, balance) in self.into_iter().enumerate() {
             let udt_type = balance.asset().type_script();
             let udt_type_opt = ScriptOpt::new_builder().set(Some(udt_type)).build();
             let cap: u64 = balance.asset().max_capacity().unpack();
-            outputs.push((
-                CellOutput::new_builder()
-                    .capacity(cap.pack())
-                    .lock(mk_lock_script(i as u8))
-                    .type_(udt_type_opt.clone())
-                    .build(),
-                bytes::Bytes::from(balance.distribution().nth0().unpack().to_le_bytes().to_vec()),
-            ));
-            outputs.push(
-                (
-                    CellOutput::new_builder()
-                        .capacity(cap.pack())
-                        .lock(mk_lock_script(i as u8))
-                        .type_(udt_type_opt.clone())
-                        .build(),
-                    bytes::Bytes::from(balance.distribution().nth1().unpack().to_le_bytes().to_vec()),
-                )
-            );
+            indices.iter().fold(vec![], |mut acc, f| {
+                if balance.distribution().get(*f as usize).expect("invalid index") == 0u128 {
+                    acc.push(
+                        (
+                            CellOutput::new_builder()
+                                .capacity(cap.pack())
+                                .lock(mk_lock_script(*f))
+                                .build(),
+                            bytes::Bytes::new(),
+                        )
+                    );
+                } else {
+                    outputs.push((
+                        CellOutput::new_builder()
+                            .capacity(cap.pack())
+                            .lock(mk_lock_script(*f))
+                            .type_(udt_type_opt.clone())
+                            .build(),
+                        bytes::Bytes::from(balance.distribution().get(*f as usize).expect("invalid index").to_le_bytes().to_vec()),
+                    ));
+                }
+                acc
+            });
         }
         return outputs
     }
