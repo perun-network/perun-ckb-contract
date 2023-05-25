@@ -62,9 +62,7 @@ impl Client {
         let (channel_token, channel_token_outpoint) = env.create_channel_token(ctx);
 
         let pcls = env.build_pcls(ctx, Default::default());
-        let pcls_code_hash = ctx
-            .get_cell_data_hash(&env.pcls_out_point)
-            .expect("pcls hash");
+        let pcls_code_hash = pcls.code_hash();
         let pfls_code_hash = ctx
             .get_cell_data_hash(&env.pfls_out_point)
             .expect("pfls hash");
