@@ -3,7 +3,7 @@ use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
         core::{TransactionBuilder, TransactionView},
-        prelude::{Builder, Entity, Pack, Unpack},
+        prelude::{Builder, Entity, Pack},
     },
     context::Context,
 };
@@ -14,7 +14,7 @@ use crate::perun::{
     test::{cell::FundingCell, transaction::common::channel_witness},
 };
 
-use super::common::create_cells;
+use super::common::{create_cells, add_cap_to_a};
 
 #[derive(Debug, Clone)]
 pub struct CloseArgs {
@@ -58,7 +58,7 @@ pub fn mk_close(
     ];
     inputs.extend(args.funds_cells.iter().cloned().map(|f| {
         CellInput::new_builder()
-            .previous_output(f.out_point)
+            .previous_output(f.outpoint())
             .build()
     }));
 
@@ -68,23 +68,10 @@ pub fn mk_close(
         env.pfls_script_dep.clone(),
         env.always_success_script_dep.clone(),
     ];
-
+    let channel_cap = env.min_capacity_for_channel(args.state.clone())?;
+    let balances = add_cap_to_a(&args.state.state().balances(), channel_cap);
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
-    let outputs = args.state.state().clone().mk_close_outputs(f);
-    let outputs = outputs
-        .iter()
-        .cloned()
-        .enumerate()
-        .map(|(i, (op, d))| {
-            let cap: u64 = op.capacity().unpack();
-            let min_amount = env.min_capacity_for_channel(args.state.clone())?;
-            let amount = match i {
-                0 => cap + min_amount.as_u64(),
-                _ => cap,
-            };
-            Ok((op.as_builder().capacity(amount.pack()).build(), d))
-        })
-        .collect::<Result<Vec<_>, perun::Error>>()?;
+    let outputs = balances.mk_outputs(f, vec![0, 1]);
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let close_action = redeemer!(close!(
