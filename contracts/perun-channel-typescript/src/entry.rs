@@ -651,7 +651,7 @@ pub fn verify_all_payed(
     is_abort: bool,
 ) -> Result<(), Error> {
     debug!("verify_all_payed");
-
+    debug!("is_abort: {}", is_abort);
     let minimum_payment_a = channel_constants
         .params()
         .party_a()
@@ -684,6 +684,9 @@ pub fn verify_all_payed(
         .payment_script_hash()
         .unpack();
 
+    debug!("ckbytes_balance_a: {}", ckbytes_balance_a);
+    debug!("ckbytes_balance_b: {}", ckbytes_balance_b);
+
     let mut ckbytes_outputs_a = 0;
     let mut ckbytes_outputs_b = 0;
 
@@ -712,6 +715,8 @@ pub fn verify_all_payed(
             ckbytes_outputs_b = output.capacity().unpack();
         }
     }
+    debug!("ckbytes_outputs_a: {}", ckbytes_outputs_a);
+    debug!("ckbytes_outputs_b: {}", ckbytes_outputs_b);
 
     // Parties with balances below the minimum capacity of the payment script
     // are not required to be payed.
