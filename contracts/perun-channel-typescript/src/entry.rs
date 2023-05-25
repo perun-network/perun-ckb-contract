@@ -425,8 +425,8 @@ pub fn verify_equal_sum_of_balances(
 }
 
 pub fn verify_channel_continues_locked() -> Result<(), Error> {
-    let input_lock_script = load_cell_lock(0, Source::Input)?;
-    let output_lock_script = load_cell_lock(0, Source::Output)?;
+    let input_lock_script = load_cell_lock(0, Source::GroupInput)?;
+    let output_lock_script = load_cell_lock(0, Source::GroupOutput)?;
     if input_lock_script.as_slice()[..] != output_lock_script.as_slice()[..] {
         return Err(Error::ChannelDoesNotContinue);
     }
