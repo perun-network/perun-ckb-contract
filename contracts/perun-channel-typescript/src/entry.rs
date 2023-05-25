@@ -374,7 +374,7 @@ pub fn verify_increasing_version_number(
     new_state: &ChannelState,
 ) -> Result<(), Error> {
     debug!("verify_increasing_version_number old_state disputed:  {}", old_status.disputed().to_bool());
-    debug!("verify_increasing_version_number old: {},  new: {}", old_status.state().version(), new_state.version());
+    debug!("verify_increasing_version_number old: {},  new: {}", old_status.state().version().unpack(), new_state.version().unpack());
     // Allow registering initial state
     if !old_status.disputed().to_bool() && old_status.state().version().unpack() == 0 && new_state.version().unpack() == 0 {
         return Ok(());
