@@ -705,14 +705,14 @@ pub fn verify_all_payed(
                 let (sudt_idx, amount) = get_sudt_amout(final_balance, i, &output.type_().to_opt().expect("checked above"))?; 
                 udt_outputs_a[sudt_idx] += amount;
             }
-            ckbytes_outputs_a = output.capacity().unpack();
+            ckbytes_outputs_a += output.capacity().unpack();
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
             if output.type_().is_some() {
                 let (sudt_idx, amount) = get_sudt_amout(final_balance, i, &output.type_().to_opt().expect("checked above"))?; 
                 udt_outputs_b[sudt_idx] += amount;
             }
-            ckbytes_outputs_b = output.capacity().unpack();
+            ckbytes_outputs_b += output.capacity().unpack();
         }
     }
     debug!("ckbytes_outputs_a: {}", ckbytes_outputs_a);
