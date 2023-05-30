@@ -246,7 +246,7 @@ where
     }
 
     /// finalize finalizes the channel state in use. It has to be called for
-    /// before successful close actions.
+    /// before successful close actions. It bumps the version of the channel state.
     pub fn finalize(&mut self) -> &mut Self {
         let status = self.channel_state.clone();
         let old_version: u64 = status.state().version().unpack();
