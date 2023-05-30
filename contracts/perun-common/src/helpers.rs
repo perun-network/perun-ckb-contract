@@ -137,6 +137,10 @@ impl SUDTDistribution {
         }
     }
 
+    pub fn from_array(a: [u128; 2]) -> Self {
+        SUDTDistribution::new_builder().nth0(a[0].pack()).nth1(a[1].pack()).build()
+    }
+
     pub fn to_array(&self) -> [u128; 2] {
         [self.nth0().unpack(), self.nth1().unpack()]
     }
@@ -267,6 +271,14 @@ impl CKByteDistribution {
             1 => Ok(self.clone().as_builder().nth1(0u64.pack()).build()),
             _ => Err(Error::IndexOutOfBound),
         }
+    }
+
+    pub fn from_array(array: [u64; 2]) -> Self {
+        CKByteDistribution::new_builder().nth0(array[0].pack()).nth1(array[1].pack()).build()
+    }
+
+    pub fn to_array(&self) -> [u64; 2] {
+        [self.nth0().unpack(), self.nth1().unpack()]
     }
 }
 
