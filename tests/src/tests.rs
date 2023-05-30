@@ -64,6 +64,7 @@ fn channel_test_bench() -> Result<(), perun::Error> {
         test_multi_asset_payment,
         test_multi_asset_abort,
         test_multi_asset_abort_zero_sudt_balance,
+        test_multi_asset_force_close,
     ]
     .iter()
     .map(|test| {
@@ -435,6 +436,49 @@ pub fn test_multi_asset_abort_zero_sudt_balance(
             .expect("opening channel");
 
         chan.with(alice).abort().expect("aborting channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
+fn test_multi_asset_force_close(
+    context: &mut Context,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let asset_funding = [
+        20u128,
+        30u128,
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.update(pay_ckbytes(Direction::AtoB, 50));
+        chan.update(pay_sudt(Direction::BtoA, 10, 0));
+
+        chan.with(bob).dispute().expect("disputing channel");
+        
+        chan.delay(env.challenge_duration);
+
+        chan.with(bob).force_close().expect("force closing channel");
 
         chan.assert();
         Ok(())
