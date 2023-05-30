@@ -208,7 +208,7 @@ impl Balances {
         }
         for (i, sb) in self.sudts().into_iter().enumerate() {
             let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
-            if sb.asset().as_slice() != other_sb.as_slice() {
+            if sb.asset().as_slice() != other_sb.asset().as_slice() {
                 return Ok(false);
             }
             if sb.distribution().sum() != other_sb.distribution().sum() {
