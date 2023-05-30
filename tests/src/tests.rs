@@ -62,6 +62,8 @@ fn channel_test_bench() -> Result<(), perun::Error> {
         test_multiple_disputes,
         test_multiple_disputes_same_version,
         test_multi_asset_payment,
+        test_multi_asset_abort,
+        test_multi_asset_abort_zero_sudt_balance,
     ]
     .iter()
     .map(|test| {
@@ -369,6 +371,70 @@ fn test_multi_asset_payment(
         chan.update(pay_sudt(Direction::BtoA, 10, 0));
 
         chan.with(alice).finalize().close().expect("closing channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
+pub fn test_multi_asset_abort(
+    context: &mut Context,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(0)?.as_u64(),
+        Capacity::bytes(0)?.as_u64(),
+    ];
+    let asset_funding = [
+        30u128,
+        20u128,
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(alice).abort().expect("aborting channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
+pub fn test_multi_asset_abort_zero_sudt_balance(
+    context: &mut Context,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(0)?.as_u64(),
+        Capacity::bytes(0)?.as_u64(),
+    ];
+    let asset_funding = [
+        0u128,
+        0u128,
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(alice).abort().expect("aborting channel");
 
         chan.assert();
         Ok(())
