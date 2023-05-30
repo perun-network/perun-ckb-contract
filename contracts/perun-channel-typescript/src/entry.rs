@@ -1,5 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::{result::Result};
+use core::result::Result;
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{self, vec};
@@ -15,9 +15,10 @@ use ckb_std::{
     },
     debug,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash,
-        load_header, load_script, load_script_hash, load_transaction, load_witness_args,
-    }, syscalls::{SysError, self},
+        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_header,
+        load_script, load_script_hash, load_transaction, load_witness_args,
+    },
+    syscalls::{self, SysError},
 };
 use perun_common::{
     error::Error,
@@ -165,7 +166,11 @@ pub fn check_valid_start(
     debug!("verify_state_valid_as_start passed");
 
     // Here we verify that the first party completes its funding and that itsfunds are actually locked to the pfls with correct args.
-    verify_funding_in_outputs(FUNDER_INDEX, &new_status.state().balances(), channel_constants)?;
+    verify_funding_in_outputs(
+        FUNDER_INDEX,
+        &new_status.state().balances(),
+        channel_constants,
+    )?;
     debug!("verify_funding_in_outputs passed");
 
     // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
@@ -308,7 +313,12 @@ pub fn check_valid_close(
             // We verify that every party is payed the amount of funds that it has locked to the channel so far.
             // If abourt is called, Party A must have fully funded the channel and Party B can not have funded
             // the channel because of our funding protocol.
-            verify_all_payed(&old_status.state().balances().clear_index(PARTY_B_INDEX)?, channel_capacity, channel_constants, true)?;
+            verify_all_payed(
+                &old_status.state().balances().clear_index(PARTY_B_INDEX)?,
+                channel_capacity,
+                channel_constants,
+                true,
+            )?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -323,7 +333,12 @@ pub fn check_valid_close(
             debug!("verify_time_lock_expired passed");
             verify_status_disputed(old_status)?;
             debug!("verify_status_disputed passed");
-            verify_all_payed(&old_status.state().balances(), channel_capacity, channel_constants, false)?;
+            verify_all_payed(
+                &old_status.state().balances(),
+                channel_capacity,
+                channel_constants,
+                false,
+            )?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -347,7 +362,12 @@ pub fn check_valid_close(
                 &channel_constants.params().party_b().pub_key(),
             )?;
             // We verify that each party is payed according to the balance distribution in the final state.
-            verify_all_payed(&c.state().balances(), channel_capacity, channel_constants, false)?;
+            verify_all_payed(
+                &c.state().balances(),
+                channel_capacity,
+                channel_constants,
+                false,
+            )?;
             debug!("verify_all_payed passed");
             Ok(())
         }
@@ -373,10 +393,20 @@ pub fn verify_increasing_version_number(
     old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    debug!("verify_increasing_version_number old_state disputed:  {}", old_status.disputed().to_bool());
-    debug!("verify_increasing_version_number old: {},  new: {}", old_status.state().version().unpack(), new_state.version().unpack());
+    debug!(
+        "verify_increasing_version_number old_state disputed:  {}",
+        old_status.disputed().to_bool()
+    );
+    debug!(
+        "verify_increasing_version_number old: {},  new: {}",
+        old_status.state().version().unpack(),
+        new_state.version().unpack()
+    );
     // Allow registering initial state
-    if !old_status.disputed().to_bool() && old_status.state().version().unpack() == 0 && new_state.version().unpack() == 0 {
+    if !old_status.disputed().to_bool()
+        && old_status.state().version().unpack() == 0
+        && new_state.version().unpack() == 0
+    {
         return Ok(());
     }
     if old_status.state().version().unpack() < new_state.version().unpack() {
@@ -466,8 +496,9 @@ pub fn verify_funding_in_outputs(
     if to_fund == 0 {
         return Ok(());
     }
-    
-    let mut udt_sum = vec![0u128, initial_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+
+    let mut udt_sum =
+        vec![0u128, initial_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
 
     let expected_pcts_script_hash = load_script_hash()?;
     let outputs = load_transaction()?.raw().outputs();
@@ -486,13 +517,20 @@ pub fn verify_funding_in_outputs(
                 return Err(Error::InvalidPFLSInOutputs);
             }
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amout(initial_balance, i, &output.type_().to_opt().expect("checked above"))?;
+                let (sudt_idx, amount) = get_sudt_amout(
+                    initial_balance,
+                    i,
+                    &output.type_().to_opt().expect("checked above"),
+                )?;
                 udt_sum[sudt_idx] += amount;
             }
         }
     }
     if capacity_sum != to_fund {
-        debug!("verify_funding_in_outputs: capacity_sum: {}, to_fund: {}", capacity_sum, to_fund);
+        debug!(
+            "verify_funding_in_outputs: capacity_sum: {}, to_fund: {}",
+            capacity_sum, to_fund
+        );
         return Err(Error::OwnFundingNotInOutputs);
     }
     if !initial_balance.sudts().fully_represented(idx, &udt_sum)? {
@@ -670,7 +708,6 @@ pub fn verify_all_payed(
         reimburse_b = reimburse_a;
     }
 
-
     let ckbytes_balance_a = final_balance.ckbytes().get(0)? + channel_capacity + reimburse_a;
     let payment_script_hash_a = channel_constants
         .params()
@@ -691,8 +728,10 @@ pub fn verify_all_payed(
     let mut ckbytes_outputs_a = 0;
     let mut ckbytes_outputs_b = 0;
 
-    let mut udt_outputs_a = vec![0u128; final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
-    let mut udt_outputs_b = vec![0u128; final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+    let mut udt_outputs_a =
+        vec![0u128; final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+    let mut udt_outputs_b =
+        vec![0u128; final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
 
     let outputs = load_transaction()?.raw().outputs();
 
@@ -703,14 +742,22 @@ pub fn verify_all_payed(
 
         if output_lock_script_hash[..] == payment_script_hash_a[..] {
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amout(final_balance, i, &output.type_().to_opt().expect("checked above"))?; 
+                let (sudt_idx, amount) = get_sudt_amout(
+                    final_balance,
+                    i,
+                    &output.type_().to_opt().expect("checked above"),
+                )?;
                 udt_outputs_a[sudt_idx] += amount;
             }
             ckbytes_outputs_a += output.capacity().unpack();
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amout(final_balance, i, &output.type_().to_opt().expect("checked above"))?; 
+                let (sudt_idx, amount) = get_sudt_amout(
+                    final_balance,
+                    i,
+                    &output.type_().to_opt().expect("checked above"),
+                )?;
                 udt_outputs_b[sudt_idx] += amount;
             }
             ckbytes_outputs_b += output.capacity().unpack();
@@ -739,14 +786,17 @@ pub fn verify_all_payed(
     Ok(())
 }
 
-
 // TODO: We might want to verify that the capacity of the sudt output is at least the max_capacity of the SUDT asset.
-//      Not doing so may result in the ability to steal funds up to the 
+//      Not doing so may result in the ability to steal funds up to the
 //      (max_capacity of the SUDT asset - actual occupied capacity of the SUDT type script), if the SUDT asset's max_capacity
 //      is smaller than the payment_min_capacity of the participant. We do not do this for now, because it is an extreme edge case
 //      and the max_capacity of an SUDT should never be set that low.
-pub fn get_sudt_amout(balances: &Balances, output_idx: usize, type_script: &Script) -> Result<(usize, u128), Error> {
-    let mut buf  = [0u8; SUDT_MIN_LEN];
+pub fn get_sudt_amout(
+    balances: &Balances,
+    output_idx: usize,
+    type_script: &Script,
+) -> Result<(usize, u128), Error> {
+    let mut buf = [0u8; SUDT_MIN_LEN];
 
     let (sudt_idx, _) = balances.sudts().get_distribution(type_script)?;
     let sudt_data = load_cell_data(output_idx, Source::Output)?;
