@@ -492,6 +492,7 @@ pub fn verify_funding_in_outputs(
         }
     }
     if capacity_sum != to_fund {
+        debug!("verify_funding_in_outputs: capacity_sum: {}, to_fund: {}", capacity_sum, to_fund);
         return Err(Error::OwnFundingNotInOutputs);
     }
     if !initial_balance.sudts().fully_represented(idx, &udt_sum)? {
@@ -690,8 +691,8 @@ pub fn verify_all_payed(
     let mut ckbytes_outputs_a = 0;
     let mut ckbytes_outputs_b = 0;
 
-    let mut udt_outputs_a = vec![0u128, final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
-    let mut udt_outputs_b = vec![0u128, final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+    let mut udt_outputs_a = vec![0u128; final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+    let mut udt_outputs_b = vec![0u128; final_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
 
     let outputs = load_transaction()?.raw().outputs();
 
@@ -725,6 +726,9 @@ pub fn verify_all_payed(
     {
         return Err(Error::NotAllPayed);
     }
+
+    debug!("udt_outputs_a: {:?}", udt_outputs_a);
+    debug!("udt_outputs_b: {:?}", udt_outputs_b);
 
     if !final_balance.sudts().fully_represented(0, &udt_outputs_a)? {
         return Err(Error::NotAllPayed);
