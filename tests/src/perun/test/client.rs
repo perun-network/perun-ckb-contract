@@ -56,15 +56,13 @@ impl Client {
         funding_agreement: &test::FundingAgreement,
     ) -> Result<(ChannelId, OpenResult), perun::Error> {
         // Prepare environment so that this party has the required funds.
-        let (my_funds_outpoint, my_funds) =
+        let inputs =
             env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         // Create the channel token.
         let (channel_token, channel_token_outpoint) = env.create_channel_token(ctx);
 
         let pcls = env.build_pcls(ctx, Default::default());
-        let pcls_code_hash = ctx
-            .get_cell_data_hash(&env.pcls_out_point)
-            .expect("pcls hash");
+        let pcls_code_hash = pcls.code_hash();
         let pfls_code_hash = ctx
             .get_cell_data_hash(&env.pfls_out_point)
             .expect("pfls hash");
@@ -102,8 +100,7 @@ impl Client {
             cid,
             funding_agreement: funding_agreement.clone(),
             channel_token_outpoint: channel_token_outpoint.clone(),
-            my_funds_outpoint: my_funds_outpoint.clone(),
-            my_available_funds: my_funds,
+            inputs: inputs,
             party_index: self.index,
             pcls_script: pcls,
             pcts_script: pcts,
@@ -127,7 +124,7 @@ impl Client {
         pcts: Script,
     ) -> Result<transaction::FundResult, perun::Error> {
         // Prepare environment so that this party has the required funds.
-        let (my_funds_outpoint, my_available_funds) =
+        let inputs =
             env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         let fr = transaction::mk_fund(
             ctx,
@@ -137,8 +134,7 @@ impl Client {
                 funding_agreement: funding_agreement.clone(),
                 party_index: self.index,
                 state: channel_state,
-                my_funds_outpoint,
-                my_available_funds,
+                inputs,
                 pcts,
             },
         )?;

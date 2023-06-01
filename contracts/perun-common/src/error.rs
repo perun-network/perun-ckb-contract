@@ -77,6 +77,9 @@ pub enum Error {
     SamePaymentAddress,
     TypeScriptInPaymentOutput,
     TypeScriptInPFLSOutput,
+    InvalidSUDT,
+    InvalidSUDTDataLength,
+    DecreasingAmount,
 }
 
 impl From<SysError> for Error {

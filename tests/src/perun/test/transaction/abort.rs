@@ -2,14 +2,14 @@ use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
         core::{TransactionBuilder, TransactionView},
-        packed::{CellInput, CellOutput, OutPoint},
+        packed::{CellInput, OutPoint},
         prelude::{Builder, Entity, Pack},
     },
     context::Context,
 };
 use perun_common::{perun_types::ChannelStatus, redeemer};
 
-use crate::perun::{self, harness, test::cell::FundingCell};
+use crate::perun::{self, harness, test::{cell::FundingCell, transaction::common::add_cap_to_a}};
 
 use super::common::{channel_witness, create_cells};
 
@@ -52,33 +52,17 @@ pub fn mk_abort(
     ];
     inputs.extend(args.funds.iter().cloned().map(|op| {
         CellInput::new_builder()
-            .previous_output(op.out_point)
+            .previous_output(op.outpoint())
             .build()
     }));
 
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     // TODO: We are expecting the output amounts to be greater than the minimum amount necessary to
     // accomodate the space required for each output cell.
-    let outputs: Vec<_> = args
-        .funds
-        .iter()
-        .cloned()
-        .enumerate()
-        .map(|(i, f)| {
-            let min_amount = env.min_capacity_for_channel(args.state.clone())?;
-            let amount = match i {
-                0 => f.amount + min_amount.as_u64(),
-                _ => f.amount,
-            };
-            Ok((
-                CellOutput::new_builder()
-                    .capacity(amount.pack())
-                    .lock(env.build_lock_script(ctx, Bytes::from(vec![f.index])))
-                    .build(),
-                Bytes::new(),
-            ))
-        })
-        .collect::<Result<Vec<_>, perun::Error>>()?;
+    let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
+    let channel_cap = env.min_capacity_for_channel(args.state.clone())?;
+    let balances = add_cap_to_a(&args.state.state().balances(), channel_cap);
+    let outputs = balances.mk_outputs(f, vec![0]);
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let cell_deps = vec![

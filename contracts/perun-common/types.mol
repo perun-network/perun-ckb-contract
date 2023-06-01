@@ -3,7 +3,29 @@ import blockchain;
 /* Perun Types */
 array SEC1EncodedPubKey [byte; 33];
 
-array Balances [Uint64; 2];
+array CKByteDistribution [Uint64; 2];
+
+array SUDTDistribution [Uint128; 2];
+
+vector SUDTAllocation <SUDTBalances>;
+
+table SUDTAsset {
+  type_script: Script,
+  // The max_capacity of an SUDTAsset should always be at least the capacity needed for the SUDT type script + outputs_data
+  // + max(party_a.payment_min_capacity, party_b.payment_min_capacity)
+  // Make sure verify this in the Funding Agreement, as the contract can not verify this upon channel start!
+  max_capacity: Uint64,
+}
+
+table SUDTBalances {
+  asset: SUDTAsset,
+  distribution: SUDTDistribution,
+}
+
+table Balances {
+  ckbytes: CKByteDistribution,
+  sudts: SUDTAllocation,
+}
 
 array True [byte; 1];
 array False [byte; 1];
@@ -110,7 +132,6 @@ table ChannelState {
 table ChannelStatus {
   state: ChannelState,
   funded: Bool,
-  funding: Balances,
   disputed: Bool,
 }
 

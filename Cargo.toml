@@ -3,6 +3,7 @@ members = [ "contracts/perun-channel-lockscript"
           , "contracts/perun-channel-typescript"
           , "contracts/perun-funds-lockscript"
           , "contracts/perun-common"
+          , "contracts/sample-udt"
           ]
 exclude = ["tests"]
 

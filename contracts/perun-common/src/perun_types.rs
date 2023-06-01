@@ -597,6 +597,1224 @@ impl molecule::prelude::Builder for SEC1EncodedPubKeyBuilder {
     }
 }
 #[derive(Clone)]
+pub struct CKByteDistribution(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for CKByteDistribution {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for CKByteDistribution {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for CKByteDistribution {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        write!(f, "{}", self.nth0())?;
+        write!(f, ", {}", self.nth1())?;
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for CKByteDistribution {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        CKByteDistribution::new_unchecked(v.into())
+    }
+}
+impl CKByteDistribution {
+    pub const TOTAL_SIZE: usize = 16;
+    pub const ITEM_SIZE: usize = 8;
+    pub const ITEM_COUNT: usize = 2;
+    pub fn nth0(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(0..8))
+    }
+    pub fn nth1(&self) -> Uint64 {
+        Uint64::new_unchecked(self.0.slice(8..16))
+    }
+    pub fn as_reader<'r>(&'r self) -> CKByteDistributionReader<'r> {
+        CKByteDistributionReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for CKByteDistribution {
+    type Builder = CKByteDistributionBuilder;
+    const NAME: &'static str = "CKByteDistribution";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        CKByteDistribution(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        CKByteDistributionReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        CKByteDistributionReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().set([self.nth0(), self.nth1()])
+    }
+}
+#[derive(Clone, Copy)]
+pub struct CKByteDistributionReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for CKByteDistributionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for CKByteDistributionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for CKByteDistributionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        write!(f, "{}", self.nth0())?;
+        write!(f, ", {}", self.nth1())?;
+        write!(f, "]")
+    }
+}
+impl<'r> CKByteDistributionReader<'r> {
+    pub const TOTAL_SIZE: usize = 16;
+    pub const ITEM_SIZE: usize = 8;
+    pub const ITEM_COUNT: usize = 2;
+    pub fn nth0(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
+    }
+    pub fn nth1(&self) -> Uint64Reader<'r> {
+        Uint64Reader::new_unchecked(&self.as_slice()[8..16])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for CKByteDistributionReader<'r> {
+    type Entity = CKByteDistribution;
+    const NAME: &'static str = "CKByteDistributionReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        CKByteDistributionReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+pub struct CKByteDistributionBuilder(pub(crate) [Uint64; 2]);
+impl ::core::fmt::Debug for CKByteDistributionBuilder {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:?})", Self::NAME, &self.0[..])
+    }
+}
+impl ::core::default::Default for CKByteDistributionBuilder {
+    fn default() -> Self {
+        CKByteDistributionBuilder([Uint64::default(), Uint64::default()])
+    }
+}
+impl CKByteDistributionBuilder {
+    pub const TOTAL_SIZE: usize = 16;
+    pub const ITEM_SIZE: usize = 8;
+    pub const ITEM_COUNT: usize = 2;
+    pub fn set(mut self, v: [Uint64; 2]) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn nth0(mut self, v: Uint64) -> Self {
+        self.0[0] = v;
+        self
+    }
+    pub fn nth1(mut self, v: Uint64) -> Self {
+        self.0[1] = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for CKByteDistributionBuilder {
+    type Entity = CKByteDistribution;
+    const NAME: &'static str = "CKByteDistributionBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(self.0[0].as_slice())?;
+        writer.write_all(self.0[1].as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        CKByteDistribution::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct SUDTDistribution(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for SUDTDistribution {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for SUDTDistribution {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for SUDTDistribution {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        write!(f, "{}", self.nth0())?;
+        write!(f, ", {}", self.nth1())?;
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for SUDTDistribution {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+        SUDTDistribution::new_unchecked(v.into())
+    }
+}
+impl SUDTDistribution {
+    pub const TOTAL_SIZE: usize = 32;
+    pub const ITEM_SIZE: usize = 16;
+    pub const ITEM_COUNT: usize = 2;
+    pub fn nth0(&self) -> Uint128 {
+        Uint128::new_unchecked(self.0.slice(0..16))
+    }
+    pub fn nth1(&self) -> Uint128 {
+        Uint128::new_unchecked(self.0.slice(16..32))
+    }
+    pub fn as_reader<'r>(&'r self) -> SUDTDistributionReader<'r> {
+        SUDTDistributionReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for SUDTDistribution {
+    type Builder = SUDTDistributionBuilder;
+    const NAME: &'static str = "SUDTDistribution";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        SUDTDistribution(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTDistributionReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTDistributionReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().set([self.nth0(), self.nth1()])
+    }
+}
+#[derive(Clone, Copy)]
+pub struct SUDTDistributionReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for SUDTDistributionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for SUDTDistributionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for SUDTDistributionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        write!(f, "{}", self.nth0())?;
+        write!(f, ", {}", self.nth1())?;
+        write!(f, "]")
+    }
+}
+impl<'r> SUDTDistributionReader<'r> {
+    pub const TOTAL_SIZE: usize = 32;
+    pub const ITEM_SIZE: usize = 16;
+    pub const ITEM_COUNT: usize = 2;
+    pub fn nth0(&self) -> Uint128Reader<'r> {
+        Uint128Reader::new_unchecked(&self.as_slice()[0..16])
+    }
+    pub fn nth1(&self) -> Uint128Reader<'r> {
+        Uint128Reader::new_unchecked(&self.as_slice()[16..32])
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for SUDTDistributionReader<'r> {
+    type Entity = SUDTDistribution;
+    const NAME: &'static str = "SUDTDistributionReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        SUDTDistributionReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        }
+        Ok(())
+    }
+}
+pub struct SUDTDistributionBuilder(pub(crate) [Uint128; 2]);
+impl ::core::fmt::Debug for SUDTDistributionBuilder {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:?})", Self::NAME, &self.0[..])
+    }
+}
+impl ::core::default::Default for SUDTDistributionBuilder {
+    fn default() -> Self {
+        SUDTDistributionBuilder([Uint128::default(), Uint128::default()])
+    }
+}
+impl SUDTDistributionBuilder {
+    pub const TOTAL_SIZE: usize = 32;
+    pub const ITEM_SIZE: usize = 16;
+    pub const ITEM_COUNT: usize = 2;
+    pub fn set(mut self, v: [Uint128; 2]) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn nth0(mut self, v: Uint128) -> Self {
+        self.0[0] = v;
+        self
+    }
+    pub fn nth1(mut self, v: Uint128) -> Self {
+        self.0[1] = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for SUDTDistributionBuilder {
+    type Entity = SUDTDistribution;
+    const NAME: &'static str = "SUDTDistributionBuilder";
+    fn expected_length(&self) -> usize {
+        Self::TOTAL_SIZE
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        writer.write_all(self.0[0].as_slice())?;
+        writer.write_all(self.0[1].as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        SUDTDistribution::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct SUDTAllocation(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for SUDTAllocation {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for SUDTAllocation {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for SUDTAllocation {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl ::core::default::Default for SUDTAllocation {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        SUDTAllocation::new_unchecked(v.into())
+    }
+}
+impl SUDTAllocation {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<SUDTBalances> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> SUDTBalances {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            SUDTBalances::new_unchecked(self.0.slice(start..))
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            SUDTBalances::new_unchecked(self.0.slice(start..end))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> SUDTAllocationReader<'r> {
+        SUDTAllocationReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for SUDTAllocation {
+    type Builder = SUDTAllocationBuilder;
+    const NAME: &'static str = "SUDTAllocation";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        SUDTAllocation(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTAllocationReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTAllocationReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct SUDTAllocationReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for SUDTAllocationReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for SUDTAllocationReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for SUDTAllocationReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> SUDTAllocationReader<'r> {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<SUDTBalancesReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> SUDTBalancesReader<'r> {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            SUDTBalancesReader::new_unchecked(&self.as_slice()[start..])
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            SUDTBalancesReader::new_unchecked(&self.as_slice()[start..end])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for SUDTAllocationReader<'r> {
+    type Entity = SUDTAllocation;
+    const NAME: &'static str = "SUDTAllocationReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        SUDTAllocationReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(
+                Self,
+                TotalSizeNotMatch,
+                molecule::NUMBER_SIZE * 2,
+                slice_len
+            );
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        for pair in offsets.windows(2) {
+            let start = pair[0];
+            let end = pair[1];
+            SUDTBalancesReader::verify(&slice[start..end], compatible)?;
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct SUDTAllocationBuilder(pub(crate) Vec<SUDTBalances>);
+impl SUDTAllocationBuilder {
+    pub fn set(mut self, v: Vec<SUDTBalances>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: SUDTBalances) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = SUDTBalances>>(mut self, iter: T) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+    pub fn replace(&mut self, index: usize, v: SUDTBalances) -> Option<SUDTBalances> {
+        self.0
+            .get_mut(index)
+            .map(|item| ::core::mem::replace(item, v))
+    }
+}
+impl molecule::prelude::Builder for SUDTAllocationBuilder {
+    type Entity = SUDTAllocation;
+    const NAME: &'static str = "SUDTAllocationBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.0.len() + 1)
+            + self
+                .0
+                .iter()
+                .map(|inner| inner.as_slice().len())
+                .sum::<usize>()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let item_count = self.0.len();
+        if item_count == 0 {
+            writer.write_all(&molecule::pack_number(
+                molecule::NUMBER_SIZE as molecule::Number,
+            ))?;
+        } else {
+            let (total_size, offsets) = self.0.iter().fold(
+                (
+                    molecule::NUMBER_SIZE * (item_count + 1),
+                    Vec::with_capacity(item_count),
+                ),
+                |(start, mut offsets), inner| {
+                    offsets.push(start);
+                    (start + inner.as_slice().len(), offsets)
+                },
+            );
+            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+            for offset in offsets.into_iter() {
+                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+            }
+            for inner in self.0.iter() {
+                writer.write_all(inner.as_slice())?;
+            }
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        SUDTAllocation::new_unchecked(inner.into())
+    }
+}
+pub struct SUDTAllocationIterator(SUDTAllocation, usize, usize);
+impl ::core::iter::Iterator for SUDTAllocationIterator {
+    type Item = SUDTBalances;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for SUDTAllocationIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for SUDTAllocation {
+    type Item = SUDTBalances;
+    type IntoIter = SUDTAllocationIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        SUDTAllocationIterator(self, 0, len)
+    }
+}
+impl<'r> SUDTAllocationReader<'r> {
+    pub fn iter<'t>(&'t self) -> SUDTAllocationReaderIterator<'t, 'r> {
+        SUDTAllocationReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct SUDTAllocationReaderIterator<'t, 'r>(&'t SUDTAllocationReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for SUDTAllocationReaderIterator<'t, 'r> {
+    type Item = SUDTBalancesReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for SUDTAllocationReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
+pub struct SUDTAsset(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for SUDTAsset {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for SUDTAsset {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for SUDTAsset {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "type_script", self.type_script())?;
+        write!(f, ", {}: {}", "max_capacity", self.max_capacity())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for SUDTAsset {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            73, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        SUDTAsset::new_unchecked(v.into())
+    }
+}
+impl SUDTAsset {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn type_script(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Script::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn max_capacity(&self) -> Uint64 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Uint64::new_unchecked(self.0.slice(start..end))
+        } else {
+            Uint64::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> SUDTAssetReader<'r> {
+        SUDTAssetReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for SUDTAsset {
+    type Builder = SUDTAssetBuilder;
+    const NAME: &'static str = "SUDTAsset";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        SUDTAsset(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTAssetReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTAssetReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .type_script(self.type_script())
+            .max_capacity(self.max_capacity())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct SUDTAssetReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for SUDTAssetReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for SUDTAssetReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for SUDTAssetReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "type_script", self.type_script())?;
+        write!(f, ", {}: {}", "max_capacity", self.max_capacity())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> SUDTAssetReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn type_script(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ScriptReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn max_capacity(&self) -> Uint64Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            Uint64Reader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for SUDTAssetReader<'r> {
+    type Entity = SUDTAsset;
+    const NAME: &'static str = "SUDTAssetReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        SUDTAssetReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        ScriptReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Uint64Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct SUDTAssetBuilder {
+    pub(crate) type_script: Script,
+    pub(crate) max_capacity: Uint64,
+}
+impl SUDTAssetBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn type_script(mut self, v: Script) -> Self {
+        self.type_script = v;
+        self
+    }
+    pub fn max_capacity(mut self, v: Uint64) -> Self {
+        self.max_capacity = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for SUDTAssetBuilder {
+    type Entity = SUDTAsset;
+    const NAME: &'static str = "SUDTAssetBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.type_script.as_slice().len()
+            + self.max_capacity.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.type_script.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.max_capacity.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.type_script.as_slice())?;
+        writer.write_all(self.max_capacity.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        SUDTAsset::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct SUDTBalances(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for SUDTBalances {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for SUDTBalances {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for SUDTBalances {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "asset", self.asset())?;
+        write!(f, ", {}: {}", "distribution", self.distribution())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for SUDTBalances {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            117, 0, 0, 0, 12, 0, 0, 0, 85, 0, 0, 0, 73, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0, 53, 0,
+            0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
+        ];
+        SUDTBalances::new_unchecked(v.into())
+    }
+}
+impl SUDTBalances {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn asset(&self) -> SUDTAsset {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        SUDTAsset::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn distribution(&self) -> SUDTDistribution {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            SUDTDistribution::new_unchecked(self.0.slice(start..end))
+        } else {
+            SUDTDistribution::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> SUDTBalancesReader<'r> {
+        SUDTBalancesReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for SUDTBalances {
+    type Builder = SUDTBalancesBuilder;
+    const NAME: &'static str = "SUDTBalances";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        SUDTBalances(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTBalancesReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        SUDTBalancesReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .asset(self.asset())
+            .distribution(self.distribution())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct SUDTBalancesReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for SUDTBalancesReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for SUDTBalancesReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for SUDTBalancesReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "asset", self.asset())?;
+        write!(f, ", {}: {}", "distribution", self.distribution())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> SUDTBalancesReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn asset(&self) -> SUDTAssetReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        SUDTAssetReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn distribution(&self) -> SUDTDistributionReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            SUDTDistributionReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            SUDTDistributionReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for SUDTBalancesReader<'r> {
+    type Entity = SUDTBalances;
+    const NAME: &'static str = "SUDTBalancesReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        SUDTBalancesReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        SUDTAssetReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        SUDTDistributionReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct SUDTBalancesBuilder {
+    pub(crate) asset: SUDTAsset,
+    pub(crate) distribution: SUDTDistribution,
+}
+impl SUDTBalancesBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn asset(mut self, v: SUDTAsset) -> Self {
+        self.asset = v;
+        self
+    }
+    pub fn distribution(mut self, v: SUDTDistribution) -> Self {
+        self.distribution = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for SUDTBalancesBuilder {
+    type Entity = SUDTBalances;
+    const NAME: &'static str = "SUDTBalancesBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.asset.as_slice().len()
+            + self.distribution.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.asset.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.distribution.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.asset.as_slice())?;
+        writer.write_all(self.distribution.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        SUDTBalances::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct Balances(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for Balances {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -614,27 +1832,58 @@ impl ::core::fmt::Debug for Balances {
 }
 impl ::core::fmt::Display for Balances {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        write!(f, "{}", self.nth0())?;
-        write!(f, ", {}", self.nth1())?;
-        write!(f, "]")
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "ckbytes", self.ckbytes())?;
+        write!(f, ", {}: {}", "sudts", self.sudts())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
     }
 }
 impl ::core::default::Default for Balances {
     fn default() -> Self {
-        let v: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let v: Vec<u8> = vec![
+            32, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            4, 0, 0, 0,
+        ];
         Balances::new_unchecked(v.into())
     }
 }
 impl Balances {
-    pub const TOTAL_SIZE: usize = 16;
-    pub const ITEM_SIZE: usize = 8;
-    pub const ITEM_COUNT: usize = 2;
-    pub fn nth0(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(0..8))
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
     }
-    pub fn nth1(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(8..16))
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn ckbytes(&self) -> CKByteDistribution {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        CKByteDistribution::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn sudts(&self) -> SUDTAllocation {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            SUDTAllocation::new_unchecked(self.0.slice(start..end))
+        } else {
+            SUDTAllocation::new_unchecked(self.0.slice(start..))
+        }
     }
     pub fn as_reader<'r>(&'r self) -> BalancesReader<'r> {
         BalancesReader::new_unchecked(self.as_slice())
@@ -662,7 +1911,9 @@ impl molecule::prelude::Entity for Balances {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set([self.nth0(), self.nth1()])
+        Self::new_builder()
+            .ckbytes(self.ckbytes())
+            .sudts(self.sudts())
     }
 }
 #[derive(Clone, Copy)]
@@ -683,21 +1934,49 @@ impl<'r> ::core::fmt::Debug for BalancesReader<'r> {
 }
 impl<'r> ::core::fmt::Display for BalancesReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        write!(f, "{}", self.nth0())?;
-        write!(f, ", {}", self.nth1())?;
-        write!(f, "]")
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "ckbytes", self.ckbytes())?;
+        write!(f, ", {}: {}", "sudts", self.sudts())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
     }
 }
 impl<'r> BalancesReader<'r> {
-    pub const TOTAL_SIZE: usize = 16;
-    pub const ITEM_SIZE: usize = 8;
-    pub const ITEM_COUNT: usize = 2;
-    pub fn nth0(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[0..8])
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
     }
-    pub fn nth1(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[8..16])
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn ckbytes(&self) -> CKByteDistributionReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        CKByteDistributionReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn sudts(&self) -> SUDTAllocationReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            SUDTAllocationReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            SUDTAllocationReader::new_unchecked(&self.as_slice()[start..])
+        }
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for BalancesReader<'r> {
@@ -712,40 +1991,61 @@ impl<'r> molecule::prelude::Reader<'r> for BalancesReader<'r> {
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
-    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
         use molecule::verification_error as ve;
         let slice_len = slice.len();
-        if slice_len != Self::TOTAL_SIZE {
-            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
         }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        CKByteDistributionReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        SUDTAllocationReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
-pub struct BalancesBuilder(pub(crate) [Uint64; 2]);
-impl ::core::fmt::Debug for BalancesBuilder {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:?})", Self::NAME, &self.0[..])
-    }
-}
-impl ::core::default::Default for BalancesBuilder {
-    fn default() -> Self {
-        BalancesBuilder([Uint64::default(), Uint64::default()])
-    }
+#[derive(Debug, Default)]
+pub struct BalancesBuilder {
+    pub(crate) ckbytes: CKByteDistribution,
+    pub(crate) sudts: SUDTAllocation,
 }
 impl BalancesBuilder {
-    pub const TOTAL_SIZE: usize = 16;
-    pub const ITEM_SIZE: usize = 8;
-    pub const ITEM_COUNT: usize = 2;
-    pub fn set(mut self, v: [Uint64; 2]) -> Self {
-        self.0 = v;
+    pub const FIELD_COUNT: usize = 2;
+    pub fn ckbytes(mut self, v: CKByteDistribution) -> Self {
+        self.ckbytes = v;
         self
     }
-    pub fn nth0(mut self, v: Uint64) -> Self {
-        self.0[0] = v;
-        self
-    }
-    pub fn nth1(mut self, v: Uint64) -> Self {
-        self.0[1] = v;
+    pub fn sudts(mut self, v: SUDTAllocation) -> Self {
+        self.sudts = v;
         self
     }
 }
@@ -753,11 +2053,23 @@ impl molecule::prelude::Builder for BalancesBuilder {
     type Entity = Balances;
     const NAME: &'static str = "BalancesBuilder";
     fn expected_length(&self) -> usize {
-        Self::TOTAL_SIZE
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.ckbytes.as_slice().len()
+            + self.sudts.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(self.0[0].as_slice())?;
-        writer.write_all(self.0[1].as_slice())?;
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.ckbytes.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.sudts.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.ckbytes.as_slice())?;
+        writer.write_all(self.sudts.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -3675,10 +4987,11 @@ impl ::core::fmt::Display for Close {
 impl ::core::default::Default for Close {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            105, 0, 0, 0, 16, 0, 0, 0, 97, 0, 0, 0, 101, 0, 0, 0, 81, 0, 0, 0, 20, 0, 0, 0, 52, 0,
-            0, 0, 68, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            121, 0, 0, 0, 16, 0, 0, 0, 113, 0, 0, 0, 117, 0, 0, 0, 97, 0, 0, 0, 20, 0, 0, 0, 52, 0,
+            0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         Close::new_unchecked(v.into())
     }
@@ -4519,9 +5832,10 @@ impl ::core::fmt::Display for ChannelState {
 impl ::core::default::Default for ChannelState {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            81, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 68, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            97, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0,
+            12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelState::new_unchecked(v.into())
     }
@@ -4823,7 +6137,6 @@ impl ::core::fmt::Display for ChannelStatus {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "state", self.state())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
-        write!(f, ", {}: {}", "funding", self.funding())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -4835,17 +6148,17 @@ impl ::core::fmt::Display for ChannelStatus {
 impl ::core::default::Default for ChannelStatus {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            127, 0, 0, 0, 20, 0, 0, 0, 101, 0, 0, 0, 106, 0, 0, 0, 122, 0, 0, 0, 81, 0, 0, 0, 20,
-            0, 0, 0, 52, 0, 0, 0, 68, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            123, 0, 0, 0, 16, 0, 0, 0, 113, 0, 0, 0, 118, 0, 0, 0, 97, 0, 0, 0, 20, 0, 0, 0, 52, 0,
+            0, 0, 84, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelStatus::new_unchecked(v.into())
     }
 }
 impl ChannelStatus {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4874,17 +6187,11 @@ impl ChannelStatus {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Bool::new_unchecked(self.0.slice(start..end))
     }
-    pub fn funding(&self) -> Balances {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        Balances::new_unchecked(self.0.slice(start..end))
-    }
     pub fn disputed(&self) -> Bool {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
+            let end = molecule::unpack_number(&slice[16..]) as usize;
             Bool::new_unchecked(self.0.slice(start..end))
         } else {
             Bool::new_unchecked(self.0.slice(start..))
@@ -4919,7 +6226,6 @@ impl molecule::prelude::Entity for ChannelStatus {
         Self::new_builder()
             .state(self.state())
             .funded(self.funded())
-            .funding(self.funding())
             .disputed(self.disputed())
     }
 }
@@ -4944,7 +6250,6 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "state", self.state())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
-        write!(f, ", {}: {}", "funding", self.funding())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -4954,7 +6259,7 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
     }
 }
 impl<'r> ChannelStatusReader<'r> {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -4983,17 +6288,11 @@ impl<'r> ChannelStatusReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         BoolReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn funding(&self) -> BalancesReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        BalancesReader::new_unchecked(&self.as_slice()[start..end])
-    }
     pub fn disputed(&self) -> BoolReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
+            let end = molecule::unpack_number(&slice[16..]) as usize;
             BoolReader::new_unchecked(&self.as_slice()[start..end])
         } else {
             BoolReader::new_unchecked(&self.as_slice()[start..])
@@ -5051,8 +6350,7 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelStatusReader<'r> {
         }
         ChannelStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BoolReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        BalancesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        BoolReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        BoolReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -5060,21 +6358,16 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelStatusReader<'r> {
 pub struct ChannelStatusBuilder {
     pub(crate) state: ChannelState,
     pub(crate) funded: Bool,
-    pub(crate) funding: Balances,
     pub(crate) disputed: Bool,
 }
 impl ChannelStatusBuilder {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 3;
     pub fn state(mut self, v: ChannelState) -> Self {
         self.state = v;
         self
     }
     pub fn funded(mut self, v: Bool) -> Self {
         self.funded = v;
-        self
-    }
-    pub fn funding(mut self, v: Balances) -> Self {
-        self.funding = v;
         self
     }
     pub fn disputed(mut self, v: Bool) -> Self {
@@ -5089,7 +6382,6 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.state.as_slice().len()
             + self.funded.as_slice().len()
-            + self.funding.as_slice().len()
             + self.disputed.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
@@ -5100,8 +6392,6 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         offsets.push(total_size);
         total_size += self.funded.as_slice().len();
         offsets.push(total_size);
-        total_size += self.funding.as_slice().len();
-        offsets.push(total_size);
         total_size += self.disputed.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
@@ -5109,7 +6399,6 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         }
         writer.write_all(self.state.as_slice())?;
         writer.write_all(self.funded.as_slice())?;
-        writer.write_all(self.funding.as_slice())?;
         writer.write_all(self.disputed.as_slice())?;
         Ok(())
     }

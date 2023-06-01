@@ -21,3 +21,7 @@ template_type = "Rust"
 [[contracts]]
 name = "perun-funds-lockscript"
 template_type = "Rust"
+
+[[contracts]]
+name = "sample-udt"
+template_type = "Rust"

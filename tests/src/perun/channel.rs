@@ -8,7 +8,7 @@ use ckb_testtool::{
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
     ctrue,
-    perun_types::{ChannelConstants, ChannelStatus},
+    perun_types::{ChannelConstants, ChannelStatus, ChannelState},
 };
 
 use crate::perun::{
@@ -205,16 +205,7 @@ where
     /// dispute a channel using the currently active participant set by
     /// `with(..)`.
     pub fn dispute(&mut self) -> Result<(), perun::Error> {
-        let current_state = self.channel_state.state();
-        let v: u64 = current_state.version().unpack();
-        let bumped_state = current_state.as_builder().version((v + 1).pack()).build();
-        self.channel_state = self
-            .channel_state
-            .clone()
-            .as_builder()
-            .disputed(ctrue!())
-            .state(bumped_state)
-            .build();
+        self.channel_state = self.channel_state.clone().as_builder().disputed(ctrue!()).build();
         let sigs = self.sigs_for_channel_state()?;
         let res = match &self.channel_cell {
             Some(channel_cell) => {
@@ -255,11 +246,22 @@ where
     }
 
     /// finalize finalizes the channel state in use. It has to be called for
-    /// before successful close actions.
+    /// before successful close actions. It bumps the version of the channel state.
     pub fn finalize(&mut self) -> &mut Self {
         let status = self.channel_state.clone();
-        let state = status.state().as_builder().is_final(ctrue!()).build();
+        let old_version: u64 = status.state().version().unpack();
+        let state = status.state().as_builder().is_final(ctrue!()).version((old_version + 1).pack()).build();
         self.channel_state = status.as_builder().state(state).build();
+        self
+    }
+
+    pub fn update(&mut self, update: impl Fn(&ChannelState) -> Result<ChannelState, perun::Error>) -> &mut Self {
+        let new_state = update(&self.channel_state.state()).expect("update failed");
+        self.channel_state = self.channel_state
+            .clone()
+            .as_builder()
+            .state(new_state)
+            .build();
         self
     }
 
