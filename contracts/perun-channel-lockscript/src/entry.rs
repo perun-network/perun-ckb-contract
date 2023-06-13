@@ -31,19 +31,28 @@ pub fn main() -> Result<(), Error> {
     }
 
     // locate the ChannelConstants in the type script of the input cell.
-    let type_script = load_cell_type(0, Source::GroupInput)?.expect("type script not found");
-    let type_script_args: Bytes = type_script.args().unpack();
+    // the best practice is to loop all the input cells in the group
+    for i in 0.. {
+        // Loop over all input cells.
+        let type_script = match load_cell_type(i, Source::GroupInput) {
+            Ok(Some(script)) => script,
+            Ok(None) => panic!("type script not found"),
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+        let type_script_args: Bytes = type_script.args().unpack();
 
-    let constants = ChannelConstants::from_slice(&type_script_args)
-        .expect("unable to parse args as channel parameters");
+        let constants = ChannelConstants::from_slice(&type_script_args)
+            .expect("unable to parse args as channel parameters");
 
-    let is_participant = verify_is_participant(
-        &constants.params().party_a().unlock_script_hash().unpack(),
-        &constants.params().party_b().unlock_script_hash().unpack(),
-    )?;
+        let is_participant = verify_is_participant(
+            &constants.params().party_a().unlock_script_hash().unpack(),
+            &constants.params().party_b().unlock_script_hash().unpack(),
+        )?;
 
-    if !is_participant {
-        return Err(Error::NotParticipant);
+        if !is_participant {
+            return Err(Error::NotParticipant);
+        }
     }
 
     return Ok(());
