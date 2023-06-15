@@ -13,6 +13,11 @@ name = "pfls"
 enable_type_id = false
 location = { file = "build/release/perun-funds-lockscript" }
 
+[[cells]]
+name = "sudt"
+enable_type_id = false
+location = { file = "build/release/sample-udt" }
+
 #
 # # reference to on-chain cells
 # [[cells]]
@@ -33,6 +38,6 @@ location = { file = "build/release/perun-funds-lockscript" }
 # # For example the secp256k1 lock
 [lock]
 code_hash = "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8"
-args = "0x826a847502a66ba161e4222840a300b2e2c98659"
+args = "0xbd7f931a48087b549ce3c92930483fed9d330233"
 hash_type = "type"
 
