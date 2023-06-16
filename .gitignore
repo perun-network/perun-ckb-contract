@@ -3,6 +3,7 @@ target/*
 .cache/.cargo/*
 contracts/**/target/*
 tests/target/*
+migrations/**
 
 # C
 contracts/c/build/*
