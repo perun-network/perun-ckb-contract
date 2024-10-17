@@ -28,11 +28,12 @@ pub fn main() -> Result<(), Error> {
 
     return verify_pcts_in_inputs(&pcts_script_hash.unpack());
 }
-
+//#note: basically checks that the channel cell is present in the inputs of the transaction and if it is, then it allows the Tx to occur
+//this means that it delegates the actual logic of whether the transaction is valid to the pcts script
 pub fn verify_pcts_in_inputs(pcts_script_hash: &[u8; 32]) -> Result<(), Error> {
     let num_inputs = load_transaction()?.raw().inputs().len();
     for i in 0..num_inputs {
-        match load_cell_type_hash(i, Source::Input)? {
+        match load_cell_type_hash(i, Source::Input)? {  //#note load the hash of the type-script of the i-th input cell and match
             Some(cell_type_script_hash) => {
                 if cell_type_script_hash[..] == pcts_script_hash[..] {
                     return Ok(());

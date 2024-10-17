@@ -240,7 +240,8 @@ pub fn check_valid_progress(
             debug!("verify_funded_status passed");
             Ok(())
         }
-        ChannelWitnessUnion::Dispute(d) => {
+        //TODO: Adapt this for virtual channels
+        ChannelWitnessUnion::Dispute(d) => { //Note: We don't check whether the challenge duration has expiered or not. => We don't want to prevent people from posting higher state version in a disupte case 
             debug!("ChannelWitnessUnion::Dispute");
 
             // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
@@ -329,7 +330,7 @@ pub fn check_valid_close(
             // latest state.
             verify_status_funded(old_status)?;
             debug!("verify_status_funded passed");
-            verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
+            verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?; // This is the check which ensures that a channel is only closed after the challenge duration has expired.
             debug!("verify_time_lock_expired passed");
             verify_status_disputed(old_status)?;
             debug!("verify_status_disputed passed");
@@ -378,7 +379,7 @@ pub fn check_valid_close(
 
 pub fn load_witness() -> Result<ChannelWitness, Error> {
     debug!("load_witness");
-
+    //There is only one channel cell in inputs so there can be only one element in the witness array. Sinc there is only one channel cell ,so this cell's witness data is at index 0 in the 
     let witness_args = load_witness_args(0, Source::GroupInput)?;
     let witness_bytes: Bytes = witness_args
         .input_type()
@@ -491,7 +492,7 @@ pub fn verify_funding_in_outputs(
     initial_balance: &Balances,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    let ckbytes_locked_for_sudts = initial_balance.sudts().get_locked_ckbytes();
+    let ckbytes_locked_for_sudts = initial_balance.sudts().get_locked_ckbytes(); //FRAGE: I don't understand this. How can I get the amount of ckbytes required for sudts assets? Because SUDTs also need ckbytes for the state rent (cell)
     let to_fund = initial_balance.ckbytes().get(idx)? + ckbytes_locked_for_sudts;
     if to_fund == 0 {
         return Ok(());
@@ -839,7 +840,7 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
     }
     Ok(())
 }
-
+//TODO: Modify function to read ledger channel AND virtual channel's state from channel cell data field
 pub fn get_channel_action() -> Result<ChannelAction, Error> {
     let input_status_opt = load_cell_data(0, Source::GroupInput)
         .ok()

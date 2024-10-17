@@ -138,3 +138,15 @@ table ChannelStatus {
 struct ChannelToken {
   out_point: OutPoint,
 }
+
+table VirtualChannelStatus {
+  state: ChannelState,
+  params: ChannelParameters,  
+}
+
+union LedgerChannelOrVirtualChannel {
+    ChannelStatus,  //ledger channel
+    VirtualChannelStatus, //virtual channel
+}
+
+vector channelCellData <LedgerChannelOrVirtualChannel>;

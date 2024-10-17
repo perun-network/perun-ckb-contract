@@ -14,7 +14,7 @@ use perun_common::{error::Error, perun_types::ChannelConstants};
 // The perun-channel-lockscript (pcls) is used to lock access to interacting with a channel and is attached as lock script
 // to the channel-cell (the cell which uses the perun-channel-type-script (pcts) as its type script).
 // A channel defines two participants, each of which has their own unlock_script_hash (also defined in the ChannelConstants.params.{party_a,party_b}).
-// The pcls allows a transaction to interact with the channel, if at least one input cell is present with:
+// The pcls allows a transaction to interact with the channel, if AT LEAST ONE INPUT CELL is present with:
 // - cell's lock script hash == unlock_script_hash of party_a or
 // - cell's lock script hash == unlock_script_hash of party_b
 // We recommend using the secp256k1_blake160_sighash_all script as unlock script and corresponding payment args for the participants.
@@ -33,7 +33,7 @@ pub fn main() -> Result<(), Error> {
     // locate the ChannelConstants in the type script of the input cell.
     // the best practice is to loop all the input cells in the group
     for i in 0.. {
-        // Loop over all input cells.
+        // Loop over all input cells. This will loop over all input cells having the same lockscript as this lockscript (PCLS). Then we only load the type-script of the cell.
         let type_script = match load_cell_type(i, Source::GroupInput) {
             Ok(Some(script)) => script,
             Ok(None) => panic!("type script not found"),
