@@ -11,6 +11,75 @@ use ckb_std::{
 };
 use perun_common::{error::Error, perun_types::ChannelConstants};
 
+
+pub fn main() -> Result<(), Error>{
+    // call normal_mode first return and if it fails, call vc_mode return its value
+    let script = load_script()?;
+    let args: Bytes = script.args().unpack();
+
+    // return an error if args is invalid
+    if args.is_empty(){
+        return normal_mode();
+    }
+    
+    // Thus Source::GroupInput would have two cells in case of virtual channel dispute and one cell otherwise
+    // We will use this fact to check which mode we are in (1)Normal mode, (2) VC mode
+    let mut counter = 0;
+     for i in 0.. {
+        match load_cell_type(i, Source::GroupInput) {
+            Ok(Some(script)) => script,
+            Ok(None) => panic!("type script not found"),
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+        counter += 1;
+    }
+    
+    if counter ==1{
+        return normal_mode();
+    }else {
+        return vc_mode();
+    }
+}
+
+pub fn vc_mode() ->Result<(), Error>{
+    let mut participant_hashes: [[[u8; 32]; 2]; 2] = [
+    [
+        [0u8; 32], // First 32-byte array in the first subarray
+        [0u8; 32], // Second 32-byte array in the first subarray
+    ],
+    [
+        [0u8; 32], // First 32-byte array in the second subarray
+        [0u8; 32], // Second 32-byte array in the second subarray
+    ],
+];
+
+    for i in  0..{
+        let type_script = match  load_cell_type(i, Source::GroupInput) {
+            Ok(Some(script)) => script,
+            Ok(None) => panic!("type script not found"),
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+        let type_script_args: Bytes = type_script.args().unpack();
+
+        let constants = ChannelConstants::from_slice(&type_script_args)
+            .expect("unable to parse args as channel parameters");
+
+        participant_hashes[i][0] = constants.params().party_a().unlock_script_hash().unpack();
+        participant_hashes[i][1] = constants.params().party_b().unlock_script_hash().unpack();
+    }
+    match verify_is_participant(&participant_hashes[0][0], &participant_hashes[0][1]){
+        Ok(true) => return Ok(()),
+        Ok(false) =>  match verify_is_participant(&participant_hashes[1][0], &participant_hashes[1][1]){
+            Ok(true) => return Ok(()),
+            Ok(false) => return Err(Error::NotParticipant),
+            Err(err) => return Err(err.into()),
+        },
+        Err(err) => return Err(err.into()),
+    }
+}
+
 // The perun-channel-lockscript (pcls) is used to lock access to interacting with a channel and is attached as lock script
 // to the channel-cell (the cell which uses the perun-channel-type-script (pcts) as its type script).
 // A channel defines two participants, each of which has their own unlock_script_hash (also defined in the ChannelConstants.params.{party_a,party_b}).
@@ -21,17 +90,7 @@ use perun_common::{error::Error, perun_types::ChannelConstants};
 //
 // Note: This means, that each participant needs to use a secp256k1_blake160_sighash_all as input to interact with the channel.
 // This should not be a substantial restriction, since a payment input will likely be used anyway (e.g. for funding or fees).
-
-pub fn main() -> Result<(), Error> {
-    let script = load_script()?;
-    let args: Bytes = script.args().unpack();
-    // return an error if args is invalid
-    if !args.is_empty() {
-        return Err(Error::PCLSWithArgs);
-    }
-
-    // locate the ChannelConstants in the type script of the input cell.
-    // the best practice is to loop all the input cells in the group
+pub fn normal_mode() -> Result<(), Error> {
     for i in 0.. {
         // Loop over all input cells. This will loop over all input cells having the same lockscript as this lockscript (PCLS). Then we only load the type-script of the cell.
         let type_script = match load_cell_type(i, Source::GroupInput) {
