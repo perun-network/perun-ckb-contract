@@ -81,6 +81,7 @@ table ChannelParameters {
 // If e.g. the payment_min_capacity (inside the participants of the channel parameters) were to be significantly larger than the minimum 
 // capacity of the payment lock script, a party could steal funds from the channel participants with balances smaller than the 
 // payment_min_capacity upon channel closing.
+// type-script args contain ChannelConstants
 table ChannelConstants {
   params: ChannelParameters,
   // pfls__code_hash specifies the code hash of the lock_script that guards funds for this channel.
@@ -139,9 +140,12 @@ struct ChannelToken {
   out_point: OutPoint,
 }
 
+array ParentsPCTSHash [Byte32;2];
+
 table VirtualChannelStatus {
   state: ChannelState,
-  params: ChannelParameters,  
+  params: ChannelParameters,
+  parents:  ParentsPCTSHash,
 }
 
 union LedgerChannelOrVirtualChannel {

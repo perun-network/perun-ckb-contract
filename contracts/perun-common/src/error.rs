@@ -80,6 +80,8 @@ pub enum Error {
     InvalidSUDT,
     InvalidSUDTDataLength,
     DecreasingAmount,
+
+    VirtualChannelStatusInChannelCellWhereChannelStatusExpected,
 }
 
 impl From<SysError> for Error {

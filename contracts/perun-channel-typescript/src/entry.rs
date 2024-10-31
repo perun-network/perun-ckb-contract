@@ -24,8 +24,17 @@ use perun_common::{
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
-        ChannelWitness, ChannelWitnessUnion, SEC1EncodedPubKey,
+        Balances, 
+        ChannelCellData,
+        ChannelConstants,
+        ChannelParameters,
+        ChannelState,
+        ChannelStatus, 
+        ChannelToken,
+        ChannelWitness,
+        ChannelWitnessUnion,
+        LedgerChannelOrVirtualChannelUnionReader,
+        SEC1EncodedPubKey
     },
     sig::verify_signature,
 };
@@ -47,18 +56,18 @@ pub enum ChannelAction {
     /// in the inputs and the same channel with updated state is progressed in the outputs.
     /// The possible redeemers associated with the Progress action are Fund and Dispute.
     Progress {
-        old_status: ChannelStatus,
-        new_status: ChannelStatus,
+        old_status: ChannelCellData,
+        new_status: ChannelCellData,
     }, // one PCTS input, one PCTS output
     /// Start indicates that a channel is being started. This means that a **new channel** lives in the
     /// output cells of this transaction. No channel cell is consumes as an input.
     /// As Start does not consume a channel cell, there is no Witness associated with the Start action.
-    Start { new_status: ChannelStatus }, // no PCTS input, one PCTS output
+    Start { new_status: ChannelCellData }, // no PCTS input, one PCTS output
     /// Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
     /// recreated in the outputs with updated state. The possible redeemers associated with the Close action are
     /// Close, Abort and ForceClose.
     /// The channel type script assures that all funds are payed out to the correct parties upon closing.
-    Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
+    Close { old_status: ChannelCellData }, // one PCTS input , no PCTS output
 }
 
 pub fn main() -> Result<(), Error> {
@@ -73,7 +82,7 @@ pub fn main() -> Result<(), Error> {
     // We verify that there is at most one channel in the GroupInputs and GroupOutputs respectively.
     verify_max_one_channel()?;
     debug!("verify_max_one_channel passed");
-
+    
     // The channel constants do not change during the lifetime of a channel. They are located in the
     // args field of the pcts.
     let channel_constants =
@@ -113,13 +122,32 @@ pub fn main() -> Result<(), Error> {
     }
 }
 
+pub fn get_channel_status(cell_data: &ChannelCellData) -> Result<ChannelStatus, Error>{
+    if cell_data.as_reader().item_count() == 0{
+        return Err(Error::UnableToLoadAnyChannelStatus);
+    }
+    let item = match cell_data.as_reader().get(0){
+        Some(item) => item,
+        None => return Err(Error::UnableToLoadAnyChannelStatus),
+    };
+    match item.to_enum() {
+        LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(channel_status) => {
+            return Ok(channel_status.to_entity());
+        },
+        LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(_) => {
+            return Err(Error::VirtualChannelStatusInChannelCellWhereChannelStatusExpected);
+        },
+    }    
+}
+
 pub fn check_valid_start(
-    new_status: &ChannelStatus,
+    new_status: &ChannelCellData,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
     const FUNDER_INDEX: usize = 0;
 
     debug!("check_valid_start");
+    let new_state = get_channel_status(&new_status)?;
 
     // Upon start of a channel, the channel constants are stored in the args field of the pcts output.
     // We uniquely identify a channel through the combination of the channel id (hash of ChannelParameters,
@@ -136,7 +164,7 @@ pub fn check_valid_start(
 
     // We verify that the channel id is the hash of the channel parameters.
     verify_channel_id_integrity(
-        &new_status.state().channel_id(),
+        &new_state.state().channel_id(),
         &channel_constants.params(),
     )?;
     debug!("verify_channel_id_integrity passed");
@@ -160,7 +188,7 @@ pub fn check_valid_start(
     // We verify that the state the channel starts with is valid according to the utxo-adaption of the perun protocol.
     // For example, the channel must not be final and the version number must be 0.
     verify_state_valid_as_start(
-        &new_status.state(),
+        &new_state.state(),
         channel_constants.pfls_min_capacity().unpack(),
     )?;
     debug!("verify_state_valid_as_start passed");
@@ -168,36 +196,37 @@ pub fn check_valid_start(
     // Here we verify that the first party completes its funding and that itsfunds are actually locked to the pfls with correct args.
     verify_funding_in_outputs(
         FUNDER_INDEX,
-        &new_status.state().balances(),
+        &new_state.state().balances(),
         channel_constants,
     )?;
     debug!("verify_funding_in_outputs passed");
 
     // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
-    verify_funded_status(new_status, true)?;
+    verify_funded_status(&new_state, true)?;
     debug!("verify_funded_status passed");
 
     // We verify that the channel status is not disputed upon start.
-    verify_status_not_disputed(new_status)?;
+    verify_status_not_disputed(&new_state)?;
     debug!("verify_status_not_disputed passed");
     Ok(())
 }
 
 pub fn check_valid_progress(
-    old_status: &ChannelStatus,
-    new_status: &ChannelStatus,
+    old_status: &ChannelCellData,
+    new_status: &ChannelCellData,
     witness: &ChannelWitness,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
     debug!("check_valid_progress");
-
+    let old_state = &get_channel_status(&old_status)?;
+    let new_state = &get_channel_status(&new_status)?;
     // At this point we know that the transaction progresses the channel. There are two different
     // kinds of channel progression: Funding and Dispute. Which kind of progression is performed
     // depends on the witness.
 
     // Some checks are common to both kinds of progression and are performed here.
     // We check that both the old and the new state have the same channel id.
-    verify_equal_channel_id(&old_status.state(), &new_status.state())?;
+    verify_equal_channel_id(&old_state.state(), &new_state.state())?;
     debug!("verify_equal_channel_id passed");
 
     // No kind of channel progression should pay out any funds locked by the pfls, so we just check
@@ -216,27 +245,27 @@ pub fn check_valid_progress(
 
             // The funding array in a channel status reflects how much each party has funded up to that point.
             // Funding must not alter the channel's state.
-            verify_equal_channel_state(&old_status.state(), &new_status.state())?;
+            verify_equal_channel_state(&old_state.state(), &new_state.state())?;
             debug!("verify_equal_channel_state passed");
 
             // Funding an already funded status is invalid.
-            verify_status_not_funded(&old_status)?;
+            verify_status_not_funded(&old_state)?;
             debug!("verify_status_not_funded passed");
 
             verify_funding_in_outputs(
                 FUNDER_INDEX,
-                &old_status.state().balances(),
+                &old_state.state().balances(),
                 channel_constants,
             )?;
             debug!("verify_funding_in_outputs passed");
 
             // Funding a disputed status is invalid. This should not be able to happen anyway, but we check
             // it nontheless.
-            verify_status_not_disputed(new_status)?;
+            verify_status_not_disputed(new_state)?;
             debug!("verify_status_not_disputed passed");
 
             // We check that the funded bit in the channel status is set to true, iff the funding is complete.
-            verify_funded_status(&new_status, false)?;
+            verify_funded_status(&new_state, false)?;
             debug!("verify_funded_status passed");
             Ok(())
         }
@@ -257,23 +286,23 @@ pub fn check_valid_progress(
             // - version number is increasing (see verify_increasing_version_number)
             // - sum of balances is equal
             // - old state is not final
-            verify_channel_state_progression(old_status, &new_status.state())?;
+            verify_channel_state_progression(old_state, &new_state.state())?;
             debug!("verify_channel_state_progression passed");
 
             // One cannot dispute if funding is not complete.
-            verify_status_funded(old_status)?;
+            verify_status_funded(old_state)?;
             debug!("verify_status_funded passed");
 
             // The disputed flag in the new status must be set. This indicates that the channel can be closed
             // forcibly after the expiration of the challenge duration in a later transaction.
-            verify_status_disputed(new_status)?;
+            verify_status_disputed(new_state)?;
             debug!("verify_status_disputed passed");
 
             // We verify that the signatures of both parties are valid on the new channel state.
             verify_valid_state_sigs(
                 &d.sig_a().unpack(),
                 &d.sig_b().unpack(),
-                &new_status.state(),
+                &new_state.state(),
                 &channel_constants.params().party_a().pub_key(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
@@ -288,12 +317,12 @@ pub fn check_valid_progress(
 }
 
 pub fn check_valid_close(
-    old_status: &ChannelStatus,
+    old_status: &ChannelCellData,
     channel_witness: &ChannelWitness,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
     debug!("check_valid_close");
-
+    let old_state = &get_channel_status(&old_status)?;
     // At this point we know that this transaction closes the channel. There are three different kinds of
     // closing: Abort, ForceClose and Close. Which kind of closing is performed depends on the witness.
     // Every channel closing transaction must pay out all funds the the channel participants. The amount
@@ -308,14 +337,14 @@ pub fn check_valid_close(
             // An abort can be performed at any time by a channel participant on a channel for which funding
             // is not yet complete. It allows the initial party to reclaim its funds if e.g. the other party
             // refuses to fund the channel.
-            verify_status_not_funded(old_status)?;
+            verify_status_not_funded(old_state)?;
             debug!("verify_status_not_funded passed");
 
             // We verify that every party is payed the amount of funds that it has locked to the channel so far.
             // If abourt is called, Party A must have fully funded the channel and Party B can not have funded
             // the channel because of our funding protocol.
             verify_all_payed(
-                &old_status.state().balances().clear_index(PARTY_B_INDEX)?,
+                &old_state.state().balances().clear_index(PARTY_B_INDEX)?,
                 channel_capacity,
                 channel_constants,
                 true,
@@ -328,14 +357,14 @@ pub fn check_valid_close(
             // A force close can be performed after the channel was disputed and the challenge duration has
             // expired. Upon force close, each party is payed according to the balance distribution in the
             // latest state.
-            verify_status_funded(old_status)?;
+            verify_status_funded(old_state)?;
             debug!("verify_status_funded passed");
             verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?; // This is the check which ensures that a channel is only closed after the challenge duration has expired.
             debug!("verify_time_lock_expired passed");
-            verify_status_disputed(old_status)?;
+            verify_status_disputed(old_state)?;
             debug!("verify_status_disputed passed");
             verify_all_payed(
-                &old_status.state().balances(),
+                &old_state.state().balances(),
                 channel_capacity,
                 channel_constants,
                 false,
@@ -349,9 +378,9 @@ pub fn check_valid_close(
             // A channel can be closed by either party at any time after funding is complete.
             // For this the party needs to provide a final state (final bit set) and signatures
             // by all peers on that state.
-            verify_equal_channel_id(&old_status.state(), &c.state())?;
+            verify_equal_channel_id(&old_state.state(), &c.state())?;
             debug!("check_valid_close: Channel id verified");
-            verify_status_funded(old_status)?;
+            verify_status_funded(old_state)?;
             debug!("check_valid_close: Status funded verified");
             verify_state_finalized(&c.state())?;
             debug!("check_valid_close: State finalized verified");
@@ -379,7 +408,7 @@ pub fn check_valid_close(
 
 pub fn load_witness() -> Result<ChannelWitness, Error> {
     debug!("load_witness");
-    //There is only one channel cell in inputs so there can be only one element in the witness array. Sinc there is only one channel cell ,so this cell's witness data is at index 0 in the 
+    //There is only one channel cell in inputs so there can be only one element in the witness array. Sinc there is only one channel cell ,so this cell's witness data is at index 0 in the witness array 
     let witness_args = load_witness_args(0, Source::GroupInput)?;
     let witness_bytes: Bytes = witness_args
         .input_type()
@@ -572,7 +601,7 @@ pub fn verify_status_not_funded(status: &ChannelStatus) -> Result<(), Error> {
     }
     Ok(())
 }
-
+// TODO: remove virtual channel branch, once virtual channels are supportec
 pub fn verify_channel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
         return Err(Error::AppChannelsNotSupported);
@@ -840,16 +869,16 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
     }
     Ok(())
 }
-//TODO: Modify function to read ledger channel AND virtual channel's state from channel cell data field
+
 pub fn get_channel_action() -> Result<ChannelAction, Error> {
     let input_status_opt = load_cell_data(0, Source::GroupInput)
         .ok()
-        .map(|data| ChannelStatus::from_slice(data.as_slice()))
+        .map(|data| ChannelCellData::from_slice(data.as_slice()))
         .map_or(Ok(None), |v| v.map(Some))?;
 
     let output_status_opt = load_cell_data(0, Source::GroupOutput)
         .ok()
-        .map(|data| ChannelStatus::from_slice(data.as_slice()))
+        .map(|data| ChannelCellData::from_slice(data.as_slice()))
         .map_or(Ok(None), |v| v.map(Some))?;
 
     match (input_status_opt, output_status_opt) {
