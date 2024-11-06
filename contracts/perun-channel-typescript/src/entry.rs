@@ -16,7 +16,7 @@ use ckb_std::{
     debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_header,
-        load_script, load_script_hash, load_transaction, load_witness_args,
+        load_script, load_script_hash, load_transaction, load_witness_args,load_cell_type_hash, load_cell_type,
     },
     syscalls::{self, SysError},
 };
@@ -24,17 +24,10 @@ use perun_common::{
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, 
-        ChannelCellData,
-        ChannelConstants,
-        ChannelParameters,
-        ChannelState,
-        ChannelStatus, 
-        ChannelToken,
-        ChannelWitness,
-        ChannelWitnessUnion,
-        LedgerChannelOrVirtualChannelUnionReader,
-        SEC1EncodedPubKey
+        Balances, ChannelCellData, ChannelConstants, ChannelParameters, ChannelState,
+        ChannelStatus, ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute,
+        LedgerChannelOrVirtualChannelUnion, LedgerChannelOrVirtualChannelUnionReader,
+        SEC1EncodedPubKey, VirtualChannelStatus,
     },
     sig::verify_signature,
 };
@@ -70,6 +63,21 @@ pub enum ChannelAction {
     Close { old_status: ChannelCellData }, // one PCTS input , no PCTS output
 }
 
+pub enum DisputeMode {
+    Normal,
+    VCDisputeStart {
+        old_lc_status: ChannelStatus,
+        new_lc_status: ChannelStatus,
+        new_vc_status: VirtualChannelStatus,
+    },
+    VCDisputeProgress {
+        old_lc_status: ChannelStatus,
+        old_vc_status: VirtualChannelStatus,
+        new_lc_status: ChannelStatus,
+        new_vc_status: VirtualChannelStatus,
+    },
+}
+
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
@@ -82,7 +90,7 @@ pub fn main() -> Result<(), Error> {
     // We verify that there is at most one channel in the GroupInputs and GroupOutputs respectively.
     verify_max_one_channel()?;
     debug!("verify_max_one_channel passed");
-    
+
     // The channel constants do not change during the lifetime of a channel. They are located in the
     // args field of the pcts.
     let channel_constants =
@@ -121,23 +129,44 @@ pub fn main() -> Result<(), Error> {
         }
     }
 }
-
-pub fn get_channel_status(cell_data: &ChannelCellData) -> Result<ChannelStatus, Error>{
-    if cell_data.as_reader().item_count() == 0{
-        return Err(Error::UnableToLoadAnyChannelStatus);
+// gets valid channel action
+pub fn get_channel_status(cell_data: &ChannelCellData) -> Result<ChannelStatus, Error> {
+    if cell_data.as_reader().item_count() == 0 {
+        return Err(Error::ChannelCellDataIsEmpty);
     }
-    let item = match cell_data.as_reader().get(0){
+    let item = match cell_data.as_reader().get(0) {
         Some(item) => item,
         None => return Err(Error::UnableToLoadAnyChannelStatus),
     };
     match item.to_enum() {
         LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(channel_status) => {
             return Ok(channel_status.to_entity());
-        },
+        }
         LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(_) => {
             return Err(Error::VirtualChannelStatusInChannelCellWhereChannelStatusExpected);
-        },
-    }    
+        }
+    }
+}
+// returns the virtual channel status if present at index 1
+pub fn get_virtual_channel_status(
+    cell_data: &ChannelCellData,
+) -> Result<VirtualChannelStatus, Error> {
+    if cell_data.item_count() == 0 {
+        return Err(Error::ChannelCellDataIsEmpty);
+    }
+
+    let item = match cell_data.get(1) {
+        Some(item) => item,
+        None => return Err(Error::UnableToLoadAnyChannelStatus),
+    };
+    match item.to_enum() {
+        LedgerChannelOrVirtualChannelUnion::ChannelStatus(_) => {
+            return Err(Error::ChannelStatusInChannelCellDataWhereVirtualChannelStatusExpected);
+        }
+        LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(vc_status) => {
+            return Ok(vc_status);
+        }
+    }
 }
 
 pub fn check_valid_start(
@@ -163,10 +192,7 @@ pub fn check_valid_start(
     debug!("verify_thread_token_integrity passed");
 
     // We verify that the channel id is the hash of the channel parameters.
-    verify_channel_id_integrity(
-        &new_state.state().channel_id(),
-        &channel_constants.params(),
-    )?;
+    verify_channel_id_integrity(&new_state.state().channel_id(), &channel_constants.params())?;
     debug!("verify_channel_id_integrity passed");
 
     // We verify that the pcts is guarded by the pcls script specified in the channel constants
@@ -218,15 +244,18 @@ pub fn check_valid_progress(
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
     debug!("check_valid_progress");
-    let old_state = &get_channel_status(&old_status)?;
-    let new_state = &get_channel_status(&new_status)?;
+    let old_ledger_channel_state = &get_channel_status(&old_status)?;
+    let new_ledger_channel_state = &get_channel_status(&new_status)?;
     // At this point we know that the transaction progresses the channel. There are two different
     // kinds of channel progression: Funding and Dispute. Which kind of progression is performed
     // depends on the witness.
 
     // Some checks are common to both kinds of progression and are performed here.
     // We check that both the old and the new state have the same channel id.
-    verify_equal_channel_id(&old_state.state(), &new_state.state())?;
+    verify_equal_channel_id(
+        &old_ledger_channel_state.state(),
+        &new_ledger_channel_state.state(),
+    )?;
     debug!("verify_equal_channel_id passed");
 
     // No kind of channel progression should pay out any funds locked by the pfls, so we just check
@@ -245,69 +274,70 @@ pub fn check_valid_progress(
 
             // The funding array in a channel status reflects how much each party has funded up to that point.
             // Funding must not alter the channel's state.
-            verify_equal_channel_state(&old_state.state(), &new_state.state())?;
+            verify_equal_channel_state(
+                &old_ledger_channel_state.state(),
+                &new_ledger_channel_state.state(),
+            )?;
             debug!("verify_equal_channel_state passed");
 
             // Funding an already funded status is invalid.
-            verify_status_not_funded(&old_state)?;
+            verify_status_not_funded(&old_ledger_channel_state)?;
             debug!("verify_status_not_funded passed");
 
             verify_funding_in_outputs(
                 FUNDER_INDEX,
-                &old_state.state().balances(),
+                &old_ledger_channel_state.state().balances(),
                 channel_constants,
             )?;
             debug!("verify_funding_in_outputs passed");
 
             // Funding a disputed status is invalid. This should not be able to happen anyway, but we check
             // it nontheless.
-            verify_status_not_disputed(new_state)?;
+            verify_status_not_disputed(new_ledger_channel_state)?;
             debug!("verify_status_not_disputed passed");
 
             // We check that the funded bit in the channel status is set to true, iff the funding is complete.
-            verify_funded_status(&new_state, false)?;
+            verify_funded_status(&new_ledger_channel_state, false)?;
             debug!("verify_funded_status passed");
             Ok(())
         }
         //TODO: Adapt this for virtual channels
-        ChannelWitnessUnion::Dispute(d) => { //Note: We don't check whether the challenge duration has expiered or not. => We don't want to prevent people from posting higher state version in a disupte case 
+        ChannelWitnessUnion::Dispute(d) => {
+            //Note: We don't check whether the challenge duration has expiered or not. => We don't want to prevent people from posting higher state version in a disupte case
             debug!("ChannelWitnessUnion::Dispute");
-
-            // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
-            // the channel. For this, the honest party needs to provide the latest state (in the "new" channel status)
-            // as well as a valid signature by each party on that state (in the witness). After the expiration of the
-            // relative time lock (challenge duration), the honest party can forcibly close the channel.
-            // If a malicious party disputes with an old channel state, an honest party can dispute again with
-            // the latest state (with higher version number) and the corresponding signatures within the challenge
-            // duration.
-
-            // First, we verify the integrity of the channel state. For this, the following must hold:
-            // - channel id is equal
-            // - version number is increasing (see verify_increasing_version_number)
-            // - sum of balances is equal
-            // - old state is not final
-            verify_channel_state_progression(old_state, &new_state.state())?;
-            debug!("verify_channel_state_progression passed");
-
-            // One cannot dispute if funding is not complete.
-            verify_status_funded(old_state)?;
-            debug!("verify_status_funded passed");
-
-            // The disputed flag in the new status must be set. This indicates that the channel can be closed
-            // forcibly after the expiration of the challenge duration in a later transaction.
-            verify_status_disputed(new_state)?;
-            debug!("verify_status_disputed passed");
-
-            // We verify that the signatures of both parties are valid on the new channel state.
-            verify_valid_state_sigs(
-                &d.sig_a().unpack(),
-                &d.sig_b().unpack(),
-                &new_state.state(),
-                &channel_constants.params().party_a().pub_key(),
-                &channel_constants.params().party_b().pub_key(),
-            )?;
-            debug!("verify_valid_state_sigs passed");
-            Ok(())
+            //TODO: create two modes: normal dispute and vc_dispute
+            let dispute_mode = get_dispute_mode(&old_status, &new_status)?;
+            match dispute_mode {
+                DisputeMode::Normal => verify_normal_dispute(
+                    old_ledger_channel_state,
+                    new_ledger_channel_state,
+                    &channel_constants,
+                    &d,
+                ),
+                DisputeMode::VCDisputeStart {
+                    old_lc_status,
+                    new_lc_status,
+                    new_vc_status,
+                } => verify_vc_dispute_start(
+                    &old_lc_status,
+                    &new_lc_status,
+                    &new_vc_status,
+                    &d,
+                ),
+                DisputeMode::VCDisputeProgress {
+                    old_lc_status,
+                    old_vc_status,
+                    new_lc_status,
+                    new_vc_status,
+                } => verify_vc_dispute_progress(
+                    &old_lc_status,
+                    &old_vc_status,
+                    &new_lc_status,
+                    &new_vc_status,
+                    channel_constants,
+                    &d,
+                ),
+            }
         }
         // Close, ForceClose and Abort may not happen as channel progression (if there is a continuing channel output).
         ChannelWitnessUnion::Close(_) => Err(Error::ChannelCloseWithChannelOutput),
@@ -315,6 +345,94 @@ pub fn check_valid_progress(
         ChannelWitnessUnion::Abort(_) => Err(Error::ChannelAbortWithChannelOutput),
     }
 }
+
+
+pub fn verify_vc_dispute_start(
+    old_lc_status: &ChannelStatus,
+    new_lc_status: &ChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+    dispute: &Dispute,
+) -> Result<(), Error> {
+    // verify that the parents mentioned in the vc status are the two channel cells included in input and output
+    verify_parents_of_vc_exist(new_vc_status)?;
+    debug!("verify_parents_of_vc_exist passed");
+    
+    // verify that both parents in output have the same vc status and the sigs of vc status are valid
+    verify_vc_integrity(new_vc_status, dispute)?;
+    debug!("verify_vc_integrity passed");
+ 
+    // verify that funds locked in both the parent output cells, is the balance of vc state 
+    verify_vc_locked_funds(new_lc_status,new_vc_status)?;
+    debug!("verify_vc_locked_funds passed");
+
+    //verify third party access
+    verify_vc_third_party_access(new_vc_status)?;
+    debug!("verify_vc_third_party_access passed");
+
+    // verify integrity of ledger channel state
+    verify_channel_state_progression(old_lc_status, &new_lc_status.state())?;
+    debug!("verify_channel_state_progression passed");
+
+    Ok(())
+}
+
+pub fn verify_vc_dispute_progress(
+    old_lc_status: &ChannelStatus,
+    old_vc_status: &VirtualChannelStatus,
+    new_lc_status: &ChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+    channel_constants: &ChannelConstants,
+    dispute: &Dispute,
+) -> Result<(), Error> {
+    unimplemented!()
+}
+
+pub fn verify_normal_dispute(
+    old_ledger_channel_status: &ChannelStatus,
+    new_ledger_channel_status: &ChannelStatus,
+    channel_constants: &ChannelConstants,
+    dispute: &Dispute,
+) -> Result<(), Error> {
+    // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
+    // the channel. For this, the honest party needs to provide the latest state (in the "new" channel status)
+    // as well as a valid signature by each party on that state (in the witness). After the expiration of the
+    // relative time lock (challenge duration), the honest party can forcibly close the channel.
+    // If a malicious party disputes with an old channel state, an honest party can dispute again with
+    // the latest state (with higher version number) and the corresponding signatures within the challenge
+    // duration.
+
+    // First, we verify the integrity of the channel state. For this, the following must hold:
+    // - channel id is equal
+    // - version number is increasing (see verify_increasing_version_number)
+    // - sum of balances is equal
+    // - old state is not final
+    verify_channel_state_progression(
+        old_ledger_channel_status,
+        &new_ledger_channel_status.state(),
+    )?;
+    debug!("verify_channel_state_progression passed");
+
+    // One cannot dispute if funding is not complete.
+    verify_status_funded(old_ledger_channel_status)?;
+    debug!("verify_status_funded passed");
+
+    // The disputed flag in the new status must be set. This indicates that the channel can be closed
+    // forcibly after the expiration of the challenge duration in a later transaction.
+    verify_status_disputed(new_ledger_channel_status)?;
+    debug!("verify_status_disputed passed");
+
+    // We verify that the signatures of both parties are valid on the new channel state.
+    verify_valid_state_sigs(
+        &dispute.sig_a().unpack(),
+        &dispute.sig_b().unpack(),
+        &new_ledger_channel_status.state(),
+        &channel_constants.params().party_a().pub_key(),
+        &channel_constants.params().party_b().pub_key(),
+    )?;
+    debug!("verify_valid_state_sigs passed");
+    Ok(())
+}
+
 
 pub fn check_valid_close(
     old_status: &ChannelCellData,
@@ -406,9 +524,286 @@ pub fn check_valid_close(
     }
 }
 
+pub fn verify_vc_integrity(vc_status: &VirtualChannelStatus, dispute: &Dispute) -> Result<(), Error>{
+    let (_, output2) = get_parents_of_vc(vc_status)?;
+   
+    // Convert Option to Result for error handling
+    let vc_status1 = output2[0].as_ref().unwrap();
+    let vc_status2 = output2[1].as_ref().unwrap();
+
+    if vc_status1.as_slice() != vc_status2.as_slice(){
+        return Err(Error::ParentsOfVCInOutputHaveDifferentVCStatus);
+    }
+    verify_valid_state_sigs(
+        &dispute.vc_sigs().sig_a().as_bytes(),
+        &dispute.vc_sigs().sig_b().as_bytes(),
+        &vc_status1.state(),
+        &vc_status1.params().party_a().pub_key(),
+        &vc_status1.params().party_b().pub_key());
+
+    verify_valid_state_sigs(
+        &dispute.vc_sigs().sig_a().as_bytes(),
+        &dispute.vc_sigs().sig_b().as_bytes(),
+        &vc_status2.state(),
+        &vc_status2.params().party_a().pub_key(),
+        &vc_status2.params().party_b().pub_key());
+    Ok(())
+}
+
+pub fn verify_parents_of_vc_exist(vc_status: &VirtualChannelStatus) -> Result<(), Error>{
+    match get_parents_of_vc(vc_status){
+        Ok(_) => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
+pub fn get_parents_of_vc(vc_status: &VirtualChannelStatus) -> Result<([Option<ChannelStatus>; 2], [Option<VirtualChannelStatus>; 2]), Error>{
+    let parents_hashes = [vc_status.parents().nth0().unpack(), vc_status.parents().nth1().unpack()];
+    let mut parents_output_status: [Option<ChannelStatus>; 2] = [None, None];
+    let mut output_vc_statuses: [Option<VirtualChannelStatus>; 2] = [None, None];
+    let mut index = 0;
+    //iterate through parents pcts hashes
+    // find the input parent cell and check that it contains only channel status
+    // find the output parent cell and check that it contains a channel status and vc status
+    for parent_hash in &parents_hashes {
+        let parent_input_idx = match find_cell_by_type_hash(parent_hash, Source::Input) {
+            Ok(Some(idx)) => idx,
+            Ok(None) => return Err(Error::InputCellForGivenParticipantNotFound),
+            Err(err) => return Err(err.into()),
+        };
+
+        let parent_output_idx = match find_cell_by_type_hash(parent_hash, Source::Output) {
+            Ok(Some(idx)) => idx,
+            Ok(None) => return Err(Error::OutputCellForGivenParticipantNotFound),
+            Err(err) => return Err(err.into()),
+        };
+
+        let parent_input_data =  match load_cell_data(parent_input_idx, Source::Input) {
+            Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
+            Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+        };
+        //check that the input parent cell contains only channel status
+        verify_only_channel_status(&parent_input_data)?;
+
+        let output_data = match load_cell_data(parent_output_idx, Source::Output){
+            Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
+            Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+        };
+        if output_data.item_count() > 2 {
+            return Err(Error::InvalidOutputTxForVCDisputeStart);
+        }
+        let mut output_lc_status: Option<ChannelStatus> = None;
+        let mut output_vc_status: Option<VirtualChannelStatus> = None;
+        for i in 0..output_data.item_count(){
+            let output_enum = match output_data.get(i){
+                Some(output) => output.to_enum(),
+                None => return Err(Error::InvalidOutputTxForVCDisputeStart),
+            };
+            match output_enum{
+                LedgerChannelOrVirtualChannelUnion::ChannelStatus(status) => output_lc_status = Some(status),
+                LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(status) => output_vc_status = Some(status),
+            }
+        }
+
+        if index < 2{
+            parents_output_status[index] = output_lc_status;
+            output_vc_statuses[index] = output_vc_status;
+            index += 1;
+        }
+    }
+    Ok((parents_output_status, output_vc_statuses))
+}
+
+pub fn verify_only_channel_status(cell_data: &ChannelCellData) -> Result<(), Error>{
+    match get_channel_status(cell_data){
+        Ok(_) => Ok(()),
+        Err(_) => Err(Error::OnlyChannelStatusExpectedButThatIsNotTheCase),
+    }
+}
+
+pub fn verify_vc_locked_funds(lc_status:&ChannelStatus ,vc_status: &VirtualChannelStatus) -> Result<(), Error>{
+    let vc_balances = vc_status.state().balances();
+    let locked_funds = lc_status.state().balances().locked();
+    
+    for sub_alloc in locked_funds.into_iter(){
+        if sub_alloc.id().as_slice() == vc_status.state().channel_id().as_slice(){
+            let sub_balance = sub_alloc.balances();
+            match sub_balance.equal_in_sum(&vc_balances){
+                Ok(false) => return Err(Error::UnequalBalanceInLockedFundsAndVirtualChannelBalance),
+                _ => continue,
+            }
+            
+        } 
+    }
+    Ok(())
+}
+
+pub fn get_dispute_mode(
+    old_status: &ChannelCellData,
+    new_status: &ChannelCellData,
+) -> Result<DisputeMode, Error> {
+    if old_status.item_count() == 1 && new_status.item_count() == 1 {
+        return Ok(DisputeMode::Normal);
+    }
+
+    if old_status.item_count() == 1 && new_status.item_count() == 2 {
+        let old_state = get_channel_status(&old_status)?;
+        let new_state = get_channel_status(&new_status)?;
+        let new_vc_state = get_virtual_channel_status(&new_status)?;
+        return Ok(DisputeMode::VCDisputeStart {
+            old_lc_status: old_state,
+            new_lc_status: new_state,
+            new_vc_status: new_vc_state,
+        });
+    }
+
+    if old_status.item_count() == 2 && new_status.item_count() == 2 {
+        return Ok(DisputeMode::VCDisputeProgress {
+            old_lc_status: get_channel_status(&old_status)?,
+            old_vc_status: get_virtual_channel_status(&old_status)?,
+            new_lc_status: get_channel_status(&new_status)?,
+            new_vc_status: get_virtual_channel_status(&new_status)?,
+        });
+    }
+    Err(Error::InvalidDisputeMode)
+}
+
+/// verifies whether a third party apart from this channel's participatnts is allowed to modify the channel cell
+/// # Arguments
+/// * `old_lc_status` - The old ledger channel status
+/// * `new_lc_status` - The new ledger channel status
+/// * `new_vc_status` - The new virtual channel status
+/// 
+/// # Returns
+/// * `Ok(())` if the third party is allowed to modify the channel cell
+/// * `Err(Error)` if the third party is not allowed to modify the channel cell
+pub fn verify_vc_third_party_access(
+    new_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    // check if the channel cell of this type script is being modified by a third party
+    // find unlock script hash of the participants of this channel cell
+    // look for cells with the same unlock script hash in the inputs
+    // if you find any such cell, then it is not third party access and return with success
+    // else it is third party access and continue to next logic
+    let script = load_script()?;
+    let args: Bytes = script.args().unpack();
+    let channel_constants =
+        ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelConstants");
+    let unlock_script_a = channel_constants
+        .params()
+        .party_a()
+        .unlock_script_hash()
+        .unpack();
+    let unlock_script_b = channel_constants
+        .params()
+        .party_b()
+        .unlock_script_hash()
+        .unpack();
+    find_cell_by_lock_hash(&unlock_script_a, &unlock_script_b, Source::Input)?;
+
+    // at this point we know that the channel cell is being modified by a third party
+    // verify if third party is allowed to modify the channel cell
+    // Alice is trying to modify C_IB. Why should she be allowed to do that?
+    // load the pcts hashes of the parents from vc status.
+    // one of them should be equal to the pcts hash of this cell.
+    // consider the other pcts hash. load the channel cell with that pcts hash and find its participants unlock script hashes.
+    // find an input cell with unlock script hash with either of those participants.
+    // if such cells exist then third party access is allowed, else return error
+
+    let parent1_pcts_hash = new_vc_status.parents().nth0().unpack();
+    let parent2_pcts_hash = new_vc_status.parents().nth1().unpack();
+
+    let other_party_pcts_hash = find_other_party(&parent1_pcts_hash, &parent2_pcts_hash)?;
+
+    let other_channel_cell_idx =  match find_cell_by_type_hash(&other_party_pcts_hash, Source::Input) {
+        Ok(Some(idx)) => idx,
+        Ok(None) => return Err(Error::InputCellForGivenParticipantNotFound),
+        Err(err) => return Err(err.into()),
+    };
+
+    let other_party_type_script = load_cell_type(other_channel_cell_idx, Source::Input)?;
+    let other_party_args: Bytes = other_party_type_script.unwrap().args().unpack();
+    let other_party_constants = ChannelConstants::from_slice(&other_party_args)
+        .expect("unable to parse args as channel parameters");
+    let other_party_unlock_script_a = other_party_constants.params().party_a().unlock_script_hash().unpack();
+    let other_party_unlock_script_b = other_party_constants.params().party_b().unlock_script_hash().unpack();
+
+    match find_cell_by_lock_hash(&other_party_unlock_script_a, &other_party_unlock_script_b, Source::Input){
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => Err(Error::InputCellForGivenParticipantNotFound),
+        Err(err) => Err(err.into()),
+    }
+}
+
+
+/// finds the index of an input cell for the given pcts hash
+/// # Arguments
+/// * `pcts_hash` - The type hash of the channel cell
+/// * `source` - the source for data (Input, Output, GroupInput, GroupOutput, etc.)
+/// 
+/// # Returns
+/// * `Ok(Some(usize))` if the input cell with the given type hash is found
+/// * `Ok(None)` if the input cell with the given type hash is not found
+/// * `Err(Error)` if there is an error while loading the cell
+pub fn find_cell_by_type_hash(pcts_hash: &[u8; 32], source:Source) -> Result<Option<usize>, Error> {
+    for i in 0.. {
+        let type_hash = match load_cell_type_hash(i, source) {
+            Ok(Some(script)) => script,
+            Ok(None) => panic!("type script not found"),
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+        if &type_hash == pcts_hash {
+            return Ok(Some(i));
+        }
+    }
+    Ok(None)
+}
+///
+/// # Arguments
+/// * `party_a_unlock_hash` - The lock hash of the unlock script of party A
+/// * `party_b_unlock_script_hash` - The lock hash of the unlock script of party B
+/// * `source` - the source for data (Input, Output, GroupInput, GroupOutput, etc.)
+/// # Returns
+/// * `Ok(())` if the input cell with the given lock hash is found
+/// * `Err(Error)` if the input cell with the given lock hash is not found
+pub fn find_cell_by_lock_hash(party_a_unlock_hash:&[u8;32], party_b_unlock_script_hash: &[u8;32], source: Source) -> Result<Option<usize>, Error>{
+    for i in 0..{
+        let lock_hash = match load_cell_lock_hash(i, source) {
+            Ok(lock_hash) => lock_hash,
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+        if &lock_hash ==  party_a_unlock_hash || &lock_hash == party_b_unlock_script_hash{
+            return Ok(Some(i));
+        }
+    }
+    Ok(None)
+}
+
+/// finds the other party's pcts hash
+/// # Arguments
+/// * `parent1_pcts_hash` - The pcts hash of the first parent
+/// * `parent2_pcts_hash` - The pcts hash of the second parent
+/// 
+/// # Returns
+/// * `Ok([u8;32])` - The pcts hash of the other party
+/// * `Err(Error)` - If there is an error while loading the script hash
+pub fn find_other_party(
+    parent1_pcts_hash: &[u8; 32],
+    parent2_pcts_hash: &[u8; 32],
+) -> Result<[u8; 32], Error> {
+    let current_pcts_hash = &load_script_hash()?;
+    if parent1_pcts_hash == current_pcts_hash {
+        return Ok(*parent2_pcts_hash);
+    } else {
+        return Ok(*parent1_pcts_hash);
+    }
+}
+
 pub fn load_witness() -> Result<ChannelWitness, Error> {
     debug!("load_witness");
-    //There is only one channel cell in inputs so there can be only one element in the witness array. Sinc there is only one channel cell ,so this cell's witness data is at index 0 in the witness array 
+    //There is only one channel cell in inputs so there can be only one element in the witness array. Sinc there is only one channel cell ,so this cell's witness data is at index 0 in the witness array
     let witness_args = load_witness_args(0, Source::GroupInput)?;
     let witness_bytes: Bytes = witness_args
         .input_type()

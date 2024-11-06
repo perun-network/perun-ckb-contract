@@ -9,6 +9,18 @@ array SUDTDistribution [Uint128; 2];
 
 vector SUDTAllocation <SUDTBalances>;
 
+vector Locked_balances <SubAlloc>;
+
+table SubAlloc{
+  id: Byte32, //subchannel/virtual channel id
+  balances: SubBalances,
+}
+
+table SubBalances{
+  ckbytes: CKByteDistribution,
+  sudts: SUDTAllocation,
+}
+
 table SUDTAsset {
   type_script: Script,
   // The max_capacity of an SUDTAsset should always be at least the capacity needed for the SUDT type script + outputs_data
@@ -25,6 +37,7 @@ table SUDTBalances {
 table Balances {
   ckbytes: CKByteDistribution,
   sudts: SUDTAllocation,
+  locked: Locked_balances,
 }
 
 array True [byte; 1];
@@ -102,9 +115,15 @@ array Fund [byte; 1];
 
 array Abort [byte; 1];
 
+table VCDispute {
+  sig_a: Bytes,
+  sig_b: Bytes,
+}
+
 table Dispute {
   sig_a: Bytes,
   sig_b: Bytes,
+  vc_sigs: VCDispute,
 }
 table Close {
   state: ChannelState,

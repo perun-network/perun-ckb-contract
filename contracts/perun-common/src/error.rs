@@ -82,6 +82,15 @@ pub enum Error {
     DecreasingAmount,
 
     VirtualChannelStatusInChannelCellWhereChannelStatusExpected,
+    ChannelStatusInChannelCellDataWhereVirtualChannelStatusExpected,
+    ChannelCellDataIsEmpty,
+    InvalidDisputeMode,
+    InputCellForGivenParticipantNotFound,
+    OutputCellForGivenParticipantNotFound,
+    InvalidOutputTxForVCDisputeStart,
+    OnlyChannelStatusExpectedButThatIsNotTheCase,
+    ParentsOfVCInOutputHaveDifferentVCStatus,
+    UnequalBalanceInLockedFundsAndVirtualChannelBalance,
 }
 
 impl From<SysError> for Error {
