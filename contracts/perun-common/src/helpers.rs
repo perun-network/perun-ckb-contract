@@ -251,6 +251,32 @@ impl Balances {
         }
         Ok(true)
     }
+    //this balance contains funds to cover another balances 
+    pub fn covers_funds(&self, other: &Balances) -> Result<bool, Error>{
+        let self_total_ckbytes = self.ckbytes().sum();
+        let other_total_ckbytes = other.ckbytes().sum();
+        
+        if self_total_ckbytes  < other_total_ckbytes{
+            return Ok(false);
+        }
+
+        if self.sudts().len() != other.sudts().len() {
+            return Ok(false);
+        }
+        for (i, sb) in self.sudts().into_iter().enumerate() {
+            let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
+            if sb.asset().as_slice() != other_sb.asset().as_slice() {
+                return Ok(false);
+            }
+            let self_total_amount = sb.distribution().sum();
+            let other_total_amount = other_sb.distribution().sum();
+
+            if self_total_amount < other_total_amount{
+                return Ok(false);
+            }
+        
+        Ok(true)
+    }
 
     pub fn equal(&self, other: &Balances) -> bool {
         self.as_slice()[..] == other.as_slice()[..]

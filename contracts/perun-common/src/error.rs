@@ -91,6 +91,8 @@ pub enum Error {
     OnlyChannelStatusExpectedButThatIsNotTheCase,
     ParentsOfVCInOutputHaveDifferentVCStatus,
     UnequalBalanceInLockedFundsAndVirtualChannelBalance,
+    UndefinedBehavior,
+    LedgerChannelDoesNotHaveEnoughFundsForVC
 }
 
 impl From<SysError> for Error {

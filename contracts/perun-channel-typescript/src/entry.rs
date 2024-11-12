@@ -361,20 +361,49 @@ pub fn verify_vc_dispute_start(
     verify_vc_integrity(new_vc_status, dispute)?;
     debug!("verify_vc_integrity passed");
  
-    // verify that funds locked in both the parent output cells, is the balance of vc state 
+    // verify that funds locked in the parent output cell, is the balance of vc state 
     verify_vc_locked_funds(new_lc_status,new_vc_status)?;
     debug!("verify_vc_locked_funds passed");
 
     //verify third party access
-    verify_vc_third_party_access(new_vc_status)?;
+    let thrid_party_flag = match verify_vc_third_party_access(new_vc_status){
+        Ok(Some(flag)) => flag,
+        Ok(None) => return Err(Error::UndefinedBehavior),
+        Err(err) => return Err(err),
+    };
     debug!("verify_vc_third_party_access passed");
 
     // verify integrity of ledger channel state
-    verify_channel_state_progression(old_lc_status, &new_lc_status.state())?;
-    debug!("verify_channel_state_progression passed");
-
+    if thrid_party_flag{
+        verify_lc_channel_state_progression_in_vc_dispute_start_in_case_of_third_party(
+            old_lc_status,
+            new_lc_status,
+            new_vc_status,
+        )?;
+    } else{
+        verify_channel_state_progression(old_lc_status, &new_lc_status.state())?;
+    }
     Ok(())
 }
+
+// check C_IB's integrity in case Alice posted a VC Dispute Start Tx 
+pub fn verify_lc_channel_state_progression_in_vc_dispute_start_in_case_of_third_party(
+    old_lc_status: &ChannelStatus,
+    new_lc_status: &ChannelStatus,
+    new_vc_status: &VirtualChannelStatus
+) -> Result<(), Error> {
+    verify_equal_channel_id(&old_lc_status.state(), &new_lc_status.state())?; 
+    verify_equal_sum_of_balances(&old_lc_status.state().balances(), &new_lc_status.state().balances())?;
+    verify_state_not_finalized(&old_lc_status.state())?;
+    verify_state_finalized(&new_lc_status.state())?;
+    // since this the registerer of this Tx is a third party to this channel cell, it cannot change its lc state. 
+    // However it can add a vc state to indicate a dispute for vc was registered
+    // Nevertheless we still verify that the ledger channel has enough funds to cover vc channel's balances, even if the funds were not locked
+    verify_vc_unregistered_locked_funds(&new_lc_status.state().balances(), &new_vc_status.state().balances());
+    Ok(())
+}
+
+
 
 pub fn verify_vc_dispute_progress(
     old_lc_status: &ChannelStatus,
@@ -384,7 +413,27 @@ pub fn verify_vc_dispute_progress(
     channel_constants: &ChannelConstants,
     dispute: &Dispute,
 ) -> Result<(), Error> {
-    unimplemented!()
+    //check if there are any changes made to the state of the ledger channel. If yes then verify its integrity given the vc state
+    // if no changes are made to the ledger channel state then only verify the integrity of the vc state
+    if old_lc_status.state().as_slice() != new_lc_status.state().as_slice(){
+        verify_normal_dispute(old_lc_status, new_lc_status, channel_constants, dispute);
+        debug!("lc state was changed. Lc state progression verified");
+    }
+
+    // verify that funds locked in both the parent output cells, is the balance of vc state 
+    verify_vc_locked_funds(new_lc_status,new_vc_status)?;
+    debug!("verify_vc_locked_funds passed");
+
+    // verify increasing channel _ID
+    verify_equal_channel_id(&old_vc_status.state(), &new_vc_status.state())?;
+    debug!("vc dispute progress: verify equal channel id passed");
+    verify_increasing_version_number_for_vc(&old_vc_status.state(), &new_vc_status.state())?;
+    debug!("vc dispute progress: increasing version number passed");
+    verify_equal_sum_of_balances(&old_lc_status.state().balances(), &new_lc_status.state().balances())?;
+    debug!("vc dispute progress: equal sum of balances passed");
+    verify_state_not_finalized(&old_vc_status.state())?;
+    debug!("vc dispute progress: old vc state not finalized");
+    Ok(())
 }
 
 pub fn verify_normal_dispute(
@@ -525,7 +574,7 @@ pub fn check_valid_close(
 }
 
 pub fn verify_vc_integrity(vc_status: &VirtualChannelStatus, dispute: &Dispute) -> Result<(), Error>{
-    let (_, output2) = get_parents_of_vc(vc_status)?;
+    let (_, output2) = get_parents_of_vc(vc_status)?; // NOTE: It is redundant to verify both the vc states. Just verify the vc state in the output channel cell of this type script. The other one gets verified when its type script is executed
    
     // Convert Option to Result for error handling
     let vc_status1 = output2[0].as_ref().unwrap();
@@ -589,7 +638,7 @@ pub fn get_parents_of_vc(vc_status: &VirtualChannelStatus) -> Result<([Option<Ch
             Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
             Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
         };
-        if output_data.item_count() > 2 {
+        if output_data.item_count() > 2 { //TODO: Make this '=' instead of '>'
             return Err(Error::InvalidOutputTxForVCDisputeStart);
         }
         let mut output_lc_status: Option<ChannelStatus> = None;
@@ -637,7 +686,7 @@ pub fn verify_vc_locked_funds(lc_status:&ChannelStatus ,vc_status: &VirtualChann
     }
     Ok(())
 }
-
+//counts the number of statuses stored in ChannelCellData to derive disput mode
 pub fn get_dispute_mode(
     old_status: &ChannelCellData,
     new_status: &ChannelCellData,
@@ -679,7 +728,7 @@ pub fn get_dispute_mode(
 /// * `Err(Error)` if the third party is not allowed to modify the channel cell
 pub fn verify_vc_third_party_access(
     new_vc_status: &VirtualChannelStatus,
-) -> Result<(), Error> {
+) -> Result<Option<bool>, Error> {
     // check if the channel cell of this type script is being modified by a third party
     // find unlock script hash of the participants of this channel cell
     // look for cells with the same unlock script hash in the inputs
@@ -699,7 +748,11 @@ pub fn verify_vc_third_party_access(
         .party_b()
         .unlock_script_hash()
         .unpack();
-    find_cell_by_lock_hash(&unlock_script_a, &unlock_script_b, Source::Input)?;
+   match find_cell_by_lock_hash(&unlock_script_a, &unlock_script_b, Source::Input) {
+        Ok(Some(_)) => return Ok(Some(false)),
+        Ok(None) => (),
+        Err(err) => return Err(err.into()),
+    }
 
     // at this point we know that the channel cell is being modified by a third party
     // verify if third party is allowed to modify the channel cell
@@ -729,7 +782,7 @@ pub fn verify_vc_third_party_access(
     let other_party_unlock_script_b = other_party_constants.params().party_b().unlock_script_hash().unpack();
 
     match find_cell_by_lock_hash(&other_party_unlock_script_a, &other_party_unlock_script_b, Source::Input){
-        Ok(Some(_)) => Ok(()),
+        Ok(Some(_)) => Ok(Some(true)),
         Ok(None) => Err(Error::InputCellForGivenParticipantNotFound),
         Err(err) => Err(err.into()),
     }
@@ -840,6 +893,22 @@ pub fn verify_increasing_version_number(
     Err(Error::VersionNumberNotIncreasing)
 }
 
+pub fn verify_increasing_version_number_for_vc(
+    old_vc_state: &ChannelState,
+    new_vc_state: &ChannelState,
+) -> Result<(), Error> {
+    debug!(
+        "verify_increasing_version_number for vc old: {},  new: {}",
+        old_vc_state.version().unpack(),
+        new_vc_state.version().unpack()
+    );
+
+    if old_vc_state.version().unpack() < new_vc_state.version().unpack() {
+        return Ok(());
+    }
+    Err(Error::VersionNumberNotIncreasing)
+}
+
 pub fn verify_valid_state_sigs(
     sig_a: &Bytes,
     sig_b: &Bytes,
@@ -877,6 +946,16 @@ pub fn verify_equal_sum_of_balances(
         return Err(Error::SumOfBalancesNotEqual);
     }
     Ok(())
+}
+
+pub fn verify_vc_unregistered_locked_funds(
+    new_lc_balance: &Balances
+    , new_vc_balance: &Balances
+) -> Result<(), Error>{
+    if !new_lc_balance.covers_funds(new_lc_balance) {
+        return Err(Error::LedgerChannelDoesNotHaveEnoughFundsForVC);
+    }
+    Ok(())    
 }
 
 pub fn verify_channel_continues_locked() -> Result<(), Error> {
