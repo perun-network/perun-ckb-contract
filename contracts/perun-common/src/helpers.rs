@@ -274,7 +274,7 @@ impl Balances {
             if self_total_amount < other_total_amount{
                 return Ok(false);
             }
-        
+        }
         Ok(true)
     }
 

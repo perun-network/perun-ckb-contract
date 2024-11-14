@@ -81,6 +81,7 @@ pub enum Error {
     InvalidSUDTDataLength,
     DecreasingAmount,
 
+    InvalidParams,
     VirtualChannelStatusInChannelCellWhereChannelStatusExpected,
     ChannelStatusInChannelCellDataWhereVirtualChannelStatusExpected,
     ChannelCellDataIsEmpty,
@@ -92,7 +93,8 @@ pub enum Error {
     ParentsOfVCInOutputHaveDifferentVCStatus,
     UnequalBalanceInLockedFundsAndVirtualChannelBalance,
     UndefinedBehavior,
-    LedgerChannelDoesNotHaveEnoughFundsForVC
+    LedgerChannelDoesNotHaveEnoughFundsForVC,
+    InvalidParentPCTSHash,
 }
 
 impl From<SysError> for Error {

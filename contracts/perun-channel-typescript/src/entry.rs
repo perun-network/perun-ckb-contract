@@ -301,11 +301,9 @@ pub fn check_valid_progress(
             debug!("verify_funded_status passed");
             Ok(())
         }
-        //TODO: Adapt this for virtual channels
         ChannelWitnessUnion::Dispute(d) => {
             //Note: We don't check whether the challenge duration has expiered or not. => We don't want to prevent people from posting higher state version in a disupte case
             debug!("ChannelWitnessUnion::Dispute");
-            //TODO: create two modes: normal dispute and vc_dispute
             let dispute_mode = get_dispute_mode(&old_status, &new_status)?;
             match dispute_mode {
                 DisputeMode::Normal => verify_normal_dispute(
@@ -638,7 +636,7 @@ pub fn get_parents_of_vc(vc_status: &VirtualChannelStatus) -> Result<([Option<Ch
             Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
             Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
         };
-        if output_data.item_count() > 2 { //TODO: Make this '=' instead of '>'
+        if output_data.item_count() == 2 {
             return Err(Error::InvalidOutputTxForVCDisputeStart);
         }
         let mut output_lc_status: Option<ChannelStatus> = None;
@@ -849,8 +847,10 @@ pub fn find_other_party(
     let current_pcts_hash = &load_script_hash()?;
     if parent1_pcts_hash == current_pcts_hash {
         return Ok(*parent2_pcts_hash);
-    } else {
+    } else if parent2_pcts_hash == current_pcts_hash {
         return Ok(*parent1_pcts_hash);
+    } else{
+        return Err(Error::InvalidParentPCTSHash);
     }
 }
 
@@ -952,10 +952,11 @@ pub fn verify_vc_unregistered_locked_funds(
     new_lc_balance: &Balances
     , new_vc_balance: &Balances
 ) -> Result<(), Error>{
-    if !new_lc_balance.covers_funds(new_lc_balance) {
-        return Err(Error::LedgerChannelDoesNotHaveEnoughFundsForVC);
+    match new_lc_balance.covers_funds(new_vc_balance){
+        Ok(true) => Ok(()),
+        Ok(false) => return Err(Error::LedgerChannelDoesNotHaveEnoughFundsForVC),
+        Err(err) => return Err(err),
     }
-    Ok(())    
 }
 
 pub fn verify_channel_continues_locked() -> Result<(), Error> {
@@ -1075,7 +1076,7 @@ pub fn verify_status_not_funded(status: &ChannelStatus) -> Result<(), Error> {
     }
     Ok(())
 }
-// TODO: remove virtual channel branch, once virtual channels are supportec
+
 pub fn verify_channel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
         return Err(Error::AppChannelsNotSupported);
@@ -1084,7 +1085,7 @@ pub fn verify_channel_params_compatibility(params: &ChannelParameters) -> Result
         return Err(Error::NonLedgerChannelsNotSupported);
     }
     if params.is_virtual_channel().to_bool() {
-        return Err(Error::VirtualChannelsNotSupported);
+        return Err(Error::InvalidParams);
     }
     Ok(())
 }
