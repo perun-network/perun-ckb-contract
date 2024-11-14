@@ -96,6 +96,13 @@ pub enum Error {
     LedgerChannelDoesNotHaveEnoughFundsForVC,
     InvalidParentPCTSHash,
     ThirdPartyCannotChangeLedgerChannelStateInVCDisputeStart,
+    InvalidCloseMode,
+    InvalidParentsCountForVC,
+    ParentPCTSHashNotFound,
+    InvalidParentData,
+    VCParticipantIdxNotFound,
+    SUDTAllocationLengthMismatch,
+    VirtualChannelOverheadNotBurned,
 }
 
 impl From<SysError> for Error {

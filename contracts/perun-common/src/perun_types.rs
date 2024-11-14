@@ -7741,8 +7741,8 @@ impl molecule::prelude::Builder for ChannelTokenBuilder {
     }
 }
 #[derive(Clone)]
-pub struct ParentsPCTSHash(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for ParentsPCTSHash {
+pub struct ParentsVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for ParentsVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -7751,48 +7751,75 @@ impl ::core::fmt::LowerHex for ParentsPCTSHash {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for ParentsPCTSHash {
+impl ::core::fmt::Debug for ParentsVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for ParentsPCTSHash {
+impl ::core::fmt::Display for ParentsVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} [", Self::NAME)?;
-        write!(f, "{}", self.nth0())?;
-        write!(f, ", {}", self.nth1())?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
         write!(f, "]")
     }
 }
-impl ::core::default::Default for ParentsPCTSHash {
+impl ::core::default::Default for ParentsVec {
     fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0,
-        ];
-        ParentsPCTSHash::new_unchecked(v.into())
+        let v: Vec<u8> = vec![4, 0, 0, 0];
+        ParentsVec::new_unchecked(v.into())
     }
 }
-impl ParentsPCTSHash {
-    pub const TOTAL_SIZE: usize = 64;
-    pub const ITEM_SIZE: usize = 32;
-    pub const ITEM_COUNT: usize = 2;
-    pub fn nth0(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(0..32))
+impl ParentsVec {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
     }
-    pub fn nth1(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(32..64))
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
     }
-    pub fn as_reader<'r>(&'r self) -> ParentsPCTSHashReader<'r> {
-        ParentsPCTSHashReader::new_unchecked(self.as_slice())
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<ParentData> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> ParentData {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            ParentData::new_unchecked(self.0.slice(start..))
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            ParentData::new_unchecked(self.0.slice(start..end))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> ParentsVecReader<'r> {
+        ParentsVecReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for ParentsPCTSHash {
-    type Builder = ParentsPCTSHashBuilder;
-    const NAME: &'static str = "ParentsPCTSHash";
+impl molecule::prelude::Entity for ParentsVec {
+    type Builder = ParentsVecBuilder;
+    const NAME: &'static str = "ParentsVec";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        ParentsPCTSHash(data)
+        ParentsVec(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -7801,10 +7828,320 @@ impl molecule::prelude::Entity for ParentsPCTSHash {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ParentsPCTSHashReader::from_slice(slice).map(|reader| reader.to_entity())
+        ParentsVecReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ParentsPCTSHashReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        ParentsVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder().extend(self.into_iter())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct ParentsVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for ParentsVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for ParentsVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for ParentsVecReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} [", Self::NAME)?;
+        for i in 0..self.len() {
+            if i == 0 {
+                write!(f, "{}", self.get_unchecked(i))?;
+            } else {
+                write!(f, ", {}", self.get_unchecked(i))?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+impl<'r> ParentsVecReader<'r> {
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn item_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.item_count()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn get(&self, idx: usize) -> Option<ParentDataReader<'r>> {
+        if idx >= self.len() {
+            None
+        } else {
+            Some(self.get_unchecked(idx))
+        }
+    }
+    pub fn get_unchecked(&self, idx: usize) -> ParentDataReader<'r> {
+        let slice = self.as_slice();
+        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
+        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
+        if idx == self.len() - 1 {
+            ParentDataReader::new_unchecked(&self.as_slice()[start..])
+        } else {
+            let end_idx = start_idx + molecule::NUMBER_SIZE;
+            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
+            ParentDataReader::new_unchecked(&self.as_slice()[start..end])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for ParentsVecReader<'r> {
+    type Entity = ParentsVec;
+    const NAME: &'static str = "ParentsVecReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        ParentsVecReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(
+                Self,
+                TotalSizeNotMatch,
+                molecule::NUMBER_SIZE * 2,
+                slice_len
+            );
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        for pair in offsets.windows(2) {
+            let start = pair[0];
+            let end = pair[1];
+            ParentDataReader::verify(&slice[start..end], compatible)?;
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct ParentsVecBuilder(pub(crate) Vec<ParentData>);
+impl ParentsVecBuilder {
+    pub fn set(mut self, v: Vec<ParentData>) -> Self {
+        self.0 = v;
+        self
+    }
+    pub fn push(mut self, v: ParentData) -> Self {
+        self.0.push(v);
+        self
+    }
+    pub fn extend<T: ::core::iter::IntoIterator<Item = ParentData>>(mut self, iter: T) -> Self {
+        for elem in iter {
+            self.0.push(elem);
+        }
+        self
+    }
+    pub fn replace(&mut self, index: usize, v: ParentData) -> Option<ParentData> {
+        self.0
+            .get_mut(index)
+            .map(|item| ::core::mem::replace(item, v))
+    }
+}
+impl molecule::prelude::Builder for ParentsVecBuilder {
+    type Entity = ParentsVec;
+    const NAME: &'static str = "ParentsVecBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (self.0.len() + 1)
+            + self
+                .0
+                .iter()
+                .map(|inner| inner.as_slice().len())
+                .sum::<usize>()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let item_count = self.0.len();
+        if item_count == 0 {
+            writer.write_all(&molecule::pack_number(
+                molecule::NUMBER_SIZE as molecule::Number,
+            ))?;
+        } else {
+            let (total_size, offsets) = self.0.iter().fold(
+                (
+                    molecule::NUMBER_SIZE * (item_count + 1),
+                    Vec::with_capacity(item_count),
+                ),
+                |(start, mut offsets), inner| {
+                    offsets.push(start);
+                    (start + inner.as_slice().len(), offsets)
+                },
+            );
+            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+            for offset in offsets.into_iter() {
+                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+            }
+            for inner in self.0.iter() {
+                writer.write_all(inner.as_slice())?;
+            }
+        }
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        ParentsVec::new_unchecked(inner.into())
+    }
+}
+pub struct ParentsVecIterator(ParentsVec, usize, usize);
+impl ::core::iter::Iterator for ParentsVecIterator {
+    type Item = ParentData;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl ::core::iter::ExactSizeIterator for ParentsVecIterator {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+impl ::core::iter::IntoIterator for ParentsVec {
+    type Item = ParentData;
+    type IntoIter = ParentsVecIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.len();
+        ParentsVecIterator(self, 0, len)
+    }
+}
+impl<'r> ParentsVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> ParentsVecReaderIterator<'t, 'r> {
+        ParentsVecReaderIterator(&self, 0, self.len())
+    }
+}
+pub struct ParentsVecReaderIterator<'t, 'r>(&'t ParentsVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for ParentsVecReaderIterator<'t, 'r> {
+    type Item = ParentDataReader<'t>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.2 {
+            None
+        } else {
+            let ret = self.0.get_unchecked(self.1);
+            self.1 += 1;
+            Some(ret)
+        }
+    }
+}
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for ParentsVecReaderIterator<'t, 'r> {
+    fn len(&self) -> usize {
+        self.2 - self.1
+    }
+}
+#[derive(Clone)]
+pub struct IndexMap(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for IndexMap {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for IndexMap {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for IndexMap {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        let raw_data = hex_string(&self.raw_data());
+        write!(f, "{}(0x{})", Self::NAME, raw_data)
+    }
+}
+impl ::core::default::Default for IndexMap {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![0, 0];
+        IndexMap::new_unchecked(v.into())
+    }
+}
+impl IndexMap {
+    pub const TOTAL_SIZE: usize = 2;
+    pub const ITEM_SIZE: usize = 1;
+    pub const ITEM_COUNT: usize = 2;
+    pub fn nth0(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(0..1))
+    }
+    pub fn nth1(&self) -> Byte {
+        Byte::new_unchecked(self.0.slice(1..2))
+    }
+    pub fn raw_data(&self) -> molecule::bytes::Bytes {
+        self.as_bytes()
+    }
+    pub fn as_reader<'r>(&'r self) -> IndexMapReader<'r> {
+        IndexMapReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for IndexMap {
+    type Builder = IndexMapBuilder;
+    const NAME: &'static str = "IndexMap";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        IndexMap(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        IndexMapReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        IndexMapReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -7814,8 +8151,8 @@ impl molecule::prelude::Entity for ParentsPCTSHash {
     }
 }
 #[derive(Clone, Copy)]
-pub struct ParentsPCTSHashReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for ParentsPCTSHashReader<'r> {
+pub struct IndexMapReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for IndexMapReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -7824,38 +8161,40 @@ impl<'r> ::core::fmt::LowerHex for ParentsPCTSHashReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for ParentsPCTSHashReader<'r> {
+impl<'r> ::core::fmt::Debug for IndexMapReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for ParentsPCTSHashReader<'r> {
+impl<'r> ::core::fmt::Display for IndexMapReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        write!(f, "{}", self.nth0())?;
-        write!(f, ", {}", self.nth1())?;
-        write!(f, "]")
+        use molecule::hex_string;
+        let raw_data = hex_string(&self.raw_data());
+        write!(f, "{}(0x{})", Self::NAME, raw_data)
     }
 }
-impl<'r> ParentsPCTSHashReader<'r> {
-    pub const TOTAL_SIZE: usize = 64;
-    pub const ITEM_SIZE: usize = 32;
+impl<'r> IndexMapReader<'r> {
+    pub const TOTAL_SIZE: usize = 2;
+    pub const ITEM_SIZE: usize = 1;
     pub const ITEM_COUNT: usize = 2;
-    pub fn nth0(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
+    pub fn nth0(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[0..1])
     }
-    pub fn nth1(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[32..64])
+    pub fn nth1(&self) -> ByteReader<'r> {
+        ByteReader::new_unchecked(&self.as_slice()[1..2])
+    }
+    pub fn raw_data(&self) -> &'r [u8] {
+        self.as_slice()
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for ParentsPCTSHashReader<'r> {
-    type Entity = ParentsPCTSHash;
-    const NAME: &'static str = "ParentsPCTSHashReader";
+impl<'r> molecule::prelude::Reader<'r> for IndexMapReader<'r> {
+    type Entity = IndexMap;
+    const NAME: &'static str = "IndexMapReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        ParentsPCTSHashReader(slice)
+        IndexMapReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -7869,37 +8208,37 @@ impl<'r> molecule::prelude::Reader<'r> for ParentsPCTSHashReader<'r> {
         Ok(())
     }
 }
-pub struct ParentsPCTSHashBuilder(pub(crate) [Byte32; 2]);
-impl ::core::fmt::Debug for ParentsPCTSHashBuilder {
+pub struct IndexMapBuilder(pub(crate) [Byte; 2]);
+impl ::core::fmt::Debug for IndexMapBuilder {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:?})", Self::NAME, &self.0[..])
     }
 }
-impl ::core::default::Default for ParentsPCTSHashBuilder {
+impl ::core::default::Default for IndexMapBuilder {
     fn default() -> Self {
-        ParentsPCTSHashBuilder([Byte32::default(), Byte32::default()])
+        IndexMapBuilder([Byte::default(), Byte::default()])
     }
 }
-impl ParentsPCTSHashBuilder {
-    pub const TOTAL_SIZE: usize = 64;
-    pub const ITEM_SIZE: usize = 32;
+impl IndexMapBuilder {
+    pub const TOTAL_SIZE: usize = 2;
+    pub const ITEM_SIZE: usize = 1;
     pub const ITEM_COUNT: usize = 2;
-    pub fn set(mut self, v: [Byte32; 2]) -> Self {
+    pub fn set(mut self, v: [Byte; 2]) -> Self {
         self.0 = v;
         self
     }
-    pub fn nth0(mut self, v: Byte32) -> Self {
+    pub fn nth0(mut self, v: Byte) -> Self {
         self.0[0] = v;
         self
     }
-    pub fn nth1(mut self, v: Byte32) -> Self {
+    pub fn nth1(mut self, v: Byte) -> Self {
         self.0[1] = v;
         self
     }
 }
-impl molecule::prelude::Builder for ParentsPCTSHashBuilder {
-    type Entity = ParentsPCTSHash;
-    const NAME: &'static str = "ParentsPCTSHashBuilder";
+impl molecule::prelude::Builder for IndexMapBuilder {
+    type Entity = IndexMap;
+    const NAME: &'static str = "IndexMapBuilder";
     fn expected_length(&self) -> usize {
         Self::TOTAL_SIZE
     }
@@ -7912,7 +8251,272 @@ impl molecule::prelude::Builder for ParentsPCTSHashBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        ParentsPCTSHash::new_unchecked(inner.into())
+        IndexMap::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct ParentData(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for ParentData {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for ParentData {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for ParentData {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "pcts_hash", self.pcts_hash())?;
+        write!(f, ", {}: {}", "idx_map", self.idx_map())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for ParentData {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            46, 0, 0, 0, 12, 0, 0, 0, 44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        ParentData::new_unchecked(v.into())
+    }
+}
+impl ParentData {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn pcts_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn idx_map(&self) -> IndexMap {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            IndexMap::new_unchecked(self.0.slice(start..end))
+        } else {
+            IndexMap::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> ParentDataReader<'r> {
+        ParentDataReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for ParentData {
+    type Builder = ParentDataBuilder;
+    const NAME: &'static str = "ParentData";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        ParentData(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        ParentDataReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        ParentDataReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .pcts_hash(self.pcts_hash())
+            .idx_map(self.idx_map())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct ParentDataReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for ParentDataReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for ParentDataReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for ParentDataReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "pcts_hash", self.pcts_hash())?;
+        write!(f, ", {}: {}", "idx_map", self.idx_map())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> ParentDataReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn pcts_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn idx_map(&self) -> IndexMapReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            IndexMapReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            IndexMapReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for ParentDataReader<'r> {
+    type Entity = ParentData;
+    const NAME: &'static str = "ParentDataReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        ParentDataReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        IndexMapReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct ParentDataBuilder {
+    pub(crate) pcts_hash: Byte32,
+    pub(crate) idx_map: IndexMap,
+}
+impl ParentDataBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn pcts_hash(mut self, v: Byte32) -> Self {
+        self.pcts_hash = v;
+        self
+    }
+    pub fn idx_map(mut self, v: IndexMap) -> Self {
+        self.idx_map = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for ParentDataBuilder {
+    type Entity = ParentData;
+    const NAME: &'static str = "ParentDataBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.pcts_hash.as_slice().len()
+            + self.idx_map.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.pcts_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.idx_map.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.pcts_hash.as_slice())?;
+        writer.write_all(self.idx_map.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        ParentData::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
@@ -7947,25 +8551,23 @@ impl ::core::fmt::Display for VirtualChannelStatus {
 impl ::core::default::Default for VirtualChannelStatus {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            5, 2, 0, 0, 16, 0, 0, 0, 121, 0, 0, 0, 197, 1, 0, 0, 105, 0, 0, 0, 20, 0, 0, 0, 52, 0,
-            0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 36, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 76, 1, 0, 0, 32, 0, 0, 0, 157, 0, 0, 0, 26, 1, 0, 0, 58,
-            1, 0, 0, 66, 1, 0, 0, 66, 1, 0, 0, 71, 1, 0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0,
-            60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            201, 1, 0, 0, 16, 0, 0, 0, 121, 0, 0, 0, 197, 1, 0, 0, 105, 0, 0, 0, 20, 0, 0, 0, 52,
+            0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 36,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 76, 1, 0, 0, 32, 0, 0, 0, 157, 0, 0, 0, 26, 1, 0, 0,
+            58, 1, 0, 0, 66, 1, 0, 0, 66, 1, 0, 0, 71, 1, 0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0,
+            0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 125,
-            0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 4, 0, 0, 0,
         ];
         VirtualChannelStatus::new_unchecked(v.into())
     }
@@ -8000,14 +8602,14 @@ impl VirtualChannelStatus {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         ChannelParameters::new_unchecked(self.0.slice(start..end))
     }
-    pub fn parents(&self) -> ParentsPCTSHash {
+    pub fn parents(&self) -> ParentsVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            ParentsPCTSHash::new_unchecked(self.0.slice(start..end))
+            ParentsVec::new_unchecked(self.0.slice(start..end))
         } else {
-            ParentsPCTSHash::new_unchecked(self.0.slice(start..))
+            ParentsVec::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> VirtualChannelStatusReader<'r> {
@@ -8101,14 +8703,14 @@ impl<'r> VirtualChannelStatusReader<'r> {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         ChannelParametersReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn parents(&self) -> ParentsPCTSHashReader<'r> {
+    pub fn parents(&self) -> ParentsVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[16..]) as usize;
-            ParentsPCTSHashReader::new_unchecked(&self.as_slice()[start..end])
+            ParentsVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            ParentsPCTSHashReader::new_unchecked(&self.as_slice()[start..])
+            ParentsVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -8163,7 +8765,7 @@ impl<'r> molecule::prelude::Reader<'r> for VirtualChannelStatusReader<'r> {
         }
         ChannelStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         ChannelParametersReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        ParentsPCTSHashReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        ParentsVecReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -8171,7 +8773,7 @@ impl<'r> molecule::prelude::Reader<'r> for VirtualChannelStatusReader<'r> {
 pub struct VirtualChannelStatusBuilder {
     pub(crate) state: ChannelState,
     pub(crate) params: ChannelParameters,
-    pub(crate) parents: ParentsPCTSHash,
+    pub(crate) parents: ParentsVec,
 }
 impl VirtualChannelStatusBuilder {
     pub const FIELD_COUNT: usize = 3;
@@ -8183,7 +8785,7 @@ impl VirtualChannelStatusBuilder {
         self.params = v;
         self
     }
-    pub fn parents(mut self, v: ParentsPCTSHash) -> Self {
+    pub fn parents(mut self, v: ParentsVec) -> Self {
         self.parents = v;
         self
     }

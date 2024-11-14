@@ -159,12 +159,18 @@ struct ChannelToken {
   out_point: OutPoint,
 }
 
-array ParentsPCTSHash [Byte32;2];
+vector ParentsVec<ParentData>;
 
+array index_map[byte;2];
+
+table ParentData {
+  pcts_hash: Byte32,
+  idx_map: index_map,
+}
 table VirtualChannelStatus {
   state: ChannelState,
   params: ChannelParameters,
-  parents:  ParentsPCTSHash,
+  parents:  ParentsVec,
 }
 
 union LedgerChannelOrVirtualChannel {

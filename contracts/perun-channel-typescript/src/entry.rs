@@ -1,5 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+use core::{panic, result::Result};
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{self, vec};
@@ -24,10 +24,7 @@ use perun_common::{
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelCellData, ChannelConstants, ChannelParameters, ChannelState,
-        ChannelStatus, ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute,
-        LedgerChannelOrVirtualChannelUnion, LedgerChannelOrVirtualChannelUnionReader,
-        SEC1EncodedPubKey, VirtualChannelStatus,
+        Balances, ChannelCellData, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute, IndexMap, LedgerChannelOrVirtualChannelUnion, LedgerChannelOrVirtualChannelUnionReader, ParentsVec, SEC1EncodedPubKey, SUDTAllocation, VirtualChannelStatus
     },
     sig::verify_signature,
 };
@@ -76,6 +73,11 @@ pub enum DisputeMode {
         new_lc_status: ChannelStatus,
         new_vc_status: VirtualChannelStatus,
     },
+}
+
+pub enum CloseMode{
+    NormalMode,
+    VCMode,
 }
 
 pub fn main() -> Result<(), Error> {
@@ -483,8 +485,61 @@ pub fn verify_normal_dispute(
     Ok(())
 }
 
+pub fn get_close_mode(
+    old_status: &ChannelCellData
+) -> Result<CloseMode, Error>{
+    if old_status.item_count() == 1{
+        return Ok(CloseMode::NormalMode);
+    }
+    if old_status.item_count() == 2{
+        return Ok(CloseMode::VCMode);
+    }
+    Err(Error::InvalidCloseMode)
+}
 
 pub fn check_valid_close(
+    old_status: &ChannelCellData,
+    channel_witness: &ChannelWitness,
+    channel_constants: &ChannelConstants,
+) -> Result<(), Error> {
+    //first get close mode
+    // if normal then use check_valid_close()
+    // if not normal, then check_valid_vc_close()
+    debug!("check_valid_close");
+    let close_mode = get_close_mode(old_status)?;
+    match close_mode{
+        CloseMode::NormalMode => check_valid_normal_close(old_status, channel_witness, channel_constants),
+        CloseMode::VCMode => check_valid_vc_close(old_status, channel_constants),
+    }
+}
+
+pub fn check_valid_vc_close(
+    old_status: &ChannelCellData,
+    channel_constants: &ChannelConstants,) -> Result<(), Error>{
+     
+    let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
+    let old_lc_status = get_channel_status(&old_status)?;
+    let old_vc_status = get_virtual_channel_status(&old_status)?;
+
+    // Both vc and parent channel's challenge duration must expire to close vc
+    verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
+    verify_time_lock_expired(old_vc_status.params().challenge_duration().unpack())?;
+    debug!("verify_time_lock_expired passed");
+
+    // to close a vc, a dispute must be registered for its parent perviously
+    verify_status_disputed(&old_lc_status)?;
+    debug!("verify_status_disputed passed");   
+    
+    verify_all_payed_vc(
+        &old_lc_status.state().balances(),
+        channel_capacity,
+        channel_constants,
+        &old_vc_status)?;
+    
+    Ok(())
+}
+
+pub fn check_valid_normal_close(
     old_status: &ChannelCellData,
     channel_witness: &ChannelWitness,
     channel_constants: &ChannelConstants,
@@ -574,6 +629,63 @@ pub fn check_valid_close(
     }
 }
 
+pub fn get_idx_map(
+    parents: &ParentsVec
+) -> Result<Option<IndexMap>, Error>{
+    let pcts_hash = match load_cell_type_hash(0, Source::GroupInput)?{
+        Some(hash) => hash,
+        None => panic!("type script not found"),
+    };	
+    for i in 0..parents.len(){
+        let parent = match parents.get(i){
+            Some(parent) => parent,
+            None => return Err(Error::InvalidParentData),
+        };
+        if parent.pcts_hash().unpack() == pcts_hash{
+            return Ok(Some(parent.idx_map()));
+        }
+    }
+    Ok(None)
+}   
+
+/// get the participant index in vc, for a given participant index in lc
+pub fn get_vc_participant_idx(
+        lc_participant_idx: u8,
+        idx_map: &IndexMap,
+    ) -> Result<usize, Error>{
+    //CONTEXT: 
+    //For any perun channel, the participant index of proposer is defined to be 0 and that of proposee is 1
+    // Consider the situation where:
+    //  Alice and Ingrid have a ledger channel (C_AI),
+    //  Ingrid and Bob have lc C_IB, 
+    //  Alice and Bob have virtual channel VC_AB
+    //
+    // Let Bob be the proposer of the VC_AB then,
+    //      participant index of Bob in VC_AB is 0 
+    //      participant index of Alice in VC_AB is 1
+    // In C_IB, let Ingrid be the proposer then,
+    //      participant index of Ingrid in C_IB is 0
+    //      participant index of Bob in C_IB is 1 
+    //
+    // An index map exists for every parent of a VC. Thus VC_AB will have an index map for C_AI and one for C_IB
+    // The index map for C_IB will be [1,0]. Why?
+    // index_map[0] = 1 ==> This means the funds for Proposer of VC (aka Bob) is covered by the proposee of C_IB (aka Bob) ===> True according to given situation
+    // index_map[1] = 0 ==> This means the funds for Proposee of VC (aka Alice) is covered by the proposer of C_IB (aka Ingrid) ===> True according to given situation
+    // 
+    // Which idx does this function return?
+    // Let this PCTS belong to C_IB, then 
+    //      calling this function for Bob i.e, get_vc_participant_idx(1, &index_map) should return 0
+    //      calling this function for Ingrid i.e, get_vc_participant_idx(0, &index_map) should return 1
+        if idx_map.nth0().as_slice()[0] == lc_participant_idx{
+            return Ok(0);
+        }
+        if idx_map.nth1().as_slice()[0] == lc_participant_idx{
+            return Ok(1);
+        }
+        Err(Error::VCParticipantIdxNotFound)
+    }
+    
+
 pub fn verify_vc_integrity(vc_status: &VirtualChannelStatus, dispute: &Dispute) -> Result<(), Error>{
     let (_, output2) = get_parents_of_vc(vc_status)?; // NOTE: It is redundant to verify both the vc states. Just verify the vc state in the output channel cell of this type script. The other one gets verified when its type script is executed
    
@@ -608,7 +720,21 @@ pub fn verify_parents_of_vc_exist(vc_status: &VirtualChannelStatus) -> Result<()
 }
 
 pub fn get_parents_of_vc(vc_status: &VirtualChannelStatus) -> Result<([Option<ChannelStatus>; 2], [Option<VirtualChannelStatus>; 2]), Error>{
-    let parents_hashes = [vc_status.parents().nth0().unpack(), vc_status.parents().nth1().unpack()];
+    if vc_status.parents().len() != 2{
+        return Err(Error::InvalidParentsCountForVC);
+    }
+    let parent1_hash = match vc_status.parents().get(0){
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
+
+    let parent2_hash = match vc_status.parents().get(1){
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
+
+    let parents_hashes: [[u8;32];2] = [parent1_hash, parent2_hash];
+
     let mut parents_output_status: [Option<ChannelStatus>; 2] = [None, None];
     let mut output_vc_statuses: [Option<VirtualChannelStatus>; 2] = [None, None];
     let mut index = 0;
@@ -756,16 +882,21 @@ pub fn verify_vc_third_party_access(
     }
 
     // at this point we know that the channel cell is being modified by a third party
-    // verify if third party is allowed to modify the channel cell
-    // Alice is trying to modify C_IB. Why should she be allowed to do that?
+    // To verify if third party is allowed to modify the channel cell
     // load the pcts hashes of the parents from vc status.
     // one of them should be equal to the pcts hash of this cell.
     // consider the other pcts hash. load the channel cell with that pcts hash and find its participants unlock script hashes.
     // find an input cell with unlock script hash with either of those participants.
     // if such cells exist then third party access is allowed, else return error
 
-    let parent1_pcts_hash = new_vc_status.parents().nth0().unpack();
-    let parent2_pcts_hash = new_vc_status.parents().nth1().unpack();
+    let parent1_pcts_hash = match new_vc_status.parents().get(0){
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
+    let parent2_pcts_hash = match new_vc_status.parents().get(1){
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
 
     let other_party_pcts_hash = find_other_party(&parent1_pcts_hash, &parent2_pcts_hash)?;
 
@@ -1187,6 +1318,139 @@ pub fn verify_status_not_disputed(status: &ChannelStatus) -> Result<(), Error> {
 pub fn verify_status_disputed(status: &ChannelStatus) -> Result<(), Error> {
     if !status.disputed().to_bool() {
         return Err(Error::StatusNotDisputed);
+    }
+    Ok(())
+}
+
+pub fn verify_all_payed_vc(
+    lc_final_balances: &Balances,
+    lc_channel_capacity: u64,
+    lc_channel_constants: &ChannelConstants,
+    vc_status: &VirtualChannelStatus,
+)-> Result<(), Error>{
+    debug!("verify_all_payed_vc");
+    let vc_sudts = vc_status.state().balances().sudts();
+    let minimum_payment_a = lc_channel_constants
+        .params()
+        .party_a()
+        .payment_min_capacity()
+        .unpack();
+    
+    let minimum_payment_b = lc_channel_constants
+        .params()
+        .party_b()
+        .payment_min_capacity()
+        .unpack();
+    
+
+    // overhead of of adding an element to ChannelCellData vector is 4 bytes (offset)
+    let channel_cell_data_overhead = 4usize;
+    // overhead of a union type LedgerChannelOrVirtualChannel is 4 bytes (type id)
+    let union_type_overhead = 4usize;
+    let vc_overhead = channel_cell_data_overhead + union_type_overhead + vc_status.total_size();
+    let reimburse_a = lc_final_balances.sudts().get_locked_ckbytes();
+    
+    let reimburse_b = reimburse_a;
+    let idx_map = match get_idx_map(&vc_status.parents())?{
+        Some(map) => map,
+        None => return Err(Error::InvalidParentData),
+    };
+
+    let party_a_vc_participant_idx = get_vc_participant_idx(0, &idx_map)?;
+    let party_b_vc_participant_idx = get_vc_participant_idx(1, &idx_map)?;
+    
+    let ckbytes_balance_a = lc_final_balances.ckbytes().get(0)? + lc_channel_capacity + reimburse_a;
+    let ckbytes_balance_vc_a = vc_status.state().balances().ckbytes().get(party_a_vc_participant_idx)?;
+    let total_ckbytes_balance_a = ckbytes_balance_vc_a + ckbytes_balance_a;
+    let payment_script_hash_a = lc_channel_constants
+        .params()
+        .party_a()
+        .payment_script_hash()
+        .unpack();
+
+    let ckbytes_balance_b = lc_final_balances.ckbytes().get(1)? + reimburse_b;
+    let ckbytes_balance_vc_b = vc_status.state().balances().ckbytes().get(party_b_vc_participant_idx)?;
+    let total_ckbytes_balance_b = ckbytes_balance_vc_b + ckbytes_balance_b;
+    let payment_script_hash_b = lc_channel_constants
+        .params()
+        .party_b()
+        .payment_script_hash()
+        .unpack();
+
+    debug!("ckbytes_balance_a: {}", ckbytes_balance_a);
+    debug!("ckbytes_balance_b: {}", ckbytes_balance_b);
+
+    let mut ckbytes_outputs_a = 0;
+    let mut ckbytes_outputs_b = 0;
+
+    let mut udt_outputs_a =
+        vec![0u128; lc_final_balances.sudts().len().try_into().unwrap()].into_boxed_slice();
+    let mut udt_outputs_b =
+        vec![0u128; lc_final_balances.sudts().len().try_into().unwrap()].into_boxed_slice();
+
+    let outputs = load_transaction()?.raw().outputs();
+
+    // Note: Currently it is allowed to pay out a party's CKBytes in the capacity field of an
+    // output, that is used as SUDT payment.
+    for (i, output) in outputs.into_iter().enumerate() {
+        let output_lock_script_hash = load_cell_lock_hash(i, Source::Output)?;
+
+        if output_lock_script_hash[..] == payment_script_hash_a[..] {
+            if output.type_().is_some() {
+                let (sudt_idx, amount) = get_sudt_amout(
+                    lc_final_balances,
+                    i,
+                    &output.type_().to_opt().expect("checked above"),
+                )?;
+                udt_outputs_a[sudt_idx] += amount;
+            }
+            ckbytes_outputs_a += output.capacity().unpack();
+        }
+        if output_lock_script_hash[..] == payment_script_hash_b[..] {
+            if output.type_().is_some() {
+                let (sudt_idx, amount) = get_sudt_amout(
+                    lc_final_balances,
+                    i,
+                    &output.type_().to_opt().expect("checked above"),
+                )?;
+                udt_outputs_b[sudt_idx] += amount;
+            }
+            ckbytes_outputs_b += output.capacity().unpack();
+        }
+    }
+    debug!("ckbytes_outputs_a: {}", ckbytes_outputs_a);
+    debug!("ckbytes_outputs_b: {}", ckbytes_outputs_b);
+
+
+    // Parties with balances below the minimum capacity of the payment script
+    // are not required to be payed.
+    if (ckbytes_balance_a > ckbytes_outputs_a && ckbytes_balance_a >= minimum_payment_a)
+        || (ckbytes_balance_b > ckbytes_outputs_b && ckbytes_balance_b >= minimum_payment_b)
+    {
+        return Err(Error::NotAllPayed);
+    }
+
+    // ckbytes for storing vc state must be burned
+    if total_ckbytes_balance_a + total_ckbytes_balance_b + vc_overhead as u64 > ckbytes_outputs_a + ckbytes_outputs_b {
+        return Err(Error::VirtualChannelOverheadNotBurned);
+    }
+
+    debug!("udt_outputs_a: {:?}", udt_outputs_a);
+    debug!("udt_outputs_b: {:?}", udt_outputs_b);
+
+    if !lc_final_balances.sudts().fully_represented_vc(
+            0,
+            party_a_vc_participant_idx,
+            &vc_sudts,
+            &udt_outputs_a)? {
+        return Err(Error::NotAllPayed);
+    }
+    if !lc_final_balances.sudts().fully_represented_vc(
+            1,
+            party_b_vc_participant_idx,
+            &vc_sudts,
+            &udt_outputs_b)? {
+        return Err(Error::NotAllPayed);
     }
     Ok(())
 }

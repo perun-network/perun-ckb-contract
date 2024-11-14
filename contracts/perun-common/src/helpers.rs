@@ -349,6 +349,25 @@ impl SUDTAllocation {
         }
         return Ok(true);
     }
+
+    pub fn fully_represented_vc(&self,lc_participant_idx: usize, vc_participant_idx: usize,vc_sudts: &SUDTAllocation, values: &[u128]) -> Result<bool, Error>{
+        if values.len() < self.len() {
+            return Ok(false);
+        }
+        if self.len() != vc_sudts.len(){
+            return Err(Error::SUDTAllocationLengthMismatch);
+        }
+        for (i, sudt_balances_lc) in self.clone().into_iter().enumerate() {
+            let lc_balance = sudt_balances_lc.distribution().get(lc_participant_idx)?;
+            let (_, vc_distribution) = vc_sudts.get_distribution(&sudt_balances_lc.asset().type_script())?;
+            let vc_balance = vc_distribution.get(vc_participant_idx)?;
+            // lc_balance + vc_balance should be equal to values[i]
+            if lc_balance + vc_balance != values[i]{
+                return Ok(false);
+            } 
+        }
+        Ok(true)
+    }
 }
 
 impl CKByteDistribution {
