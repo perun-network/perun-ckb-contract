@@ -95,6 +95,7 @@ pub enum Error {
     UndefinedBehavior,
     LedgerChannelDoesNotHaveEnoughFundsForVC,
     InvalidParentPCTSHash,
+    ThirdPartyCannotChangeLedgerChannelStateInVCDisputeStart,
 }
 
 impl From<SysError> for Error {

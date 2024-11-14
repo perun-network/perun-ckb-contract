@@ -398,6 +398,9 @@ pub fn verify_lc_channel_state_progression_in_vc_dispute_start_in_case_of_third_
     // However it can add a vc state to indicate a dispute for vc was registered
     // Nevertheless we still verify that the ledger channel has enough funds to cover vc channel's balances, even if the funds were not locked
     verify_vc_unregistered_locked_funds(&new_lc_status.state().balances(), &new_vc_status.state().balances());
+    if old_lc_status.state().version().unpack() != new_lc_status.state().version().unpack(){
+        return Err(Error::ThirdPartyCannotChangeLedgerChannelStateInVCDisputeStart);
+    } 
     Ok(())
 }
 
