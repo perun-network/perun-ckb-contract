@@ -11,21 +11,20 @@ use ckb_std::{
 };
 use perun_common::{error::Error, perun_types::ChannelConstants};
 
-
-pub fn main() -> Result<(), Error>{
+pub fn main() -> Result<(), Error> {
     // call normal_mode first return and if it fails, call vc_mode return its value
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
 
     // return an error if args is invalid
-    if args.is_empty(){
+    if args.is_empty() {
         return normal_mode();
     }
-    
-    // Thus Source::GroupInput would have two cells in case of virtual channel dispute and one cell otherwise
+
+    // Source::GroupInput would have two cells in case of virtual channel dispute and one cell otherwise
     // We will use this fact to check which mode we are in (1)Normal mode, (2) VC mode
     let mut counter = 0;
-     for i in 0.. {
+    for i in 0.. {
         match load_cell_type(i, Source::GroupInput) {
             Ok(Some(script)) => script,
             Ok(None) => panic!("type script not found"),
@@ -34,28 +33,20 @@ pub fn main() -> Result<(), Error>{
         };
         counter += 1;
     }
-    
-    if counter ==1{
+
+    if counter == 1 {
         return normal_mode();
-    }else {
+    } else {
         return vc_mode();
     }
 }
 
-pub fn vc_mode() ->Result<(), Error>{
-    let mut participant_hashes: [[[u8; 32]; 2]; 2] = [
-    [
-        [0u8; 32], // First 32-byte array in the first subarray
-        [0u8; 32], // Second 32-byte array in the first subarray
-    ],
-    [
-        [0u8; 32], // First 32-byte array in the second subarray
-        [0u8; 32], // Second 32-byte array in the second subarray
-    ],
-];
+pub fn vc_mode() -> Result<(), Error> {
+    let mut participant_hashes: [[[u8; 32]; 2]; 2] =
+        [[[0u8; 32], [0u8; 32]], [[0u8; 32], [0u8; 32]]];
 
-    for i in  0..{
-        let type_script = match  load_cell_type(i, Source::GroupInput) {
+    for i in 0.. {
+        let type_script = match load_cell_type(i, Source::GroupInput) {
             Ok(Some(script)) => script,
             Ok(None) => panic!("type script not found"),
             Err(SysError::IndexOutOfBound) => break,
@@ -69,13 +60,15 @@ pub fn vc_mode() ->Result<(), Error>{
         participant_hashes[i][0] = constants.params().party_a().unlock_script_hash().unpack();
         participant_hashes[i][1] = constants.params().party_b().unlock_script_hash().unpack();
     }
-    match verify_is_participant(&participant_hashes[0][0], &participant_hashes[0][1]){
+    match verify_is_participant(&participant_hashes[0][0], &participant_hashes[0][1]) {
         Ok(true) => return Ok(()),
-        Ok(false) =>  match verify_is_participant(&participant_hashes[1][0], &participant_hashes[1][1]){
-            Ok(true) => return Ok(()),
-            Ok(false) => return Err(Error::NotParticipant),
-            Err(err) => return Err(err.into()),
-        },
+        Ok(false) => {
+            match verify_is_participant(&participant_hashes[1][0], &participant_hashes[1][1]) {
+                Ok(true) => return Ok(()),
+                Ok(false) => return Err(Error::NotParticipant),
+                Err(err) => return Err(err.into()),
+            }
+        }
         Err(err) => return Err(err.into()),
     }
 }
