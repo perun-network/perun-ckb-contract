@@ -1,14 +1,21 @@
 use crate::perun::mutators::*;
 use crate::perun::random;
 
+use ckb_testtool::ckb_traits::CellDataProvider;
+
 use super::*;
 use ckb_occupied_capacity::Capacity;
-use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
+use ckb_testtool::ckb_types::{bytes::Bytes, core::TransactionBuilder, packed::*, prelude::*};
 use ckb_testtool::context::Context;
+use ckb_testtool::ckb_types::core::ScriptHashType;
 use perun;
 use perun::test;
+use perun::test::ChannelId;
+use crate::perun::test::{keys, transaction};
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::{Balances, Bool, ChannelState, SEC1EncodedPubKey, CKByteDistribution};
+use perun_common::ctrue;
+use perun_common::perun_types::{Balances, Bool, ChannelState, SEC1EncodedPubKey, CKByteDistribution, ChannelParametersBuilder, 
+ChannelConstantsBuilder, ChannelConstants};
 use perun_common::sig::verify_signature;
 
 const MAX_CYCLES: u64 = 10 * 10_000_000;
@@ -53,6 +60,7 @@ fn test_signature() {
 #[test]
 fn channel_test_bench() -> Result<(), perun::Error> {
     let res = [
+        test_vc_lockscript,
         test_funding_abort,
         test_successful_funding_with_udt,
         test_successful_funding_without_udt,
@@ -64,7 +72,7 @@ fn channel_test_bench() -> Result<(), perun::Error> {
         test_multi_asset_payment,
         test_multi_asset_abort,
         test_multi_asset_abort_zero_sudt_balance,
-        test_multi_asset_force_close,
+        test_multi_asset_force_close
     ]
     .iter()
     .map(|test| {
@@ -483,4 +491,157 @@ fn test_multi_asset_force_close(
         chan.assert();
         Ok(())
     })
+}
+
+fn test_vc_lockscript(
+    context: &mut Context,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    println!("VC Mode test started");
+
+    // Create participant hashes
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+
+    let inputs = env.create_funds_from_agreement(context, 0, &funding_agreement)?;
+    // Step 3: Prepare PCLS with proper args (use serialized ChannelConstants)
+    let always_success_hash = context
+        .get_cell_data_hash(&env.always_success_out_point)
+        .expect("always success hash");
+
+    let parties = funding_agreement.mk_participants(context, env, env.min_capacity_no_script);
+    let (channel_token, channel_token_outpoint) = env.create_channel_token(context);
+    let chan_params = ChannelParametersBuilder::default()
+        .party_a(parties[0].clone())
+        .party_b(parties[1].clone())
+        .nonce(random::nonce().pack())
+        .challenge_duration(env.challenge_duration.pack())
+        .app(Default::default())
+        .is_ledger_channel(ctrue!())
+        .is_virtual_channel(ctrue!())
+        .build();
+    let cid_raw = blake2b256(chan_params.as_slice());
+    let cid = ChannelId::from(cid_raw);
+    
+
+    // Build ChannelConstants
+    let pcls_code_hash = env.build_pcls(context, Default::default()).code_hash();
+    let chan_const = ChannelConstantsBuilder::default()
+        .params(chan_params)
+        .pfls_code_hash(always_success_hash.clone())
+        .pfls_hash_type(ScriptHashType::Data1.into())
+        .pfls_min_capacity(env.min_capacity_pfls.pack())
+        .pcls_code_hash(pcls_code_hash.clone())
+        .pcls_hash_type(ScriptHashType::Data1.into())
+        .thread_token(channel_token.clone())
+        .build();
+
+    // Convert ChannelConstants to bytes for args
+    let constants_bytes = chan_const.as_bytes();
+
+    let constants = ChannelConstants::from_slice(&constants_bytes)
+            .expect("unable to parse args as channel parameters");
+
+    // Build PCLS script with proper args
+    let pcls = env.build_pcls(context, constants_bytes.clone());
+
+    // Step 4: Create OpenArgs with serialized args
+    let args = transaction::OpenArgs {
+        cid,
+        funding_agreement: funding_agreement.clone(),
+        channel_token_outpoint: channel_token_outpoint.clone(),
+        inputs,
+        party_index: 0,
+        pcls_script: pcls.clone(),
+        pcts_script: env.always_success_script.clone(),
+        pfls_script: env.always_success_script.clone(),
+    };
+
+
+    // Create two distinct input cells for VC mode
+
+    let unlock_script = context.build_script(
+        &env.always_success_out_point,
+        // NOTE: To be able to make sure we can distinguish between the payout of
+        // the participants, we will pass their corresponding index as an argument.
+        // This will have no effect on the execution of the always_success_script,
+        // because it does not bother checking its arguments, but will allow us to
+        // assert the correct indices once a channel is concluded.
+        Bytes::from(vec![0]),
+    ).expect("unlock script");
+
+    let input_out_point_1 = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(unlock_script.clone())
+            .type_(Some(pcls.clone()).pack())
+            .build(),
+        Bytes::from(constants_bytes.clone()),
+    );
+
+    let input_out_point_2 = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(unlock_script.clone())
+            .type_(Some(pcls.clone()).pack())
+            .build(),
+        Bytes::from(constants_bytes),
+    );
+
+    let inputs = vec![
+        CellInput::new_builder()
+            .previous_output(input_out_point_1)
+            .build(),
+        CellInput::new_builder()
+            .previous_output(input_out_point_2)
+            .build(),
+    ];
+
+
+    // Prepare outputs
+    let outputs = vec![
+        CellOutput::new_builder()
+            .capacity(500u64.pack())
+            .lock(pcls.clone())
+            .type_(Some(pcls.clone()).pack())
+            .build(),
+        CellOutput::new_builder()
+            .capacity(500u64.pack())
+            .lock(env.build_lock_script(context, Bytes::from(vec![args.party_index])))
+            .build(),
+    ];
+
+    // Prepare output cell data
+    let outputs_data = vec![Bytes::from("carrot"), Bytes::from("potato")];
+
+    // Build the transaction
+    let cell_deps = vec![
+        env.always_success_script_dep.clone(),
+        env.pcts_script_dep.clone(),
+        env.sample_udt_script_dep.clone(),
+        env.pcls_script_dep.clone(),
+    ];
+
+    let tx = TransactionBuilder::default()
+        .inputs(inputs)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .cell_deps(cell_deps)
+        .build();
+
+    // Verify the transaction and expect success (VC Mode should pass)
+    let result = context.verify_tx(&tx, u64::MAX);
+    if let Err(e) = &result {
+        println!("Transaction verification failed: {:?}", e);
+    }
+    assert!(result.is_ok(), "VC Mode test failed: {:?}", result);
+    println!("VC Mode test passed");
+    Ok(())
 }

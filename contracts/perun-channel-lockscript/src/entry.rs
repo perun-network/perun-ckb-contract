@@ -8,6 +8,7 @@ use ckb_std::{
     ckb_types::{bytes::Bytes, prelude::*},
     high_level::{load_cell_lock_hash, load_cell_type, load_script},
     syscalls::SysError,
+    debug,
 };
 use perun_common::{error::Error, perun_types::ChannelConstants};
 
@@ -15,7 +16,6 @@ pub fn main() -> Result<(), Error> {
     // call normal_mode first return and if it fails, call vc_mode return its value
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-
     // return an error if args is invalid
     if args.is_empty() {
         return normal_mode();
@@ -56,7 +56,6 @@ pub fn vc_mode() -> Result<(), Error> {
 
         let constants = ChannelConstants::from_slice(&type_script_args)
             .expect("unable to parse args as channel parameters");
-
         participant_hashes[i][0] = constants.params().party_a().unlock_script_hash().unpack();
         participant_hashes[i][1] = constants.params().party_b().unlock_script_hash().unpack();
     }
