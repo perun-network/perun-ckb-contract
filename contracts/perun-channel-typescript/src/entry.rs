@@ -687,28 +687,23 @@ pub fn get_vc_participant_idx(
     
 
 pub fn verify_vc_integrity(vc_status: &VirtualChannelStatus, dispute: &Dispute) -> Result<(), Error>{
-    let (_, output2) = get_parents_of_vc(vc_status)?; // NOTE: It is redundant to verify both the vc states. Just verify the vc state in the output channel cell of this type script. The other one gets verified when its type script is executed
+    let (_, output2) = get_parents_of_vc(vc_status)?;
    
     // Convert Option to Result for error handling
     let vc_status1 = output2[0].as_ref().unwrap();
     let vc_status2 = output2[1].as_ref().unwrap();
 
+    // both vc states in the output cells must be the same
     if vc_status1.as_slice() != vc_status2.as_slice(){
         return Err(Error::ParentsOfVCInOutputHaveDifferentVCStatus);
     }
     verify_valid_state_sigs(
         &dispute.vc_sigs().sig_a().as_bytes(),
         &dispute.vc_sigs().sig_b().as_bytes(),
-        &vc_status1.state(),
-        &vc_status1.params().party_a().pub_key(),
-        &vc_status1.params().party_b().pub_key());
+        &vc_status.state(),
+        &vc_status.params().party_a().pub_key(),
+        &vc_status.params().party_b().pub_key());
 
-    verify_valid_state_sigs(
-        &dispute.vc_sigs().sig_a().as_bytes(),
-        &dispute.vc_sigs().sig_b().as_bytes(),
-        &vc_status2.state(),
-        &vc_status2.params().party_a().pub_key(),
-        &vc_status2.params().party_b().pub_key());
     Ok(())
 }
 
