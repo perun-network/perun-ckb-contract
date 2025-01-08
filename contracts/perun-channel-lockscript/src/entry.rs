@@ -1,14 +1,17 @@
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
-
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
+use ckb_standalone_types::prelude::Unpack as StandaloneUnpack;
+
+use ckb_std::ckb_types::prelude::Unpack;
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
     high_level::{load_cell_lock_hash, load_cell_type, load_script},
     syscalls::SysError,
 };
+use molecule::prelude::Entity;
 use perun_common::{error::Error, perun_types::ChannelConstants};
 
 // The perun-channel-lockscript (pcls) is used to lock access to interacting with a channel and is attached as lock script
@@ -23,8 +26,24 @@ use perun_common::{error::Error, perun_types::ChannelConstants};
 // This should not be a substantial restriction, since a payment input will likely be used anyway (e.g. for funding or fees).
 
 pub fn main() -> Result<(), Error> {
-    let script = load_script()?;
+    // let script = load_script()?;
+    // let args: Bytes = script.args().unpack();
+
+    let script = load_script().expect("Failed to load script");
     let args: Bytes = script.args().unpack();
+
+    // Panic if args is invalid
+    if !args.is_empty() {
+        panic!("Error: PCLSWithArgs");
+    }
+
+    let args: Bytes = script.args().unpack();
+
+    // Return an error if args is invalid
+    if !args.is_empty() {
+        return Err(Error::PCLSWithArgs);
+    }
+
     // return an error if args is invalid
     if !args.is_empty() {
         return Err(Error::PCLSWithArgs);
@@ -38,7 +57,7 @@ pub fn main() -> Result<(), Error> {
             Ok(Some(script)) => script,
             Ok(None) => panic!("type script not found"),
             Err(SysError::IndexOutOfBound) => break,
-            Err(err) => return Err(err.into()),
+            Err(err) => panic!("System error occurred: {:?}", err),
         };
         let type_script_args: Bytes = type_script.args().unpack();
 

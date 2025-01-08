@@ -6,5 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ckb-std = "0.10.0"
+ckb-std = "0.16.4"
 perun-common = { path = "../perun-common", default-features = false, features = ["contract"] }
+ckb-standalone-types = { version = "0.1.2", default_features = false }
+
+[dependencies.molecule]
+version = "0.7.3"
+default-features = false

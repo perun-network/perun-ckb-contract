@@ -14,5 +14,5 @@ molecule = "0.7.3"
 ckb-types = { package = "ckb-standalone-types", version = "0.1.2" }
 k256 = { version = "0.11.6", default-features = false, features = ["ecdsa", "arithmetic"]}
 rand_core = { version = "0.6", features = ["getrandom"] }
-ckb-std = "0.10.0"
+ckb-std = "0.16.4"
 ckb-occupied-capacity = "0.108.0"
