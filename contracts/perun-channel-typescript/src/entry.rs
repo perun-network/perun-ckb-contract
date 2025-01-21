@@ -80,6 +80,8 @@ pub fn main() -> Result<(), Error> {
         ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelConstants");
     debug!("parsing channel constants passed");
 
+    debug!("channel_constants: {:?}", channel_constants);
+
     // Verify that the channel parameters are compatible with the currently supported
     // features of perun channels.
     verify_channel_params_compatibility(&channel_constants.params())?;
@@ -572,15 +574,22 @@ pub fn verify_status_not_funded(status: &ChannelStatus) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn verify_vc_status_not_disputed(status: &ChannelStatus) -> Result<(), Error> {
+    if status.disputed().to_bool() {
+        return Err(Error::StatusDisputed);
+    }
+    Ok(())
+}
+
 pub fn verify_channel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
         return Err(Error::AppChannelsNotSupported);
     }
     if !params.is_ledger_channel().to_bool() {
-        return Err(Error::NonLedgerChannelsNotSupported);
+        return Err(Error::WrongChannelType);
     }
     if params.is_virtual_channel().to_bool() {
-        return Err(Error::VirtualChannelsNotSupported);
+        return Err(Error::WrongChannelType);
     }
     Ok(())
 }
@@ -850,6 +859,9 @@ pub fn get_channel_action() -> Result<ChannelAction, Error> {
         .ok()
         .map(|data| ChannelStatus::from_slice(data.as_slice()))
         .map_or(Ok(None), |v| v.map(Some))?;
+
+    debug!("input_status_opt: {:?}", input_status_opt);
+    debug!("output_status_opt: {:?}", output_status_opt);
 
     match (input_status_opt, output_status_opt) {
         (Some(old_status), Some(new_status)) => Ok(ChannelAction::Progress {

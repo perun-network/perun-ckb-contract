@@ -9,6 +9,18 @@ array SUDTDistribution [Uint128; 2];
 
 vector SUDTAllocation <SUDTBalances>;
 
+vector Locked_balances <SubAlloc>;
+
+table SubAlloc{
+  id: Byte32, //subchannel/virtual channel id
+  balances: SubBalances,
+}
+
+table SubBalances{
+  ckbytes: CKByteDistribution,
+  sudts: SUDTAllocation,
+}
+
 table SUDTAsset {
   type_script: Script,
   // The max_capacity of an SUDTAsset should always be at least the capacity needed for the SUDT type script + outputs_data
@@ -25,6 +37,7 @@ table SUDTBalances {
 table Balances {
   ckbytes: CKByteDistribution,
   sudts: SUDTAllocation,
+  locked: Locked_balances,
 }
 
 array True [byte; 1];
@@ -70,9 +83,7 @@ table ChannelParameters {
   challenge_duration: Uint64,
   // The default should be NoApp!
   app: App,
-  // This should always be set to true for, as we currently only support ledger channels.
   is_ledger_channel: Bool,
-  // This should always be set to false for, as we currently do not support virtual channels.
   is_virtual_channel: Bool,
 }
 
@@ -101,9 +112,15 @@ array Fund [byte; 1];
 
 array Abort [byte; 1];
 
+table VCDispute {
+  sig_a: Bytes,
+  sig_b: Bytes,
+}
+
 table Dispute {
   sig_a: Bytes,
   sig_b: Bytes,
+  vc_sigs: VCDispute,
 }
 table Close {
   state: ChannelState,
@@ -138,3 +155,27 @@ table ChannelStatus {
 struct ChannelToken {
   out_point: OutPoint,
 }
+
+vector ParentsVec<ParentData>;
+
+array index_map[byte;2];
+
+table ParentData {
+  pcts_hash: Byte32,
+  idx_map: index_map,
+}
+table VirtualChannelStatus {
+  lcstatus: ChannelStatus,
+  vcstate: ChannelState,
+  funded: Bool,
+  disputed: Bool,
+  params: ChannelParameters,
+  parents:  ParentsVec,
+}
+
+union LedgerChannelOrVirtualChannel {
+    ChannelStatus,  //ledger channel
+    VirtualChannelStatus, //virtual channel
+}
+
+vector channelCellData <LedgerChannelOrVirtualChannel>;

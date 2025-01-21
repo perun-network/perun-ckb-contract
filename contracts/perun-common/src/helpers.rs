@@ -14,7 +14,7 @@ use {
 };
 
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey,
+    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances,
 };
 use crate::{
     error::Error,
@@ -200,7 +200,20 @@ impl Balances {
     }
 
     pub fn equal_in_sum(&self, other: &Balances) -> Result<bool, Error> {
-        if self.ckbytes().sum() != other.ckbytes().sum() {
+        let self_total_ckbytes = self.ckbytes().sum()
+            + self
+                .locked()
+                .into_iter()
+                .map(|sub_alloc| sub_alloc.balances().ckbytes().sum())
+                .sum::<u64>();
+        let other_total_ckbytes = other.ckbytes().sum()
+            + other
+                .locked()
+                .into_iter()
+                .map(|sub_alloc| sub_alloc.balances().ckbytes().sum())
+                .sum::<u64>();
+
+        if self_total_ckbytes != other_total_ckbytes {
             return Ok(false);
         }
         if self.sudts().len() != other.sudts().len() {
@@ -211,15 +224,97 @@ impl Balances {
             if sb.asset().as_slice() != other_sb.asset().as_slice() {
                 return Ok(false);
             }
-            if sb.distribution().sum() != other_sb.distribution().sum() {
+
+            // Sum `sudts` including locked balances
+            let mut self_total_amount = sb.distribution().sum();
+            let mut other_total_amount = other_sb.distribution().sum();
+
+            for sub_alloc in self.locked().into_iter() {
+                for sub_sb in sub_alloc.balances().sudts().into_iter() {
+                    if sub_sb.asset().as_slice() == sb.asset().as_slice() {
+                        self_total_amount += sub_sb.distribution().sum();
+                    }
+                }
+            }
+
+            for sub_alloc in other.locked().into_iter() {
+                for sub_sb in sub_alloc.balances().sudts().into_iter() {
+                    if sub_sb.asset().as_slice() == other_sb.asset().as_slice() {
+                        other_total_amount += sub_sb.distribution().sum();
+                    }
+                }
+            }
+
+            if self_total_amount != other_total_amount {
                 return Ok(false);
             }
         }
-        return Ok(true);
+        Ok(true)
+    }
+    //this balance contains funds to cover another balances
+    pub fn covers_funds(&self, other: &Balances) -> Result<bool, Error> {
+        let self_total_ckbytes = self.ckbytes().sum();
+        let other_total_ckbytes = other.ckbytes().sum();
+
+        if self_total_ckbytes < other_total_ckbytes {
+            return Ok(false);
+        }
+
+        if self.sudts().len() != other.sudts().len() {
+            return Ok(false);
+        }
+        for (i, sb) in self.sudts().into_iter().enumerate() {
+            let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
+            if sb.asset().as_slice() != other_sb.asset().as_slice() {
+                return Ok(false);
+            }
+            let self_total_amount = sb.distribution().sum();
+            let other_total_amount = other_sb.distribution().sum();
+
+            if self_total_amount < other_total_amount {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     pub fn equal(&self, other: &Balances) -> bool {
         self.as_slice()[..] == other.as_slice()[..]
+    }
+}
+
+impl SubBalances {
+    /// Compares the sum of balances for each asset in SubBalances to the same in Balances(locked funds)
+    /// Returns true if the sum of balances for each asset in SubBalances is equal to the sum of balances for each asset in Balances
+    /// Returns false otherwise
+    ///
+    /// # Arguments
+    ///     * `locked` - Balances
+    ///
+    /// # Returns
+    ///    * `Result<bool, Error>` - true if locked funds(Balances) are equal to Subbalnces, false otherwise
+    pub fn equal_in_sum(&self, vc_balances: &Balances) -> Result<bool, Error> {
+        let self_total_ckbytes = self.ckbytes().sum();
+        let vc_ckbytes = vc_balances.ckbytes().sum();
+
+        if self_total_ckbytes != vc_ckbytes {
+            return Ok(false);
+        }
+
+        if self.sudts().len() != vc_balances.sudts().len() {
+            return Ok(false);
+        }
+
+        for locked_sudt in self.sudts().into_iter() {
+            for vc_sudt in vc_balances.sudts().into_iter() {
+                if locked_sudt.asset().as_slice() == vc_sudt.asset().as_slice() {
+                    if locked_sudt.distribution().sum() != vc_sudt.distribution().sum() {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+        Ok(true)
     }
 }
 

@@ -15,7 +15,15 @@ name = "perun-channel-lockscript"
 template_type = "Rust"
 
 [[contracts]]
+name = "perun-vchannel-lockscript"
+template_type = "Rust"
+
+[[contracts]]
 name = "perun-channel-typescript"
+template_type = "Rust"
+
+[[contracts]]
+name = "perun-vchannel-typescript"
 template_type = "Rust"
 
 [[contracts]]
