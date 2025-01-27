@@ -27,9 +27,10 @@ pub fn main() -> Result<(), Error> {
     let script = load_script()?;
 
     let args: Bytes = script.args().unpack();
-    // return an error if args is invalid
-    if args.is_empty() {
-        return honest_mode();
+
+    // return an error if args is empty
+    if !args.is_empty() {
+        return Err(Error::VCLSWithArgs);
     }
 
     // Source::GroupInput would have two cells in case of virtual channel dispute and one cell otherwise

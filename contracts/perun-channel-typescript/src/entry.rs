@@ -57,7 +57,7 @@ pub enum ChannelAction {
     /// Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
     /// recreated in the outputs with updated state. The possible redeemers associated with the Close action are
     /// Close, Abort and ForceClose.
-    /// The channel type script assures that all funds are payed out to the correct parties upon closing.
+    /// The channel type script assures that all funds are paid out to the correct parties upon closing.
     Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
 }
 
@@ -298,7 +298,7 @@ pub fn check_valid_close(
     // At this point we know that this transaction closes the channel. There are three different kinds of
     // closing: Abort, ForceClose and Close. Which kind of closing is performed depends on the witness.
     // Every channel closing transaction must pay out all funds the the channel participants. The amount
-    // to be payed to each party
+    // to be paid to each party
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
     match channel_witness.to_enum() {
         ChannelWitnessUnion::Abort(_) => {
@@ -312,22 +312,22 @@ pub fn check_valid_close(
             verify_status_not_funded(old_status)?;
             debug!("verify_status_not_funded passed");
 
-            // We verify that every party is payed the amount of funds that it has locked to the channel so far.
+            // We verify that every party is paid the amount of funds that it has locked to the channel so far.
             // If abourt is called, Party A must have fully funded the channel and Party B can not have funded
             // the channel because of our funding protocol.
-            verify_all_payed(
+            verify_all_paid(
                 &old_status.state().balances().clear_index(PARTY_B_INDEX)?,
                 channel_capacity,
                 channel_constants,
                 true,
             )?;
-            debug!("verify_all_payed passed");
+            debug!("verify_all_paid passed");
             Ok(())
         }
         ChannelWitnessUnion::ForceClose(_) => {
             debug!("ChannelWitnessUnion::ForceClose");
             // A force close can be performed after the channel was disputed and the challenge duration has
-            // expired. Upon force close, each party is payed according to the balance distribution in the
+            // expired. Upon force close, each party is paid according to the balance distribution in the
             // latest state.
             verify_status_funded(old_status)?;
             debug!("verify_status_funded passed");
@@ -335,13 +335,13 @@ pub fn check_valid_close(
             debug!("verify_time_lock_expired passed");
             verify_status_disputed(old_status)?;
             debug!("verify_status_disputed passed");
-            verify_all_payed(
+            verify_all_paid(
                 &old_status.state().balances(),
                 channel_capacity,
                 channel_constants,
                 false,
             )?;
-            debug!("verify_all_payed passed");
+            debug!("verify_all_paid passed");
             Ok(())
         }
         ChannelWitnessUnion::Close(c) => {
@@ -363,14 +363,14 @@ pub fn check_valid_close(
                 &channel_constants.params().party_a().pub_key(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
-            // We verify that each party is payed according to the balance distribution in the final state.
-            verify_all_payed(
+            // We verify that each party is paid according to the balance distribution in the final state.
+            verify_all_paid(
                 &c.state().balances(),
                 channel_capacity,
                 channel_constants,
                 false,
             )?;
-            debug!("verify_all_payed passed");
+            debug!("verify_all_paid passed");
             Ok(())
         }
         ChannelWitnessUnion::Fund(_) => Err(Error::ChannelFundWithoutChannelOutput),
@@ -692,13 +692,13 @@ pub fn verify_status_disputed(status: &ChannelStatus) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_all_payed(
+pub fn verify_all_paid(
     final_balance: &Balances,
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
     is_abort: bool,
 ) -> Result<(), Error> {
-    debug!("verify_all_payed");
+    debug!("verify_all_paid");
     debug!("is_abort: {}", is_abort);
     let minimum_payment_a = channel_constants
         .params()
@@ -776,21 +776,21 @@ pub fn verify_all_payed(
     debug!("ckbytes_outputs_b: {}", ckbytes_outputs_b);
 
     // Parties with balances below the minimum capacity of the payment script
-    // are not required to be payed.
+    // are not required to be paid.
     if (ckbytes_balance_a > ckbytes_outputs_a && ckbytes_balance_a >= minimum_payment_a)
         || (ckbytes_balance_b > ckbytes_outputs_b && ckbytes_balance_b >= minimum_payment_b)
     {
-        return Err(Error::NotAllPayed);
+        return Err(Error::NotAllPaid);
     }
 
     debug!("udt_outputs_a: {:?}", udt_outputs_a);
     debug!("udt_outputs_b: {:?}", udt_outputs_b);
 
     if !final_balance.sudts().fully_represented(0, &udt_outputs_a)? {
-        return Err(Error::NotAllPayed);
+        return Err(Error::NotAllPaid);
     }
     if !final_balance.sudts().fully_represented(1, &udt_outputs_b)? {
-        return Err(Error::NotAllPayed);
+        return Err(Error::NotAllPaid);
     }
     Ok(())
 }
