@@ -22,7 +22,10 @@ use ckb_std::{
     syscalls::{self, SysError},
 };
 use perun_common::{
-    channels::{find_cell_by_lock_hash, VChannelAction},
+    channels::{
+        find_cell_by_lock_hash, find_closest_current_time, verify_thread_token_integrity,
+        verify_time_lock_expired, VChannelAction,
+    },
     error::Error,
     helpers::blake2b256,
     perun_types::{
@@ -580,7 +583,7 @@ pub fn verify_funding_in_outputs(
                 return Err(Error::InvalidPFLSInOutputs);
             }
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amount(
+                let (sudt_idx, amount) = get_vc_sudt_amount(
                     initial_balance,
                     i,
                     &output.type_().to_opt().expect("checked above"),
@@ -693,16 +696,6 @@ pub fn verify_channel_state_progression(
     verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
     verify_state_not_finalized(&old_status.state())?;
     Ok(())
-}
-
-pub fn verify_thread_token_integrity(thread_token: &ChannelToken) -> Result<(), Error> {
-    let inputs = load_transaction()?.raw().inputs();
-    for input in inputs.into_iter() {
-        if input.previous_output().as_slice()[..] == thread_token.out_point().as_slice()[..] {
-            return Ok(());
-        }
-    }
-    Err(Error::InvalidThreadToken)
 }
 
 pub fn verify_vchannel_id_integrity(
@@ -857,7 +850,7 @@ pub fn verify_vc_all_paid(
 
         if output_lock_script_hash[..] == payment_script_hash_a[..] {
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amount(
+                let (sudt_idx, amount) = get_vc_sudt_amount(
                     &final_balance.locked(),
                     i,
                     &output.type_().to_opt().expect("checked above"),
@@ -868,7 +861,7 @@ pub fn verify_vc_all_paid(
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amount(
+                let (sudt_idx, amount) = get_vc_sudt_amount(
                     &final_balance.locked(),
                     i,
                     &output.type_().to_opt().expect("checked above"),
@@ -899,57 +892,6 @@ pub fn verify_vc_all_paid(
         return Err(Error::NotAllPaid);
     }
     Ok(())
-}
-
-// TODO: We might want to verify that the capacity of the sudt output is at least the max_capacity of the SUDT asset.
-//      Not doing so may result in the ability to steal funds up to the
-//      (max_capacity of the SUDT asset - actual occupied capacity of the SUDT type script), if the SUDT asset's max_capacity
-//      is smaller than the payment_min_capacity of the participant. We do not do this for now, because it is an extreme edge case
-//      and the max_capacity of an SUDT should never be set that low.
-pub fn get_sudt_amount(
-    balances: &LockedBalances,
-    output_idx: usize,
-    type_script: &Script,
-) -> Result<(usize, u128), Error> {
-    let mut buf = [0u8; SUDT_MIN_LEN];
-
-    let (sudt_idx, _) = balances
-        .get_unchecked(output_idx)
-        .balances()
-        .sudts()
-        .get_distribution(type_script)?;
-    let sudt_data = load_cell_data(output_idx, Source::Output)?;
-    if sudt_data.len() < SUDT_MIN_LEN {
-        return Err(Error::InvalidSUDTDataLength);
-    }
-    buf.copy_from_slice(&sudt_data[..SUDT_MIN_LEN]);
-    return Ok((sudt_idx, u128::from_le_bytes(buf)));
-}
-
-pub fn verify_time_lock_expired(time_lock: u64) -> Result<(), Error> {
-    let old_header = load_header(0, Source::GroupInput)?;
-    let old_timestamp = old_header.raw().timestamp().unpack();
-    let current_time = find_closest_current_time();
-    if old_timestamp + time_lock > current_time {
-        return Err(Error::TimeLockNotExpired);
-    }
-    Ok(())
-}
-
-pub fn find_closest_current_time() -> u64 {
-    let mut latest_time = 0;
-    for i in 0.. {
-        match load_header(i, Source::HeaderDep) {
-            Ok(header) => {
-                let timestamp = header.raw().timestamp().unpack();
-                if timestamp > latest_time {
-                    latest_time = timestamp;
-                }
-            }
-            Err(_) => break,
-        }
-    }
-    latest_time
 }
 
 pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
@@ -1670,4 +1612,29 @@ pub fn verify_increasing_version_number_for_vc(
         return Ok(());
     }
     Err(Error::VersionNumberNotIncreasing)
+}
+
+// TODO: We might want to verify that the capacity of the sudt output is at least the max_capacity of the SUDT asset.
+//      Not doing so may result in the ability to steal funds up to the
+//      (max_capacity of the SUDT asset - actual occupied capacity of the SUDT type script), if the SUDT asset's max_capacity
+//      is smaller than the payment_min_capacity of the participant. We do not do this for now, because it is an extreme edge case
+//      and the max_capacity of an SUDT should never be set that low.
+pub fn get_vc_sudt_amount(
+    balances: &LockedBalances,
+    output_idx: usize,
+    type_script: &Script,
+) -> Result<(usize, u128), Error> {
+    let mut buf = [0u8; SUDT_MIN_LEN];
+
+    let (sudt_idx, _) = balances
+        .get_unchecked(output_idx)
+        .balances()
+        .sudts()
+        .get_distribution(type_script)?; //sudts().get_distribution(type_script)?;
+    let sudt_data = load_cell_data(output_idx, Source::Output)?;
+    if sudt_data.len() < SUDT_MIN_LEN {
+        return Err(Error::InvalidSUDTDataLength);
+    }
+    buf.copy_from_slice(&sudt_data[..SUDT_MIN_LEN]);
+    return Ok((sudt_idx, u128::from_le_bytes(buf)));
 }

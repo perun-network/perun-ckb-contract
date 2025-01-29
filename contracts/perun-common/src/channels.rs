@@ -1,15 +1,13 @@
 use crate::error::Error;
+use crate::helpers::blake2b256;
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances,
-    VirtualChannelStatus,
+    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken,
+    LockedBalances, SEC1EncodedPubKey, SubBalances, VirtualChannelStatus,
 };
 
 extern crate alloc;
-
 use alloc::{vec, vec::Vec};
 
-// #[cfg(not(feature = "std"))]
-// use alloc::{self, vec};
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{
@@ -18,9 +16,13 @@ use ckb_std::{
         prelude::*,
     },
     debug,
-    high_level::{load_cell_data, load_cell_lock_hash},
+    high_level::{
+        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_header,
+        load_script, load_script_hash, load_transaction, load_witness_args,
+    },
     syscalls::{self, SysError},
 };
+const SUDT_MIN_LEN: usize = 16;
 
 pub enum VChannelAction {
     /// Progress indicates that a channel is being progressed. This means that a channel cell is consumed
@@ -115,4 +117,51 @@ pub fn find_cell_by_lock_hash(
         }
     }
     Ok(None)
+}
+
+pub fn verify_channel_id_integrity(
+    channel_id: &Byte32,
+    params: &ChannelParameters,
+) -> Result<(), Error> {
+    let digest = blake2b256(params.as_slice());
+    if digest[..] != channel_id.unpack()[..] {
+        return Err(Error::InvalidChannelId);
+    }
+    Ok(())
+}
+
+pub fn verify_thread_token_integrity(thread_token: &ChannelToken) -> Result<(), Error> {
+    let inputs = load_transaction()?.raw().inputs();
+    for input in inputs.into_iter() {
+        if input.previous_output().as_slice()[..] == thread_token.out_point().as_slice()[..] {
+            return Ok(());
+        }
+    }
+    Err(Error::InvalidThreadToken)
+}
+
+pub fn verify_time_lock_expired(time_lock: u64) -> Result<(), Error> {
+    let old_header = load_header(0, Source::GroupInput)?;
+    let old_timestamp = old_header.raw().timestamp().unpack();
+    let current_time = find_closest_current_time();
+    if old_timestamp + time_lock > current_time {
+        return Err(Error::TimeLockNotExpired);
+    }
+    Ok(())
+}
+
+pub fn find_closest_current_time() -> u64 {
+    let mut latest_time = 0;
+    for i in 0.. {
+        match load_header(i, Source::HeaderDep) {
+            Ok(header) => {
+                let timestamp = header.raw().timestamp().unpack();
+                if timestamp > latest_time {
+                    latest_time = timestamp;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    latest_time
 }
