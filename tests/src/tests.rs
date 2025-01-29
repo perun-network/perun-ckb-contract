@@ -107,6 +107,28 @@ fn channel_test_bench() -> Result<(), perun::Error> {
 //     res.into_iter().collect()
 // }
 
+#[test]
+fn channel_vc_test_bench() -> Result<(), perun::Error> {
+    let res = [
+        test_fund_close, // happytest: check lockedbalances, unlock balances before closing VC
+        test_dispute, // 1st dispute: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration -> OK, Close
+        test_dispute_again, // 2 disputes: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration
+                            // 2nd dispute. Present: (vcts_1st_disp_alice). Now Bob makes another dispute: (pcts_in, vcts_2nd_disp_bob) -> challenge duration ->
+                            // Merge 2 disputes: (vcts_1st_disp_alice v2, vcts_2nd_disp_bob v4) -> (vcts_merged: vcts_2nd_disp_bob)
+                            // -> challenge duration ->  ForceClose in PCTS (VCTS 1st Close) with (vcts_merged, pcts v4) -> (vcts_merged_1st_close, pcts_v4).
+                            // 2nd VCTS Close is again PCTS ForceClose (vcts_merged_1st_close, pcts_v4) -> (pcts_v4)
+    ]
+    .iter()
+    .map(|test| {
+        let mut context = Context::default();
+        let pe = perun::harness::Env::new(&mut context, MAX_CYCLES, CHALLENGE_DURATION_MS)
+            .expect("preparing environment");
+        test(&mut context, &pe)
+    })
+    .collect::<Vec<_>>();
+    res.into_iter().collect()
+}
+
 fn create_channel_test(
     context: &mut Context,
     env: &perun::harness::Env,
@@ -521,3 +543,5 @@ fn test_multi_asset_force_close(
         Ok(())
     })
 }
+
+fn test_vc

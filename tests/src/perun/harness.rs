@@ -21,6 +21,8 @@ pub struct Env {
     // Perun contracts.
     pub pcls_out_point: OutPoint,
     pub pcts_out_point: OutPoint,
+    pub vcls_out_point: OutPoint,
+    pub vcts_out_point: OutPoint,
     pub pfls_out_point: OutPoint,
     // Auxiliary contracts.
     pub always_success_out_point: OutPoint,
@@ -29,9 +31,13 @@ pub struct Env {
     // Perun scripts.
     pcls_script: Script,
     pcts_script: Script,
+    vcls_script: Script,
+    vcts_script: Script,
     pfls_script: Script,
     pub pcls_script_dep: CellDep,
     pub pcts_script_dep: CellDep,
+    pub vcls_script_dep: CellDep,   
+    pub vcts_script_dep: CellDep,
     pub pfls_script_dep: CellDep,
     // Auxiliary scripts.
     pub always_success_script: Script,
@@ -57,11 +63,15 @@ impl Env {
         // Perun contracts.
         let pcls: Bytes = Loader::default().load_binary("perun-channel-lockscript");
         let pcts: Bytes = Loader::default().load_binary("perun-channel-typescript");
+        let vcls: Bytes = Loader::default().load_binary("perun-virtual-channel-lockscript");
+        let vcts: Bytes = Loader::default().load_binary("perun-virtual-channel-typescript");
         let pfls: Bytes = Loader::default().load_binary("perun-funds-lockscript");
         let sample_udt: Bytes = Loader::default().load_binary("sample-udt");
         // Deploying the contracts returns the cell they are deployed in.
         let pcls_out_point = context.deploy_cell(pcls);
         let pcts_out_point = context.deploy_cell(pcts);
+        let vcls_out_point = context.deploy_cell(vcls);
+        let vcts_out_point = context.deploy_cell(vcts);
         let pfls_out_point = context.deploy_cell(pfls);
         let sample_udt_out_point = context.deploy_cell(sample_udt);
         // Auxiliary contracts.
@@ -78,6 +88,15 @@ impl Env {
                 perun_types::ChannelConstants::default().as_bytes(),
             )
             .ok_or("perun-channel-typescript")?;
+        let vcls_script = context
+            .build_script(&vcls_out_point, Default::default())
+            .ok_or("perun-virtual-channel-lockscript")?;
+        let vcts_script = context
+            .build_script(
+                &vcts_out_point,
+                perun_types::ChannelConstants::default().as_bytes(),
+            )
+            .ok_or("perun-virtual-channel-typescript")?;
         let pfls_script = context
             .build_script(&pfls_out_point, Default::default())
             .ok_or("perun-funds-lockscript")?;
@@ -89,6 +108,12 @@ impl Env {
             .build();
         let pcts_script_dep = CellDep::new_builder()
             .out_point(pcts_out_point.clone())
+            .build();
+        let vcls_script_dep = CellDep::new_builder()
+            .out_point(vcls_out_point.clone())
+            .build();
+        let vcts_script_dep = CellDep::new_builder()
+            .out_point(vcts_out_point.clone())
             .build();
         let pfls_script_dep = CellDep::new_builder()
             .out_point(pfls_out_point.clone())
@@ -123,18 +148,26 @@ impl Env {
         println!("asset code hash: {}", sample_udt_script.code_hash());
         println!("pcts code hash: {}", pcts_script.code_hash());
         println!("pcls code hash: {}", pcls_script.code_hash());
+        println!("vcts code hash: {}", vcts_script.code_hash());
+        println!("vcls code hash: {}", vcls_script.code_hash());
         println!("always_success code hash: {}", always_success_script.code_hash());
         Ok(Env {
             pcls_out_point,
             pcts_out_point,
+            vcls_out_point,
+            vcts_out_point,
             pfls_out_point,
             always_success_out_point,
             sample_udt_out_point,
             pcls_script,
             pcts_script,
+            vcls_script,
+            vcts_script,
             pfls_script,
             pcls_script_dep,
             pcts_script_dep,
+            vcls_script_dep,
+            vcts_script_dep,
             pfls_script_dep,
             always_success_script,
             always_success_script_dep,
@@ -160,6 +193,20 @@ impl Env {
         context
             .build_script(pcts_out_point, args)
             .expect("perun-channel-typescript")
+    }
+
+    pub fn build_vcls(&self, context: &mut Context, args: Bytes) -> Script {
+        let vcls_out_point = &self.vcls_out_point;
+        context
+            .build_script(vcls_out_point, args)
+            .expect("perun-virtual-channel-lockscript")
+    }
+
+    pub fn build_vcts(&self, context: &mut Context, args: Bytes) -> Script {
+        let vcts_out_point = &self.vcts_out_point;
+        context
+            .build_script(vcts_out_point, args)
+            .expect("perun-virtual-channel-typescript")
     }
 
     pub fn build_pfls(&self, context: &mut Context, args: Bytes) -> Script {
