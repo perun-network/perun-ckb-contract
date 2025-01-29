@@ -164,8 +164,11 @@ table ParentData {
   pcts_hash: Byte32,
   idx_map: index_map,
 }
+
+vector LcStatusVec<ChannelStatus>
+
 table VirtualChannelStatus {
-  lcstatus: ChannelStatus,
+  lcstatus: LcStatusVec, //ChannelStatus,
   vcstate: ChannelState,
   funded: Bool,
   disputed: Bool,

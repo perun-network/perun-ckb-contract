@@ -21,6 +21,7 @@ use ckb_std::{
     syscalls::{self, SysError},
 };
 use perun_common::{
+    channels::{get_channel_action, PChannelAction},
     error::Error,
     helpers::blake2b256,
     perun_types::{
@@ -31,35 +32,6 @@ use perun_common::{
 };
 
 const SUDT_MIN_LEN: usize = 16;
-
-/// ChannelAction describes what kind of interaction with the channel is currently happening.
-///
-/// If there is an old ChannelStatus, it is the status of the channel before the interaction.
-/// The old ChannelStatus lives in the cell data of the pcts input cell.
-/// It is stored in the parallel outputs_data array of the transaction that produced the consumed
-/// channel output cell.
-///
-/// If there is a new ChannelStatus, it is the status of the channel after the interaction.
-/// The new ChannelStatus lives in the cell data of the pcts output cell. It is stored in the
-/// parallel outputs_data array of the consuming transaction
-pub enum ChannelAction {
-    /// Progress indicates that a channel is being progressed. This means that a channel cell is consumed
-    /// in the inputs and the same channel with updated state is progressed in the outputs.
-    /// The possible redeemers associated with the Progress action are Fund and Dispute.
-    Progress {
-        old_status: ChannelStatus,
-        new_status: ChannelStatus,
-    }, // one PCTS input, one PCTS output
-    /// Start indicates that a channel is being started. This means that a **new channel** lives in the
-    /// output cells of this transaction. No channel cell is consumes as an input.
-    /// As Start does not consume a channel cell, there is no Witness associated with the Start action.
-    Start { new_status: ChannelStatus }, // no PCTS input, one PCTS output
-    /// Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
-    /// recreated in the outputs with updated state. The possible redeemers associated with the Close action are
-    /// Close, Abort and ForceClose.
-    /// The channel type script assures that all funds are paid out to the correct parties upon closing.
-    Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
-}
 
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
@@ -93,8 +65,8 @@ pub fn main() -> Result<(), Error> {
     debug!("get_channel_action passed");
 
     match channel_action {
-        ChannelAction::Start { new_status } => check_valid_start(&new_status, &channel_constants),
-        ChannelAction::Progress {
+        PChannelAction::Start { new_status } => check_valid_start(&new_status, &channel_constants),
+        PChannelAction::Progress {
             old_status,
             new_status,
         } => {
@@ -107,7 +79,7 @@ pub fn main() -> Result<(), Error> {
                 &channel_constants,
             )
         }
-        ChannelAction::Close { old_status } => {
+        PChannelAction::Close { old_status } => {
             let channel_witness = load_witness()?;
             debug!("load_witness passed");
             check_valid_close(&old_status, &channel_witness, &channel_constants)
@@ -847,31 +819,6 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
         return Err(Error::StateNotFinal);
     }
     Ok(())
-}
-
-pub fn get_channel_action() -> Result<ChannelAction, Error> {
-    let input_status_opt = load_cell_data(0, Source::GroupInput)
-        .ok()
-        .map(|data| ChannelStatus::from_slice(data.as_slice()))
-        .map_or(Ok(None), |v| v.map(Some))?;
-
-    let output_status_opt = load_cell_data(0, Source::GroupOutput)
-        .ok()
-        .map(|data| ChannelStatus::from_slice(data.as_slice()))
-        .map_or(Ok(None), |v| v.map(Some))?;
-
-    debug!("input_status_opt: {:?}", input_status_opt);
-    debug!("output_status_opt: {:?}", output_status_opt);
-
-    match (input_status_opt, output_status_opt) {
-        (Some(old_status), Some(new_status)) => Ok(ChannelAction::Progress {
-            old_status,
-            new_status,
-        }),
-        (Some(old_status), None) => Ok(ChannelAction::Close { old_status }),
-        (None, Some(new_status)) => Ok(ChannelAction::Start { new_status }),
-        (None, None) => Err(Error::UnableToLoadAnyChannelStatus),
-    }
 }
 
 /// verify_max_one_channel verifies that there is at most one channel in the group input and group output respectively.

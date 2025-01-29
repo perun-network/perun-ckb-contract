@@ -22,6 +22,7 @@ use ckb_std::{
     syscalls::{self, SysError},
 };
 use perun_common::{
+    channels::{find_cell_by_lock_hash, VChannelAction},
     error::Error,
     helpers::blake2b256,
     perun_types::{
@@ -34,41 +35,6 @@ use perun_common::{
 };
 
 const SUDT_MIN_LEN: usize = 16;
-
-/// ChannelAction describes what kind of interaction with the channel is currently happening.
-///
-/// If there is an old ChannelStatus, it is the status of the channel before the interaction.
-/// The old ChannelStatus lives in the cell data of the pcts input cell.
-/// It is stored in the parallel outputs_data array of the transaction that produced the consumed
-/// channel output cell.
-///
-/// If there is a new ChannelStatus, it is the status of the channel after the interaction.
-/// The new ChannelStatus lives in the cell data of the pcts output cell. It is stored in the
-/// parallel outputs_data array of the consuming transaction
-pub enum ChannelAction {
-    /// Progress indicates that a channel is being progressed. This means that a channel cell is consumed
-    /// in the inputs and the same channel with updated state is progressed in the outputs.
-    /// The possible redeemers associated with the Progress action are Fund and Dispute.
-    Progress {
-        old_status: VirtualChannelStatus,
-        new_status: VirtualChannelStatus,
-    }, // one PCTS input, one PCTS output
-
-    /// Start indicates that a channel is being started. This means that a **new channel** lives in the
-    /// output cells of this transaction. No channel cell is consumed as an input.
-    /// As Start does not consume a channel cell, there is no Witness associated with the Start action.
-    Start {
-        new_vc_status: VirtualChannelStatus,
-        old_lc_status: ChannelStatus,
-        new_lc_status: ChannelStatus,
-    }, // no PCTS input, one PCTS output
-
-    /// Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
-    /// recreated in the outputs with updated state. The possible redeemers associated with the Close action are
-    /// Close, Abort and ForceClose.
-    /// The channel type script assures that all funds are paid out to the correct parties upon closing.
-    Close { old_status: VirtualChannelStatus }, // one PCTS input, no PCTS output
-}
 
 pub enum DisputeMode {
     Normal,
@@ -127,7 +93,7 @@ pub fn main() -> Result<(), Error> {
     debug!("get_channel_action passed");
 
     match channel_action {
-        ChannelAction::Start {
+        VChannelAction::Start {
             new_vc_status,
             old_lc_status,
             new_lc_status,
@@ -135,7 +101,7 @@ pub fn main() -> Result<(), Error> {
             debug!("Start action detected");
             check_valid_vc_start(&new_vc_status, &channel_constants)
         }
-        ChannelAction::Progress {
+        VChannelAction::Progress {
             old_status,
             new_status,
         } => {
@@ -148,7 +114,7 @@ pub fn main() -> Result<(), Error> {
                 &channel_constants,
             )
         }
-        ChannelAction::Close { old_status } => {
+        VChannelAction::Close { old_status } => {
             debug!("Close action detected");
             let channel_witness = load_witness()?;
             debug!("load_witness passed");
@@ -992,7 +958,7 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
     }
     Ok(())
 }
-pub fn get_vchannel_action() -> Result<ChannelAction, Error> {
+pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
     // Count the number of input and output cells
     let cell_num_in = count_cells(Source::Input)?;
     let cell_num_out = count_cells(Source::Output)?;
@@ -1018,7 +984,7 @@ pub fn get_vchannel_action() -> Result<ChannelAction, Error> {
             .map_or(Ok(None), |v| v.map(Some))?
             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
 
-        return Ok(ChannelAction::Progress {
+        return Ok(VChannelAction::Progress {
             old_status: cell_input_data,
             new_status: cell_output_data,
         });
@@ -1030,7 +996,7 @@ pub fn get_vchannel_action() -> Result<ChannelAction, Error> {
             .map_or(Ok(None), |v| v.map(Some))?
             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
 
-        return Ok(ChannelAction::Close {
+        return Ok(VChannelAction::Close {
             old_status: cell_input_data,
         });
     } else {
@@ -1043,7 +1009,7 @@ fn determine_channel_action_for_two_cells(
     cell_in0_data: Option<Vec<u8>>,
     cell_in1_data: Option<Vec<u8>>,
     cell_out_data: usize,
-) -> Result<ChannelAction, Error> {
+) -> Result<VChannelAction, Error> {
     // Attempt to parse each cell as PCTS or VCTS
     let pcts_opt_0 = cell_in0_data
         .as_ref()
@@ -1079,7 +1045,7 @@ fn determine_channel_action_for_two_cells(
         // Simulate fetching new_lc_status (replace this with actual logic)
         let new_lc_status = old_lc_status.clone(); // Replace with actual logic to fetch or compute new_lc_status
 
-        return Ok(ChannelAction::Start {
+        return Ok(VChannelAction::Start {
             new_vc_status,
             old_lc_status,
             new_lc_status,
@@ -1115,12 +1081,12 @@ fn determine_channel_action_for_two_cells(
 
         // compare versions, pick the one with higher version as new status
         if v0 > v1 {
-            return Ok(ChannelAction::Progress {
+            return Ok(VChannelAction::Progress {
                 old_status: vcell_in0_data,
                 new_status: vcell_out_data,
             });
         } else {
-            return Ok(ChannelAction::Progress {
+            return Ok(VChannelAction::Progress {
                 old_status: vcell_in1_data,
                 new_status: vcell_out_data,
             });
@@ -1704,30 +1670,4 @@ pub fn verify_increasing_version_number_for_vc(
         return Ok(());
     }
     Err(Error::VersionNumberNotIncreasing)
-}
-
-///
-/// # Arguments
-/// * `party_a_unlock_hash` - The lock hash of the unlock script of party A
-/// * `party_b_unlock_script_hash` - The lock hash of the unlock script of party B
-/// * `source` - the source for data (Input, Output, GroupInput, GroupOutput, etc.)
-/// # Returns
-/// * `Ok(())` if the input cell with the given lock hash is found
-/// * `Err(Error)` if the input cell with the given lock hash is not found
-pub fn find_cell_by_lock_hash(
-    party_a_unlock_hash: &[u8; 32],
-    party_b_unlock_script_hash: &[u8; 32],
-    source: Source,
-) -> Result<Option<usize>, Error> {
-    for i in 0.. {
-        let lock_hash = match load_cell_lock_hash(i, source) {
-            Ok(lock_hash) => lock_hash,
-            Err(SysError::IndexOutOfBound) => break,
-            Err(err) => return Err(err.into()),
-        };
-        if &lock_hash == party_a_unlock_hash || &lock_hash == party_b_unlock_script_hash {
-            return Ok(Some(i));
-        }
-    }
-    Ok(None)
 }

@@ -8,7 +8,9 @@ use ckb_testtool::context::Context;
 use perun;
 use perun::test;
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::{Balances, Bool, ChannelState, SEC1EncodedPubKey, CKByteDistribution};
+use perun_common::perun_types::{
+    Balances, Bool, CKByteDistribution, ChannelState, SEC1EncodedPubKey,
+};
 use perun_common::sig::verify_signature;
 
 const MAX_CYCLES: u64 = 10 * 10_000_000;
@@ -36,7 +38,13 @@ fn test_signature() {
     SEC1EncodedPubKey::new_builder().set(pubkey_bytes).build();
 
     let balances_array: [Uint64; 2] = [10u64.pack(), 11u64.pack()];
-    let balances = Balances::new_builder().ckbytes(CKByteDistribution::new_builder().set(balances_array).build()).build();
+    let balances = Balances::new_builder()
+        .ckbytes(
+            CKByteDistribution::new_builder()
+                .set(balances_array)
+                .build(),
+        )
+        .build();
     let channel_state = ChannelState::new_builder()
         .channel_id(Byte32::zero())
         .balances(balances)
@@ -76,6 +84,28 @@ fn channel_test_bench() -> Result<(), perun::Error> {
     .collect::<Vec<_>>();
     res.into_iter().collect()
 }
+
+// #[test]
+// fn channel_vc_test_bench() -> Result<(), perun::Error> {
+//     let res = [
+//         test_fund_close, // happytest: check lockedbalances, unlock balances before closing VC
+//         test_dispute, // 1st dispute: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration -> OK, Close
+//         test_dispute_again, // 2 disputes: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration
+//                             // 2nd dispute. Present: (vcts_1st_disp_alice). Now Bob makes another dispute: (pcts_in, vcts_2nd_disp_bob) -> challenge duration ->
+//                             // Merge 2 disputes: (vcts_1st_disp_alice v2, vcts_2nd_disp_bob v4) -> (vcts_merged: vcts_2nd_disp_bob)
+//                             // -> challenge duration ->  ForceClose in PCTS (VCTS 1st Close) with (vcts_merged, pcts v4) -> (vcts_merged_1st_close, pcts_v4).
+//                             // 2nd VCTS Close is again PCTS ForceClose (vcts_merged_1st_close, pcts_v4) -> (pcts_v4)
+//     ]
+//     .iter()
+//     .map(|test| {
+//         let mut context = Context::default();
+//         let pe = perun::harness::Env::new(&mut context, MAX_CYCLES, CHALLENGE_DURATION_MS)
+//             .expect("preparing environment");
+//         test(&mut context, &pe)
+//     })
+//     .collect::<Vec<_>>();
+//     res.into_iter().collect()
+// }
 
 fn create_channel_test(
     context: &mut Context,
@@ -142,7 +172,6 @@ fn test_successful_funding_without_udt(
     })
 }
 
-
 fn test_successful_funding_with_udt(
     context: &mut Context,
     env: &perun::harness::Env,
@@ -153,15 +182,16 @@ fn test_successful_funding_with_udt(
         Capacity::bytes(100)?.as_u64(),
         Capacity::bytes(100)?.as_u64(),
     ];
-    let asset_funding = [
-        20u128,
-        30u128,
-    ];
+    let asset_funding = [20u128, 30u128];
     let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
         &env.sample_udt_script,
         env.sample_udt_max_cap.as_u64(),
-        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
     );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
@@ -236,7 +266,10 @@ fn test_force_close(context: &mut Context, env: &perun::harness::Env) -> Result<
     })
 }
 
-fn test_early_force_close(context: &mut Context, env: &perun::harness::Env) -> Result<(), perun::Error> {
+fn test_early_force_close(
+    context: &mut Context,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
     let (alice, bob) = ("alice", "bob");
     let parts = [random::account(alice), random::account(bob)];
     let funding = [
@@ -257,7 +290,10 @@ fn test_early_force_close(context: &mut Context, env: &perun::harness::Env) -> R
 
         chan.with(bob).dispute().expect("invalid channel dispute");
 
-        chan.with(bob).invalid().force_close().expect("force closing channel");
+        chan.with(bob)
+            .invalid()
+            .force_close()
+            .expect("force closing channel");
 
         chan.assert();
         Ok(())
@@ -349,15 +385,16 @@ fn test_multi_asset_payment(
         Capacity::bytes(100)?.as_u64(),
         Capacity::bytes(100)?.as_u64(),
     ];
-    let asset_funding = [
-        20u128,
-        30u128,
-    ];
+    let asset_funding = [20u128, 30u128];
     let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
         &env.sample_udt_script,
         env.sample_udt_max_cap.as_u64(),
-        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
     );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
@@ -371,7 +408,10 @@ fn test_multi_asset_payment(
         chan.update(pay_ckbytes(Direction::AtoB, 50));
         chan.update(pay_sudt(Direction::BtoA, 10, 0));
 
-        chan.with(alice).finalize().close().expect("closing channel");
+        chan.with(alice)
+            .finalize()
+            .close()
+            .expect("closing channel");
 
         chan.assert();
         Ok(())
@@ -384,19 +424,17 @@ pub fn test_multi_asset_abort(
 ) -> Result<(), perun::Error> {
     let (alice, bob) = ("alice", "bob");
     let parts = [random::account(alice), random::account(bob)];
-    let funding = [
-        Capacity::bytes(0)?.as_u64(),
-        Capacity::bytes(0)?.as_u64(),
-    ];
-    let asset_funding = [
-        30u128,
-        20u128,
-    ];
+    let funding = [Capacity::bytes(0)?.as_u64(), Capacity::bytes(0)?.as_u64()];
+    let asset_funding = [30u128, 20u128];
     let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
         &env.sample_udt_script,
         env.sample_udt_max_cap.as_u64(),
-        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
     );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
@@ -416,19 +454,17 @@ pub fn test_multi_asset_abort_zero_sudt_balance(
 ) -> Result<(), perun::Error> {
     let (alice, bob) = ("alice", "bob");
     let parts = [random::account(alice), random::account(bob)];
-    let funding = [
-        Capacity::bytes(0)?.as_u64(),
-        Capacity::bytes(0)?.as_u64(),
-    ];
-    let asset_funding = [
-        0u128,
-        0u128,
-    ];
+    let funding = [Capacity::bytes(0)?.as_u64(), Capacity::bytes(0)?.as_u64()];
+    let asset_funding = [0u128, 0u128];
     let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
         &env.sample_udt_script,
         env.sample_udt_max_cap.as_u64(),
-        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
     );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
@@ -452,15 +488,16 @@ fn test_multi_asset_force_close(
         Capacity::bytes(100)?.as_u64(),
         Capacity::bytes(100)?.as_u64(),
     ];
-    let asset_funding = [
-        20u128,
-        30u128,
-    ];
+    let asset_funding = [20u128, 30u128];
     let funding_agreement = test::FundingAgreement::new_with_capacities_and_sudt(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
         &env.sample_udt_script,
         env.sample_udt_max_cap.as_u64(),
-        parts.iter().cloned().zip(asset_funding.iter().cloned()).collect(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
     );
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
@@ -475,7 +512,7 @@ fn test_multi_asset_force_close(
         chan.update(pay_sudt(Direction::BtoA, 10, 0));
 
         chan.with(bob).dispute().expect("disputing channel");
-        
+
         chan.delay(env.challenge_duration);
 
         chan.with(bob).force_close().expect("force closing channel");
