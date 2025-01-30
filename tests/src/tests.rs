@@ -110,9 +110,9 @@ fn channel_test_bench() -> Result<(), perun::Error> {
 #[test]
 fn channel_vc_test_bench() -> Result<(), perun::Error> {
     let res = [
-        test_fund_close, // happytest: check lockedbalances, unlock balances before closing VC
-        test_dispute, // 1st dispute: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration -> OK, Close
-        test_dispute_again, // 2 disputes: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration
+        test_vc_fund_close, // happytest: check lockedbalances, unlock balances before closing VC
+        // test_dispute, // 1st dispute: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration -> OK, Close
+        // test_dispute_again, // 2 disputes: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration
                             // 2nd dispute. Present: (vcts_1st_disp_alice). Now Bob makes another dispute: (pcts_in, vcts_2nd_disp_bob) -> challenge duration ->
                             // Merge 2 disputes: (vcts_1st_disp_alice v2, vcts_2nd_disp_bob v4) -> (vcts_merged: vcts_2nd_disp_bob)
                             // -> challenge duration ->  ForceClose in PCTS (VCTS 1st Close) with (vcts_merged, pcts v4) -> (vcts_merged_1st_close, pcts_v4).
@@ -137,6 +137,21 @@ fn create_channel_test(
 ) -> Result<(), perun::Error> {
     let mut chan = perun::channel::Channel::new(context, env, parts);
     test(&mut chan)
+}
+
+fn create_vc_channel_test(
+    context: &mut Context,
+    env: &perun::harness::Env,
+    parts_ai: &[perun::TestAccount],
+    parts_bi: &[perun::TestAccount],
+    parts_ab: &[perun::TestAccount],
+    test: impl Fn(&mut perun::channel::Channel<perun::State>, &mut perun::channel::Channel<perun::State>, &mut perun::channel::VirtualChannel<perun::State>) -> Result<(), perun::Error>,
+) -> Result<(), perun::Error> {
+    let mut chan_ai = perun::channel::Channel::new(context, env, parts_ai);
+    let mut chan_bi = perun::channel::Channel::new(context, env, parts_bi);
+    let mut vc_chan_ab = perun::channel::VirtualChannel::new(context, env, parts_ab, [chan_ai, chan_bi]);
+
+    test(&mut chan_ai, &mut chan_bi, &mut vc_chan_ab)
 }
 
 fn test_funding_abort(
@@ -544,4 +559,79 @@ fn test_multi_asset_force_close(
     })
 }
 
-fn test_vc
+fn test_vc_fund_close  (
+    context: &mut Context,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
+    let alice_acc = random::account(alice);
+    let bob_acc = random::account(bob);
+    let ingrid_acc = random::account(ingrid);
+
+    let parts_ai = [alice_acc, ingrid_acc];
+    let parts_bi = [bob_acc, ingrid_acc];
+    let parts_ab = [alice_acc, bob_acc];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+
+    let funding_vc = [
+        Capacity::bytes(50)?.as_u64(),
+        Capacity::bytes(50)?.as_u64(),
+    ];
+
+    let funding_agreement_ai = test::FundingAgreement::new_with_capacities(
+        parts_ai.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+
+    let fundging_agreement_bi = test::FundingAgreement::new_with_capacities(
+        parts_bi.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+
+    let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
+        [alice_acc, bob_acc].iter().cloned().zip(funding_vc.iter().cloned()).collect(),
+    );
+
+    create_vc_channel_test(context, env, &parts_ai, &parts_bi, &parts_ab, |chan_ai, chan_bi, vc_chan_ab| {
+        chan_ai.with(alice)
+            .open(&funding_agreement_ai)
+            .expect("opening channel");
+
+        chan_bi.with(bob)
+            .open(&fundging_agreement_bi)
+            .expect("opening channel");
+
+        chan_ai.with(ingrid)
+            .fund(&funding_agreement_ai)
+            .expect("funding channel");
+
+        chan_bi.with(ingrid)
+            .fund(&funding_agreement_bi)
+            .expect("funding channel");
+
+        vc_chan_ab.with(alice)
+            .open(&fundging_agreement_ab)
+            .expect("funding channel");
+
+        vc_chan_ab.with(alice)
+            .finalize()
+            .close()
+            .expect("closing virtual channel");
+
+        chan_ai.with(alice)
+            .finalize()
+            .close()
+            .expect("closing parent channel");
+
+        chan_bi.with(bob)
+            .finalize()
+            .close()
+            .expect("closing parent channel");
+
+        vc_chan_ab.assert();
+        chan_ai.assert();
+        chan_bi.assert();
+        Ok(())
+    })
+}

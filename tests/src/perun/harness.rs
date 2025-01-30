@@ -9,7 +9,7 @@ use ckb_testtool::{
 use perun_common::cfalse;
 use perun_common::perun_types::ChannelStateBuilder;
 use perun_common::perun_types::ChannelStatusBuilder;
-use perun_common::perun_types::{self, ChannelStatus, ChannelToken};
+use perun_common::perun_types::{self, ChannelStatus, ChannelToken, ChannelParameters};
 
 use super::test::ChannelId;
 use super::test::FundingAgreement;
@@ -328,5 +328,48 @@ impl Env {
             .disputed(cfalse!())
             .build();
         Ok(channel_status)
+    }
+
+    pub fn build_virtual_channel_state(
+        &self,
+        channel_id: ChannelId,
+        client_index: u8,
+        funding_agreement: &FundingAgreement,
+        channel_params: ChannelParameters,
+        parents_pcts: [Byte32, 2]
+        parents_status: [ChannelStatus, 2]
+    ) -> Result<ChannelStatus, LockedBalances, perun::Error> {
+        let all_indices = funding_agreement
+            .content()
+            .iter()
+            .map(|FundingAgreementEntry { index, .. }| *index)
+            .collect::<Vec<_>>();
+        let channel_balances = funding_agreement.mk_balances(all_indices)?;
+        let locked = funding_agreement.mk_locked_balances(channel_id)?;
+        let channel_state = ChannelStateBuilder::default()
+            .channel_id(channel_id.to_byte32())
+            .balances(channel_balances)
+            .version(Default::default())
+            .is_final(cfalse!())
+            .build();
+
+        let lcparents = LCStatusVec::new_builder()
+            .push(parents_status[0])
+            .push(parents_status[1])
+            .build();
+
+        let parents = ParentsVec::new_builder()
+            .push(ParentData::new_builder().pcts_hash(parents_pcts[0]).idx_map(IndexMap::new_builder().nth0(0).nth1(1).build()).build())
+            .push(ParentData::new_builder().pcts_hash(parents_pcts[1]).idx_map(IndexMap::new_builder().nth0(1).nth1(0).build()).build())
+            .build();
+
+        let channel_status = VirtualChannelStatusBuilder::default()
+            .vcstate(channel_state)
+            .funded(cfalse!())
+            .disputed(cfalse!())
+            .params(channel_params)
+            .parents(parents)
+            .build();
+        Ok(channel_status, locked)
     }
 }

@@ -256,4 +256,33 @@ impl Client {
         println!("consumed cycles: {}", cycles);
         Ok(fcr)
     }
+
+    pub fn open_vc(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        funding_agreement: &test::FundingAgreement,
+        parents_statuses: [ChannelStatus, 2],
+        parents_hashes: [Byte32, 2],
+    ) -> Result<(ChannelId, ChannelStatus, LockedBalances), perun::Error> {
+        let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
+
+        let chan_params = perun_types::ChannelParametersBuilder::default()
+            .party_a(parties[0].clone())
+            .party_b(parties[1].clone())
+            .nonce(random::nonce().pack())
+            .challenge_duration(env.challenge_duration.pack())
+            .app(Default::default())
+            .is_ledger_channel(cfalse!())
+            .is_virtual_channel(ctrue!())
+            .build();
+
+        let cid_raw = blake2b256(chan_params.as_slice());
+        let cid = ChannelId::from(cid_raw);
+        
+        
+        let (vcs, locked ) =env.build_virtual_channel_state(args.cid, args.party_index, &args.funding_agreement, chan_params, parents_status, parents_hashes)?;
+        
+        Ok(cid, vcs, locked)
+    }
 }
