@@ -29,10 +29,10 @@ use perun_common::{
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelCellData, ChannelConstants, ChannelParameters, ChannelState,
+        Balances, Bool, ChannelCellData, ChannelConstants, ChannelParameters, ChannelState,
         ChannelStatus, ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute,
         LedgerChannelOrVirtualChannelUnion, LedgerChannelOrVirtualChannelUnionReader,
-        LockedBalances, SEC1EncodedPubKey, VirtualChannelStatus,
+        LockedBalances, SEC1EncodedPubKey, SubAlloc, VirtualChannelStatus,
     },
     sig::verify_signature,
 };
@@ -967,19 +967,18 @@ fn determine_channel_action_for_two_cells(
         .as_ref()
         .and_then(|data| VirtualChannelStatus::from_slice(data).ok());
 
-    // Case 1: One PCTS and one VCTS (Start)
-    if (pcts_opt_0.is_some() && vcts_opt_1.is_some())
-        || (pcts_opt_1.is_some() && vcts_opt_0.is_some())
+    // Case 1: One PCTS and no VCTS (Start), then one PCTS, one VCTS as outputs
+    if (pcts_opt_0.is_some() && vcts_opt_1.is_none())
+        || (pcts_opt_1.is_some() && vcts_opt_0.is_none())
     {
-        // Extract details for Start action
-        let new_vc_status = if vcts_opt_0.is_some() {
-            vcts_opt_0.unwrap()
+        let new_vc_status = if let Some(ref pcts_status) = pcts_opt_0 {
+            build_vchannel_status(pcts_status)
         } else {
-            vcts_opt_1.unwrap()
+            build_vchannel_status(pcts_opt_1.as_ref().unwrap())
         };
 
-        let old_lc_status = if pcts_opt_0.is_some() {
-            pcts_opt_0.unwrap()
+        let old_lc_status = if let Some(ref pcts_status) = pcts_opt_0 {
+            pcts_status.clone()
         } else {
             pcts_opt_1.unwrap()
         };
@@ -1637,4 +1636,26 @@ pub fn get_vc_sudt_amount(
     }
     buf.copy_from_slice(&sudt_data[..SUDT_MIN_LEN]);
     return Ok((sudt_idx, u128::from_le_bytes(buf)));
+}
+
+pub fn build_vchannel_status(pcts_status: &ChannelStatus) -> VirtualChannelStatus {
+    let locked_bals = pcts_status.state().balances().locked().get_unchecked(0);
+
+    let bals = Balances::new_builder()
+        .ckbytes(locked_bals.balances().ckbytes().clone())
+        .sudts(locked_bals.balances().sudts().clone())
+        .build();
+
+    let vc_chanstate = ChannelState::new_builder()
+        .version(0u64.pack())
+        .balances(bals)
+        .is_final(Bool::from_bool(false))
+        .build();
+
+    VirtualChannelStatus::new_builder()
+        .lcstatus(pcts_status.clone())
+        .vcstate(vc_chanstate)
+        .disputed(Bool::from_bool(true))
+        .funded(Bool::from_bool(true))
+        .build()
 }
