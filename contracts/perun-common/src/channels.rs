@@ -165,3 +165,25 @@ pub fn find_closest_current_time() -> u64 {
     }
     latest_time
 }
+
+// verify_max_one_channel verifies that there is at most one channel in the group input and group output respectively.
+pub fn verify_max_one_channel() -> Result<(), Error> {
+    if count_cells(Source::GroupInput)? > 1 || count_cells(Source::GroupOutput)? > 1 {
+        return Err(Error::MoreThanOneChannel);
+    } else {
+        return Ok(());
+    }
+}
+
+pub fn count_cells(source: Source) -> Result<usize, Error> {
+    let mut null_buf: [u8; 0] = [];
+    for i in 0.. {
+        match syscalls::load_cell(&mut null_buf, 0, i, source) {
+            Ok(_) => continue,
+            Err(SysError::LengthNotEnough(_)) => continue,
+            Err(SysError::IndexOutOfBound) => return Ok(i),
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(0)
+}

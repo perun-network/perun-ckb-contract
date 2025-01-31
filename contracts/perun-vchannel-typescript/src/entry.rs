@@ -23,8 +23,8 @@ use ckb_std::{
 };
 use perun_common::{
     channels::{
-        find_cell_by_lock_hash, find_closest_current_time, verify_thread_token_integrity,
-        verify_time_lock_expired, VChannelAction,
+        count_cells, find_cell_by_lock_hash, find_closest_current_time, verify_max_one_channel,
+        verify_thread_token_integrity, verify_time_lock_expired, VChannelAction,
     },
     error::Error,
     helpers::blake2b256,
@@ -71,9 +71,6 @@ pub fn main() -> Result<(), Error> {
     // We verify that there is at most one channel in the GroupInputs and GroupOutputs respectively.
 
     // this does not need to be the case for vcs  - if there is a dispute, there are two channel cells in the inputs
-
-    // verify_max_one_channel()?;
-    // debug!("verify_max_one_channel passed");
 
     // The channel constants do not change during the lifetime of a channel. They are located in the
     // args field of the pcts.
@@ -543,13 +540,13 @@ pub fn verify_funding_in_outputs(
         .get_unchecked(idx)
         .balances()
         .sudts()
-        .get_locked_ckbytes(); //sudts().get_locked_ckbytes();
+        .get_locked_ckbytes();
     let to_fund = initial_balance
         .get_unchecked(idx)
         .balances()
         .ckbytes()
         .get(idx)?
-        + ckbytes_locked_for_sudts; //.ckbytes().get(idx)? + ckbytes_locked_for_sudts;
+        + ckbytes_locked_for_sudts;
     if to_fund == 0 {
         return Ok(());
     }
@@ -678,12 +675,9 @@ pub fn verify_equal_channel_id(
     old_state: &ChannelState,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    if old_state.balances().locked().get_unchecked(0).id().unpack()[..]
-        != new_state.balances().locked().get_unchecked(0).id().unpack()[..]
-    {
+    if old_state.channel_id().unpack()[..] != new_state.channel_id().unpack()[..] {
         return Err(Error::ChannelIdMismatch);
     }
-
     Ok(())
 }
 
@@ -993,7 +987,7 @@ fn determine_channel_action_for_two_cells(
         });
     }
 
-    // Case 2: Two VCTS and zero PCTS (Progress)
+    // Case 2: Two VCTS and zero PCTS (Progress) -> one (merged) VCTS as output
     if vcts_opt_0.is_some() && vcts_opt_1.is_some() {
         // if number of outputs is not 1, return an error
         if cell_out_data != 1 {
@@ -1036,28 +1030,6 @@ fn determine_channel_action_for_two_cells(
 
     // If no valid case is matched, return an error
     Err(Error::UnableToLoadAnyChannelStatus)
-}
-
-/// verify_max_one_channel verifies that there is at most one channel in the group input and group output respectively.
-pub fn verify_max_one_channel() -> Result<(), Error> {
-    if count_cells(Source::GroupInput)? > 1 || count_cells(Source::GroupOutput)? > 1 {
-        return Err(Error::MoreThanOneChannel);
-    } else {
-        return Ok(());
-    }
-}
-
-pub fn count_cells(source: Source) -> Result<usize, Error> {
-    let mut null_buf: [u8; 0] = [];
-    for i in 0.. {
-        match syscalls::load_cell(&mut null_buf, 0, i, source) {
-            Ok(_) => continue,
-            Err(SysError::LengthNotEnough(_)) => continue,
-            Err(SysError::IndexOutOfBound) => return Ok(i),
-            Err(err) => return Err(err.into()),
-        }
-    }
-    Ok(0)
 }
 
 pub fn verify_different_payment_addresses(
