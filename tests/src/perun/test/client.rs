@@ -1,7 +1,7 @@
 use ckb_testtool::ckb_traits::CellDataProvider;
 
 use ckb_testtool::ckb_types::core::ScriptHashType;
-use ckb_testtool::ckb_types::packed::{OutPoint, Script};
+use ckb_testtool::ckb_types::packed::{OutPoint, Script, Byte32};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 
@@ -9,7 +9,7 @@ use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::{ChannelState, ChannelStatus};
+use perun_common::perun_types::{ChannelState, ChannelStatus, VirtualChannelStatus, LockedBalances};
 
 use crate::perun;
 use crate::perun::harness;
@@ -262,9 +262,9 @@ impl Client {
         ctx: &mut Context,
         env: &harness::Env,
         funding_agreement: &test::FundingAgreement,
-        parents_statuses: [ChannelStatus, 2],
-        parents_hashes: [Byte32, 2],
-    ) -> Result<(ChannelId, ChannelStatus, LockedBalances), perun::Error> {
+        parents_statuses: [ChannelStatus; 2],
+        parents_hashes: [Byte32; 2],
+    ) -> Result<(ChannelId, VirtualChannelStatus, LockedBalances), perun::Error> {
         let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
 
         let chan_params = perun_types::ChannelParametersBuilder::default()
@@ -281,8 +281,17 @@ impl Client {
         let cid = ChannelId::from(cid_raw);
         
         
-        let (vcs, locked ) =env.build_virtual_channel_state(args.cid, args.party_index, &args.funding_agreement, chan_params, parents_status, parents_hashes)?;
+        let (vcs, locked ) =env.build_virtual_channel_state(cid, self.index, funding_agreement, chan_params, parents_hashes, parents_statuses)?;
         
-        Ok(cid, vcs, locked)
+        Ok((cid, vcs, locked))
     }
+
+    pub fn close_vc(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        _cid: test::ChannelId,
+        state: ChannelStatus,
+        sigs: [Vec<u8>; 2],
+    ) -> Result<(ChannelId, VirtualChannelStatus, LockedBalances), perun::Error>
 }

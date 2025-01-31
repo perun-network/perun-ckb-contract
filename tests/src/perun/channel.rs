@@ -130,6 +130,15 @@ where
         self
     }
 
+    pub fn update_locked_balances(&mut self, locked LockedBalances) -> &mut Self {
+        self.channel_state = self.channel_state
+            .clone()
+            .as_builder()
+            .locked_balances(locked)
+            .build();
+        self
+    }
+
     /// delay the environment by the given `duration`, this makes the next
     /// transaction receive a block_header with a timestamp that is `duration`
     /// in the future.

@@ -9,7 +9,8 @@ use ckb_testtool::{
 use perun_common::cfalse;
 use perun_common::perun_types::ChannelStateBuilder;
 use perun_common::perun_types::ChannelStatusBuilder;
-use perun_common::perun_types::{self, ChannelStatus, ChannelToken, ChannelParameters};
+use perun_common::perun_types::VirtualChannelStatusBuilder;
+use perun_common::perun_types::{self, LockedBalances, ChannelStatus, VirtualChannelStatus, ChannelToken, ChannelParameters, ParentsVec, ParentData, LCStatusVec, IndexMap};
 
 use super::test::ChannelId;
 use super::test::FundingAgreement;
@@ -336,9 +337,9 @@ impl Env {
         client_index: u8,
         funding_agreement: &FundingAgreement,
         channel_params: ChannelParameters,
-        parents_pcts: [Byte32, 2]
-        parents_status: [ChannelStatus, 2]
-    ) -> Result<ChannelStatus, LockedBalances, perun::Error> {
+        parents_pcts: [Byte32; 2],
+        parents_status: [ChannelStatus; 2],
+    ) -> Result<(VirtualChannelStatus, LockedBalances), perun::Error> {
         let all_indices = funding_agreement
             .content()
             .iter()
@@ -359,8 +360,8 @@ impl Env {
             .build();
 
         let parents = ParentsVec::new_builder()
-            .push(ParentData::new_builder().pcts_hash(parents_pcts[0]).idx_map(IndexMap::new_builder().nth0(0).nth1(1).build()).build())
-            .push(ParentData::new_builder().pcts_hash(parents_pcts[1]).idx_map(IndexMap::new_builder().nth0(1).nth1(0).build()).build())
+            .push(ParentData::new_builder().pcts_hash(parents_pcts[0]).idx_map(IndexMap::new_builder().nth0(0.into()).nth1(1.into()).build()).build())
+            .push(ParentData::new_builder().pcts_hash(parents_pcts[1]).idx_map(IndexMap::new_builder().nth0(1.into()).nth1(0.into()).build()).build())
             .build();
 
         let channel_status = VirtualChannelStatusBuilder::default()
@@ -370,6 +371,6 @@ impl Env {
             .params(channel_params)
             .parents(parents)
             .build();
-        Ok(channel_status, locked)
+        Ok((channel_status, locked))
     }
 }

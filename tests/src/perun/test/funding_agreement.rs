@@ -8,8 +8,10 @@ use k256::PublicKey;
 use perun_common::perun_types::{
     self, Balances, CKByteDistribution, ParticipantBuilder,
     SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution,
+    LockedBalances, SubBalances, SubAlloc
 };
 
+use crate::perun::test::ChannelId;
 use crate::perun;
 
 #[derive(Debug, Clone)]
@@ -167,11 +169,10 @@ impl FundingAgreement {
                     .build(),
             )
             .sudts(SUDTAllocation::new_builder().set(sudt_alloc).build())
-            .locked(mk_locked_balances(indices, vc_id))
             .build())
     }
 
-    pub fn mk_locked_balances(&self, indices: Vec<u8>, id : ChannelId ) -> Result<LockedBalances, perun::Error> {
+    pub fn mk_locked_balances(&self, id : ChannelId ) -> Result<LockedBalances, perun::Error> {
         let mut ckbytes = [0u64; 2];
         let sudts = self.register.get_sudtassets();
         let mut sudt_dist: Vec<[u128; 2]> = Vec::new();
@@ -179,10 +180,6 @@ impl FundingAgreement {
             sudt_dist.push([0u128, 0]);
         }
         for fae in self.entries.iter() {
-            if indices.iter().find(|&&i| i == fae.index).is_none() {
-                continue;
-            }
-
             ckbytes[fae.index as usize] = fae.ckbytes;
             for (asset, amount) in fae.sudts.iter() {
                 sudt_dist[asset.0 as usize][fae.index as usize] = *amount;
@@ -213,10 +210,10 @@ impl FundingAgreement {
             .sudts(SUDTAllocation::new_builder().set(sudt_alloc).build())
             .build();
         
-        OK(LockedBalances::new_builder()
+        Ok(LockedBalances::new_builder()
                             .push(SubAlloc::new_builder()
                                 .id(id.to_byte32())
-                                .balances(sub_balances)).build())
+                                .balances(sub_balances).build()).build())
     }
 
     pub fn expected_ckbytes_funding_for(&self, index: u8) -> Result<u64, perun::Error> {

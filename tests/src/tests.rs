@@ -145,11 +145,11 @@ fn create_vc_channel_test(
     parts_ai: &[perun::TestAccount],
     parts_bi: &[perun::TestAccount],
     parts_ab: &[perun::TestAccount],
-    test: impl Fn(&mut perun::channel::Channel<perun::State>, &mut perun::channel::Channel<perun::State>, &mut perun::channel::VirtualChannel<perun::State>) -> Result<(), perun::Error>,
+    test: impl Fn(&mut perun::channel::Channel<perun::State>, &mut perun::channel::Channel<perun::State>, &mut perun::virtual_channel::VirtualChannel<perun::State>) -> Result<(), perun::Error>,
 ) -> Result<(), perun::Error> {
-    let mut chan_ai = perun::channel::Channel::new(context, env, parts_ai);
+    let mut chan_ai = perun::channel::Channel::new(context.clone(), env, parts_ai);
     let mut chan_bi = perun::channel::Channel::new(context, env, parts_bi);
-    let mut vc_chan_ab = perun::channel::VirtualChannel::new(context, env, parts_ab, [chan_ai, chan_bi]);
+    let mut vc_chan_ab = perun::virtual_channel::VirtualChannel::new(context, env, parts_ab, &[chan_ai, chan_bi]);
 
     test(&mut chan_ai, &mut chan_bi, &mut vc_chan_ab)
 }
@@ -568,9 +568,9 @@ fn test_vc_fund_close  (
     let bob_acc = random::account(bob);
     let ingrid_acc = random::account(ingrid);
 
-    let parts_ai = [alice_acc, ingrid_acc];
-    let parts_bi = [bob_acc, ingrid_acc];
-    let parts_ab = [alice_acc, bob_acc];
+    let parts_ai = [alice_acc.clone(), ingrid_acc.clone()];
+    let parts_bi = [bob_acc.clone(), ingrid_acc.clone()];
+    let parts_ab = [alice_acc.clone(), bob_acc.clone()];
     let funding = [
         Capacity::bytes(100)?.as_u64(),
         Capacity::bytes(100)?.as_u64(),
@@ -585,12 +585,12 @@ fn test_vc_fund_close  (
         parts_ai.iter().cloned().zip(funding.iter().cloned()).collect(),
     );
 
-    let fundging_agreement_bi = test::FundingAgreement::new_with_capacities(
+    let funding_agreement_bi = test::FundingAgreement::new_with_capacities(
         parts_bi.iter().cloned().zip(funding.iter().cloned()).collect(),
     );
 
     let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
-        [alice_acc, bob_acc].iter().cloned().zip(funding_vc.iter().cloned()).collect(),
+        parts_ab.iter().cloned().zip(funding_vc.iter().cloned()).collect(),
     );
 
     create_vc_channel_test(context, env, &parts_ai, &parts_bi, &parts_ab, |chan_ai, chan_bi, vc_chan_ab| {
@@ -599,7 +599,7 @@ fn test_vc_fund_close  (
             .expect("opening channel");
 
         chan_bi.with(bob)
-            .open(&fundging_agreement_bi)
+            .open(&funding_agreement_bi)
             .expect("opening channel");
 
         chan_ai.with(ingrid)
@@ -611,7 +611,7 @@ fn test_vc_fund_close  (
             .expect("funding channel");
 
         vc_chan_ab.with(alice)
-            .open(&fundging_agreement_ab)
+            .open(&funding_agreement_ab)
             .expect("funding channel");
 
         vc_chan_ab.with(alice)
