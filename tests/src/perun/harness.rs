@@ -10,7 +10,7 @@ use perun_common::cfalse;
 use perun_common::perun_types::ChannelStateBuilder;
 use perun_common::perun_types::ChannelStatusBuilder;
 use perun_common::perun_types::VirtualChannelStatusBuilder;
-use perun_common::perun_types::{self, LockedBalances, ChannelStatus, VirtualChannelStatus, ChannelToken, ChannelParameters, ParentsVec, ParentData, LCStatusVec, IndexMap};
+use perun_common::perun_types::{self, LockedBalances, ChannelStatus, VirtualChannelStatus, ChannelToken, ChannelParameters, ParentsVec, ParentData, IndexMap};
 
 use super::test::ChannelId;
 use super::test::FundingAgreement;
@@ -334,11 +334,10 @@ impl Env {
     pub fn build_virtual_channel_state(
         &self,
         channel_id: ChannelId,
-        client_index: u8,
         funding_agreement: &FundingAgreement,
         channel_params: ChannelParameters,
         parents_pcts: [Byte32; 2],
-        parents_status: [ChannelStatus; 2],
+        parent_status: ChannelStatus,
     ) -> Result<(VirtualChannelStatus, LockedBalances), perun::Error> {
         let all_indices = funding_agreement
             .content()
@@ -354,17 +353,13 @@ impl Env {
             .is_final(cfalse!())
             .build();
 
-        let lcparents = LCStatusVec::new_builder()
-            .push(parents_status[0])
-            .push(parents_status[1])
-            .build();
-
         let parents = ParentsVec::new_builder()
-            .push(ParentData::new_builder().pcts_hash(parents_pcts[0]).idx_map(IndexMap::new_builder().nth0(0.into()).nth1(1.into()).build()).build())
-            .push(ParentData::new_builder().pcts_hash(parents_pcts[1]).idx_map(IndexMap::new_builder().nth0(1.into()).nth1(0.into()).build()).build())
+            .push(ParentData::new_builder().pcts_hash(parents_pcts[0].clone()).idx_map(IndexMap::new_builder().nth0(0.into()).nth1(1.into()).build()).build())
+            .push(ParentData::new_builder().pcts_hash(parents_pcts[1].clone()).idx_map(IndexMap::new_builder().nth0(1.into()).nth1(0.into()).build()).build())
             .build();
 
         let channel_status = VirtualChannelStatusBuilder::default()
+            .lcstatus(parent_status)
             .vcstate(channel_state)
             .funded(cfalse!())
             .disputed(cfalse!())

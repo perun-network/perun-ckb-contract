@@ -262,7 +262,7 @@ impl Client {
         ctx: &mut Context,
         env: &harness::Env,
         funding_agreement: &test::FundingAgreement,
-        parents_statuses: [ChannelStatus; 2],
+        parents_statuses: ChannelStatus,
         parents_hashes: [Byte32; 2],
     ) -> Result<(ChannelId, VirtualChannelStatus, LockedBalances), perun::Error> {
         let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
@@ -281,17 +281,8 @@ impl Client {
         let cid = ChannelId::from(cid_raw);
         
         
-        let (vcs, locked ) =env.build_virtual_channel_state(cid, self.index, funding_agreement, chan_params, parents_hashes, parents_statuses)?;
+        let (vcs, locked ) = env.build_virtual_channel_state(cid, funding_agreement, chan_params, parents_hashes, parents_statuses)?;
         
         Ok((cid, vcs, locked))
     }
-
-    pub fn close_vc(
-        &self,
-        ctx: &mut Context,
-        env: &harness::Env,
-        _cid: test::ChannelId,
-        state: ChannelStatus,
-        sigs: [Vec<u8>; 2],
-    ) -> Result<(ChannelId, VirtualChannelStatus, LockedBalances), perun::Error>
 }

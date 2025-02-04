@@ -200,7 +200,7 @@ impl FundingAgreement {
             );
         }
 
-        let mut sub_balances = SubBalances::new_builder()
+        let sub_balances = SubBalances::new_builder()
             .ckbytes(
                 CKByteDistribution::new_builder()
                     .nth0(ckbytes[0].pack())

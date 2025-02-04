@@ -8,7 +8,9 @@ use ckb_testtool::{
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
     ctrue,
-    perun_types::{ChannelConstants, ChannelStatus, ChannelState},
+    perun_types::{ChannelConstants, ChannelStatus, ChannelState, LockedBalances, ParentData, 
+        SubBalances, ParentsVec, CKByteDistribution, SUDTAllocation, SubAlloc, Balances,
+    },
 };
 
 use crate::perun::{
@@ -130,11 +132,121 @@ where
         self
     }
 
-    pub fn update_locked_balances(&mut self, locked LockedBalances) -> &mut Self {
+    pub fn update_virtual_channel(&mut self, locked: LockedBalances, parents: ParentsVec) -> &mut Self {
+        let mut parent = None;
+        for i in 0..parents.len() {
+            let p = parents.get_unchecked(i);
+            if p.pcts_hash() == self.pcts.code_hash() {
+                parent = Some(p);
+                break;
+            }
+        }
+        let parent = parent.expect("parent not found");
+
+        let idx_map = parent.idx_map();
+
+        let mut locked = locked.clone();
+
+        let old_state = self.channel_state.state();
+        let balances = self.channel_state.state().balances();
+
+        
+        if idx_map.nth0() == 1.into() {
+            let mut new_sub_balances = SubBalances::new_builder()
+                .ckbytes(
+                    CKByteDistribution::new_builder()
+                        .nth0(locked.get(0).expect("").balances().ckbytes().nth1())
+                        .nth1(locked.get(0).expect("").balances().ckbytes().nth0())
+                        .build(),
+                )
+                .sudts(locked.get(0).expect("").balances().sudts())
+                .build();
+
+            locked = LockedBalances::new_builder()
+                        .push(SubAlloc::new_builder()
+                        .id(locked.get(0).expect("").id())
+                        .balances(new_sub_balances).build()).build();
+        }
+
+        let new_balances = Balances::new_builder()
+            .ckbytes(balances.ckbytes())
+            .sudts(balances.sudts())
+            .locked(locked.clone())
+            .build();
+
+
+        let new_state = ChannelState::new_builder()
+            .version(old_state.version())
+            .is_final(old_state.is_final())
+            .channel_id(old_state.channel_id())
+            .balances(new_balances)
+            .build();
+
+
         self.channel_state = self.channel_state
             .clone()
             .as_builder()
-            .locked_balances(locked)
+            .state(new_state)
+            .build();
+        self
+    }
+
+    pub fn close_virtual_channel(&mut self, parents: ParentsVec) -> &mut Self {
+        let mut parent = None;
+        for i in 0..parents.len() {
+            let p = parents.get_unchecked(i);
+            if p.pcts_hash() == self.pcts.code_hash() {
+                parent = Some(p);
+                break;
+            }
+        }
+        let parent = parent.expect("parent not found");
+        let idx_map = parent.idx_map();
+
+        let old_state = self.channel_state.state();
+        let balances = self.channel_state.state().balances();
+        let locked = balances.locked();
+
+        let mut new_ckbytes = balances.ckbytes(); 
+
+        if idx_map.nth0() == 1.into() {
+            let locked_balance_a = locked.get(0).expect("").balances().ckbytes().get(1).expect("no ckbytes");
+            let locked_balance_b = locked.get(0).expect("").balances().ckbytes().get(0).expect("no ckbytes");
+            let diff = locked_balance_b - locked_balance_a;
+
+            new_ckbytes = new_ckbytes.clone().as_builder()
+                                        .nth0((new_ckbytes.get(0).expect("no 0th") + diff).pack())
+                                        .nth1((new_ckbytes.get(1).expect("no 1st") - diff).pack())
+                                        .build();   
+        } else {
+            let locked_balance_a = locked.get(0).expect("no locked").balances().ckbytes().get(0).expect("no ckbytes");
+            let locked_balance_b = locked.get(0).expect("no locked").balances().ckbytes().get(1).expect("no ckbytes");
+            let diff = locked_balance_b - locked_balance_a;
+
+            new_ckbytes = new_ckbytes.clone().as_builder()
+                                        .nth0((new_ckbytes.get(0).expect("no 0th") + diff).pack())
+                                        .nth1((new_ckbytes.get(1).expect("no 1st") - diff).pack())
+                                        .build();
+        }
+
+
+        let new_balances = Balances::new_builder()
+            .ckbytes(new_ckbytes)
+            .sudts(balances.sudts())
+            .build();
+
+            let new_state = ChannelState::new_builder()
+            .version(old_state.version())
+            .is_final(old_state.is_final())
+            .channel_id(old_state.channel_id())
+            .balances(new_balances)
+            .build();
+
+
+        self.channel_state = self.channel_state
+            .clone()
+            .as_builder()
+            .state(new_state)
             .build();
         self
     }
@@ -379,5 +491,13 @@ where
             .iter()
             .fold(Default::default(), |acc, act| acc.apply(act));
         assert_eq!(expected_state, self.current_state)
+    }
+
+    pub fn channel_state(&self) -> &ChannelStatus {
+        &self.channel_state
+    }
+
+    pub fn pcts(&self) -> &Script {
+        &self.pcts
     }
 }

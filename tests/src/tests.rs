@@ -11,6 +11,8 @@ use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{
     Balances, Bool, CKByteDistribution, ChannelState, SEC1EncodedPubKey,
 };
+
+use crate::perun::virtual_channel::VirtualChannel;
 use perun_common::sig::verify_signature;
 
 const MAX_CYCLES: u64 = 10 * 10_000_000;
@@ -144,14 +146,18 @@ fn create_vc_channel_test(
     env: &perun::harness::Env,
     parts_ai: &[perun::TestAccount],
     parts_bi: &[perun::TestAccount],
-    parts_ab: &[perun::TestAccount],
-    test: impl Fn(&mut perun::channel::Channel<perun::State>, &mut perun::channel::Channel<perun::State>, &mut perun::virtual_channel::VirtualChannel<perun::State>) -> Result<(), perun::Error>,
+    test: impl Fn(&mut perun::channel::Channel<perun::State>, &mut perun::channel::Channel<perun::State>) -> Result<(), perun::Error>,
 ) -> Result<(), perun::Error> {
-    let mut chan_ai = perun::channel::Channel::new(context.clone(), env, parts_ai);
-    let mut chan_bi = perun::channel::Channel::new(context, env, parts_bi);
-    let mut vc_chan_ab = perun::virtual_channel::VirtualChannel::new(context, env, parts_ab, &[chan_ai, chan_bi]);
+    // Ensure contexts live long enough
+    let mut context_ai = Context::default();
+    let mut context_bi = Context::default();
 
-    test(&mut chan_ai, &mut chan_bi, &mut vc_chan_ab)
+    // Create channels
+    let mut chan_ai = perun::channel::Channel::new(&mut context_ai, env, parts_ai);
+    let mut chan_bi = perun::channel::Channel::new(&mut context_bi, env, parts_bi);
+    
+    // Run the test function with mutable references
+    test(&mut chan_ai, &mut chan_bi)
 }
 
 fn test_funding_abort(
@@ -593,7 +599,7 @@ fn test_vc_fund_close  (
         parts_ab.iter().cloned().zip(funding_vc.iter().cloned()).collect(),
     );
 
-    create_vc_channel_test(context, env, &parts_ai, &parts_bi, &parts_ab, |chan_ai, chan_bi, vc_chan_ab| {
+    create_vc_channel_test(context, env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
         chan_ai.with(alice)
             .open(&funding_agreement_ai)
             .expect("opening channel");
@@ -609,16 +615,24 @@ fn test_vc_fund_close  (
         chan_bi.with(ingrid)
             .fund(&funding_agreement_bi)
             .expect("funding channel");
+        let mut vc_context = Context::default();
 
-        vc_chan_ab.with(alice)
-            .open(&funding_agreement_ab)
-            .expect("funding channel");
+        let mut vc_chan_ab: VirtualChannel<perun::State> = perun::virtual_channel::VirtualChannel::new(
+            &mut vc_context, 
+            &env, 
+            &parts_ab, 
+            [chan_ai, chan_bi]);
 
-        vc_chan_ab.with(alice)
-            .finalize()
-            .close()
-            .expect("closing virtual channel");
 
+            vc_chan_ab.with(alice)
+                .open(&funding_agreement_ab)
+                .expect("funding channel");
+
+            vc_chan_ab.with(alice)
+                .finalize()
+                .close()
+                .expect("closing virtual channel");
+            drop(vc_chan_ab);
         chan_ai.with(alice)
             .finalize()
             .close()
@@ -628,8 +642,6 @@ fn test_vc_fund_close  (
             .finalize()
             .close()
             .expect("closing parent channel");
-
-        vc_chan_ab.assert();
         chan_ai.assert();
         chan_bi.assert();
         Ok(())

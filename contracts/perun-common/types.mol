@@ -165,10 +165,10 @@ table ParentData {
   idx_map: index_map,
 }
 
-vector LcStatusVec<ChannelStatus>
+vector LcStatusVec<ChannelStatus>;
 
 table VirtualChannelStatus {
-  lcstatus: LcStatusVec, //ChannelStatus,
+  lcstatus: ChannelStatus, //ChannelStatus,
   vcstate: ChannelState,
   funded: Bool,
   disputed: Bool,

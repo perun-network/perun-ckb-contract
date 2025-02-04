@@ -8,7 +8,7 @@ use ckb_testtool::{
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
     ctrue,
-    perun_types::{ChannelConstants, VirtualChannelStatus, ChannelState},
+    perun_types::{ChannelConstants, VirtualChannelStatus, ChannelState, SubBalances, LockedBalances, SubAlloc},
 };
 
 use crate::perun::{
@@ -44,7 +44,7 @@ where
     /// The current state of this channel.
     virtual_channel_state: VirtualChannelStatus,
     /// The parents for this channel.
-    parent_channels: [perun::channel::Channel<'a,perun::State>; 2],
+    parent_channels: [&'a mut perun::channel::Channel<'a, perun::State>; 2],
     /// The used Perun Channel Type Script.
     vcts: Script,
     /// All available parties.
@@ -94,7 +94,7 @@ where
         context: &'a mut Context,
         env: &'a perun::harness::Env,
         parts: &[perun::TestAccount],
-        parents: &[perun::channel::Channel<perun::State>; 2],
+        parents: [&'a mut perun::channel::Channel<'a, perun::State>; 2],
     ) -> Self {
         let m_parts: HashMap<_, _> = parts
             .iter()
@@ -116,7 +116,7 @@ where
             vcts: Script::default(),
             virtual_channel_cell: None,
             virtual_channel_state: VirtualChannelStatus::default(),
-            parent_channels: *parents,
+            parent_channels: parents,
             active_part: active.clone(),
             parts: m_parts.clone(),
             validity: ActionValidity::Valid,
@@ -146,7 +146,9 @@ where
 
         let (id, vcs, locked) = call_action!(self, open_vc, funding_agreement, parents_status, parents_pcts)?;
 
-        self.parent_channels.iter().for_each(|p| p.update_virtual_channel(locked));
+        let parents = vcs.parents().clone();
+
+        self.parent_channels.iter().for_each(|p| {p.update_virtual_channel(locked, parents);});
 
         self.id = id;
         self.virtual_channel_state = vcs;
@@ -157,28 +159,18 @@ where
     /// before successful close actions. It bumps the version of the channel state.
     pub fn finalize(&mut self) -> &mut Self {
         let status = self.virtual_channel_state.clone();
-        let old_version: u64 = status.state().version().unpack();
-        let state = status.state().as_builder().is_final(ctrue!()).version((old_version + 1).pack()).build();
-        self.virtual_channel_state = status.as_builder().state(state).build();
+        let old_version: u64 = status.vcstate().version().unpack();
+        let state = status.vcstate().as_builder().is_final(ctrue!()).version((old_version + 1).pack()).build();
+        self.virtual_channel_state = status.as_builder().vcstate(state).build();
         self
     }
 
     /// close a channel using the currently active participant set by
     /// `with(..)`.
     pub fn close(&mut self) -> Result<(), perun::Error> {
-        let sigs = self.sigs_for_channel_state()?;
-        match self.virtual_channel_cell.clone() {
-            Some(channel_cell) => call_action!(
-                self,
-                close_vc,
-                self.id,
-                self.virtual_channel_state.clone(),
-                sigs
-            ),
-            None => panic!("no channel cell, invalid test setup"),
-        }?;
-        let locked = self.get_locked_balances()?;
-        self.parent_channels.iter().for_each(|p| p.update_virtual_channel(locked));
+    
+        let parents = self.virtual_channel_state.clone().parents().clone();
+        self.parent_channels.iter_mut().for_each(|p| { p.close_virtual_channel(parents.clone()); });
         Ok(())
     }
 
@@ -196,12 +188,24 @@ where
         self.ctx.link_cell_with_block(cell, header.hash(), 0);
     }
 
-    fn get_locked_balances(&self) -> Result<perun::LockedBalances, perun::Error> {
-        let channel_cell = self.virtual_channel_cell.clone().expect("no channel cell");
-        let cell = self.ctx.get_cell(&channel_cell).expect("cell not found");
-        let data = cell.data().expect("cell data not found");
-        perun::LockedBalances::from_slice(&data.raw_data()).map_err(|_| perun::Error::new("could not parse locked balances"))
-    }
+    fn get_locked_balances(&self) -> Result<LockedBalances, perun::Error> {
+        let virtual_channel_status = self.virtual_channel_state.clone();
+        let vcstate = virtual_channel_status.vcstate();
+
+        let balances = vcstate.balances();
+        let ckbytes = balances.ckbytes();  
+        let sudtbalances = balances.sudts();
+        
+        let sub_balances = SubBalances::new_builder()
+                                            .ckbytes(ckbytes)
+                                            .sudts(sudtbalances).build();
+        let locked_balances = LockedBalances::new_builder()
+                                            .push(SubAlloc::new_builder()
+                                                    .id(self.id.to_byte32())
+                                                    .balances(sub_balances).build()).build();
+        Ok(locked_balances)
+    }  
+                                        
 
 
     /// valid sets the validity of the next action to valid. (default)
