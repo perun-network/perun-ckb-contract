@@ -1,5 +1,7 @@
 use crate::perun::mutators::*;
+use crate::perun::virtual_channel::*;
 use crate::perun::random;
+use crate::tests::test::ChannelId;
 
 use super::*;
 use ckb_occupied_capacity::Capacity;
@@ -8,11 +10,11 @@ use ckb_testtool::context::Context;
 use perun;
 use perun::test;
 use perun_common::helpers::blake2b256;
+use perun_common::{ctrue, cfalse};
 use perun_common::perun_types::{
-    Balances, Bool, CKByteDistribution, ChannelState, SEC1EncodedPubKey,
+    Balances, Bool, CKByteDistribution, ChannelState, SEC1EncodedPubKey, ChannelParametersBuilder
 };
 
-use crate::perun::virtual_channel::VirtualChannel;
 use perun_common::sig::verify_signature;
 
 const MAX_CYCLES: u64 = 10 * 10_000_000;
@@ -615,24 +617,36 @@ fn test_vc_fund_close  (
         chan_bi.with(ingrid)
             .fund(&funding_agreement_bi)
             .expect("funding channel");
-        let mut vc_context = Context::default();
-
-        let mut vc_chan_ab: VirtualChannel<perun::State> = perun::virtual_channel::VirtualChannel::new(
-            &mut vc_context, 
-            &env, 
-            &parts_ab, 
-            [chan_ai, chan_bi]);
 
 
-            vc_chan_ab.with(alice)
-                .open(&funding_agreement_ab)
-                .expect("funding channel");
+        let mut context = Context::default();
+        let parties_vc = funding_agreement_ab.mk_participants(&mut context, env, env.min_capacity_no_script);
 
-            vc_chan_ab.with(alice)
-                .finalize()
-                .close()
-                .expect("closing virtual channel");
-            drop(vc_chan_ab);
+        let chan_params = ChannelParametersBuilder::default()
+                .party_a(parties_vc[0].clone())
+                .party_b(parties_vc[1].clone())
+                .nonce(random::nonce().pack())
+                .challenge_duration(env.challenge_duration.pack())
+                .app(Default::default())
+                .is_ledger_channel(cfalse!())
+                .is_virtual_channel(ctrue!())
+                .build();
+    
+        let cid_raw = blake2b256(chan_params.as_slice());
+        let cid = ChannelId::from(cid_raw);
+
+        chan_ai.with(alice)
+            .update(update_virtual_channel(&funding_agreement_ab, cid));
+
+        chan_bi.with(ingrid)
+            .update(update_virtual_channel(&funding_agreement_ab, cid));
+
+        chan_ai.with(alice)
+            .update(resolve_virtual_channel());
+        
+        chan_bi.with(ingrid)
+            .update(resolve_virtual_channel());
+
         chan_ai.with(alice)
             .finalize()
             .close()
