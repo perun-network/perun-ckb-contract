@@ -61,8 +61,8 @@ fn test_signature() {
     verify_signature(&msg_hash, &sig_bytes, pubkey.as_slice()).expect("valid signature");
 }
 
-// TODO: Add mutator to channel state that can be passed to dispute, and close.
 #[test]
+// TODO: Add mutator to channel state that can be passed to dispute, and close.
 fn channel_test_bench() -> Result<(), perun::Error> {
     let res = [
         test_funding_abort,
@@ -124,10 +124,13 @@ fn channel_vc_test_bench() -> Result<(), perun::Error> {
     ]
     .iter()
     .map(|test| {
-        let mut context = Context::default();
-        let pe = perun::harness::Env::new(&mut context, MAX_CYCLES, CHALLENGE_DURATION_MS)
+        let mut context_1 = Context::default();
+        let mut context_2 = Context::default();
+        let pe_1 = perun::harness::Env::new(&mut context_1, MAX_CYCLES, CHALLENGE_DURATION_MS)
             .expect("preparing environment");
-        test(&mut context, &pe)
+        let pe_2 = perun::harness::Env::new(&mut context_2, MAX_CYCLES, CHALLENGE_DURATION_MS)
+            .expect("preparing environment");
+        test(&mut context_1, &mut context_2, &pe_1, &pe_2)
     })
     .collect::<Vec<_>>();
     res.into_iter().collect()
@@ -144,19 +147,17 @@ fn create_channel_test(
 }
 
 fn create_vc_channel_test(
-    context: &mut Context,
-    env: &perun::harness::Env,
+    context_1: &mut Context,
+    context_2: &mut Context,
+    env_1: &perun::harness::Env,
+    env_2: &perun::harness::Env,
     parts_ai: &[perun::TestAccount],
     parts_bi: &[perun::TestAccount],
     test: impl Fn(&mut perun::channel::Channel<perun::State>, &mut perun::channel::Channel<perun::State>) -> Result<(), perun::Error>,
 ) -> Result<(), perun::Error> {
-    // Ensure contexts live long enough
-    let mut context_ai = Context::default();
-    let mut context_bi = Context::default();
-
     // Create channels
-    let mut chan_ai = perun::channel::Channel::new(&mut context_ai, env, parts_ai);
-    let mut chan_bi = perun::channel::Channel::new(&mut context_bi, env, parts_bi);
+    let mut chan_ai = perun::channel::Channel::new(context_1, env_1, parts_ai);
+    let mut chan_bi = perun::channel::Channel::new(context_2, env_2, parts_bi);
     
     // Run the test function with mutable references
     test(&mut chan_ai, &mut chan_bi)
@@ -568,8 +569,10 @@ fn test_multi_asset_force_close(
 }
 
 fn test_vc_fund_close  (
-    context: &mut Context,
-    env: &perun::harness::Env,
+    context_1: &mut Context,
+    context_2: &mut Context,
+    env_1: &perun::harness::Env,
+    env_2: &perun::harness::Env,
 ) -> Result<(), perun::Error> {
     let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
     let alice_acc = random::account(alice);
@@ -601,7 +604,7 @@ fn test_vc_fund_close  (
         parts_ab.iter().cloned().zip(funding_vc.iter().cloned()).collect(),
     );
 
-    create_vc_channel_test(context, env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
+    create_vc_channel_test(context_1, context_2, env_1, env_2, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
         chan_ai.with(alice)
             .open(&funding_agreement_ai)
             .expect("opening channel");
@@ -620,7 +623,9 @@ fn test_vc_fund_close  (
 
 
         let mut context = Context::default();
-        let parties_vc = funding_agreement_ab.mk_participants(&mut context, env, env.min_capacity_no_script);
+        let env = perun::harness::Env::new(&mut context, MAX_CYCLES, CHALLENGE_DURATION_MS)
+            .expect("preparing environment");
+        let parties_vc = funding_agreement_ab.mk_participants(&mut context, &env, env.min_capacity_no_script);
 
         let chan_params = ChannelParametersBuilder::default()
                 .party_a(parties_vc[0].clone())

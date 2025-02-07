@@ -64,8 +64,8 @@ impl Env {
         // Perun contracts.
         let pcls: Bytes = Loader::default().load_binary("perun-channel-lockscript");
         let pcts: Bytes = Loader::default().load_binary("perun-channel-typescript");
-        let vcls: Bytes = Loader::default().load_binary("perun-virtual-channel-lockscript");
-        let vcts: Bytes = Loader::default().load_binary("perun-virtual-channel-typescript");
+        let vcls: Bytes = Loader::default().load_binary("perun-vchannel-lockscript");
+        let vcts: Bytes = Loader::default().load_binary("perun-vchannel-typescript");
         let pfls: Bytes = Loader::default().load_binary("perun-funds-lockscript");
         let sample_udt: Bytes = Loader::default().load_binary("sample-udt");
         // Deploying the contracts returns the cell they are deployed in.
@@ -219,9 +219,10 @@ impl Env {
 
     pub fn build_lock_script(&self, context: &mut Context, args: Bytes) -> Script {
         let always_success_out_point = &self.always_success_out_point;
-        context
-            .build_script(always_success_out_point, args)
-            .expect("always_success")
+        let result = context
+            .build_script(always_success_out_point, args);
+        println!("Debug: result = {:?}", result);
+        result.expect("This is failing!")
     }
 
     pub fn min_capacity_for_channel(&self, cs: ChannelStatus) -> Result<Capacity, perun::Error> {
