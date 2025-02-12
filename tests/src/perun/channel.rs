@@ -13,6 +13,10 @@ use perun_common::{
     },
 };
 
+use std::cell::RefCell;
+use std::sync::Mutex;
+use std::rc::Rc;
+
 use crate::perun::{
     self,
     test::{keys, Client},
@@ -52,7 +56,7 @@ where
     /// All available parties.
     parts: HashMap<String, test::Client>,
     /// The surrounding chain context.
-    ctx: &'a mut Context,
+    ctx: Rc<Mutex<RefCell<Context>>>,
     /// The intial test harness environment supplying all Perun specific
     /// contracts and functionality for deployment etc.
     env: &'a harness::Env,
@@ -72,10 +76,11 @@ macro_rules! call_action {
     ($self:ident, $action:ident $(, $x:expr)*$(,)*) => (
         {
             println!("calling action {} on {}", stringify!($action), $self.active_part.name());
+            let mut ctx = $self.ctx.lock().unwrap();
             let res = match $self.validity {
-                ActionValidity::Valid => $self.active_part.$action($self.ctx, $self.env, $($x),*),
+                ActionValidity::Valid => $self.active_part.$action(&mut ctx.borrow_mut(), $self.env, $($x),*),
                 ActionValidity::Invalid => {
-                    let res = $self.active_part.$action($self.ctx, $self.env, $($x),*);
+                    let res = $self.active_part.$action(&mut ctx.borrow_mut(), $self.env, $($x),*);
                     match res {
                         Ok(_) => Err(perun::Error::new("action should have failed")),
                         Err(_) => Ok(Default::default()),
@@ -93,7 +98,7 @@ where
     S: Default + perun::Applyable + Debug + PartialEq,
 {
     pub fn new(
-        context: &'a mut Context,
+        context: Rc<Mutex<RefCell<Context>>>,
         env: &'a perun::harness::Env,
         parts: &[perun::TestAccount],
     ) -> Self {
@@ -164,9 +169,10 @@ where
             )
             .build()
             .into_view();
-        self.ctx.insert_header(header.clone());
+        let mut ctx = self.ctx.lock().unwrap();
+        ctx.borrow_mut().insert_header(header.clone());
         // We will always use 0 as the `tx_index`.
-        self.ctx.link_cell_with_block(cell, header.hash(), 0);
+        ctx.borrow_mut().link_cell_with_block(cell, header.hash(), 0);
     }
 
     /// fund a channel using the currently active participant set by `with(..)`
@@ -201,7 +207,7 @@ where
     /// to the given `to` participant.
     pub fn send<P: perun::Account>(&mut self, to: &P, amount: u64) -> Result<(), perun::Error> {
         let to = self.parts.get(&to.name()).expect("part not found");
-        self.active_part.send(self.ctx, self.env)
+        self.active_part.send(self.ctx.clone(), self.env)
     }
 
     /// dispute a channel using the currently active participant set by
@@ -332,7 +338,8 @@ where
             .into_view();
         // Push a header with the current time which can be used in force_close
         // as for time validation purposes.
-        self.ctx.insert_header(h.clone());
+        let mut ctx = self.ctx.lock().unwrap();
+        ctx.borrow_mut().insert_header(h.clone());
         match self.channel_cell.clone() {
             Some(channel_cell) => call_action!(
                 self,

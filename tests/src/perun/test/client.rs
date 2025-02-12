@@ -23,6 +23,10 @@ use k256::ecdsa::{Signature, SigningKey};
 use super::cell::FundingCell;
 use super::ChannelId;
 
+use std::cell::RefCell;
+use std::sync::Mutex;
+use std::rc::Rc;
+
 #[derive(Clone, Debug)]
 pub struct Client {
     index: u8,
@@ -143,7 +147,7 @@ impl Client {
         Ok(fr)
     }
 
-    pub fn send(&self, ctx: &mut Context, env: &harness::Env) -> Result<(), perun::Error> {
+    pub fn send(&self, ctx: Rc<Mutex<RefCell<Context>>>, env: &harness::Env) -> Result<(), perun::Error> {
         Ok(())
     }
 

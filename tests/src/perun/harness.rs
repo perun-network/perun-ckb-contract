@@ -16,6 +16,10 @@ use super::test::ChannelId;
 use super::test::FundingAgreement;
 use super::test::FundingAgreementEntry;
 
+use std::cell::RefCell;
+use std::sync::Mutex;
+use std::rc::Rc;
+
 // Env contains all chain information required for running Perun
 // tests.
 pub struct Env {
@@ -57,10 +61,13 @@ impl Env {
     // prepare_env prepares the given context to be used for running Perun
     // tests.
     pub fn new(
-        context: &mut Context,
+        context: Rc<Mutex<RefCell<Context>>>,
         max_cycles: u64,
         challenge_duration: u64,
     ) -> Result<Env, perun::error::Error> {
+        // borrow the context
+        let mut ctx = context.lock().unwrap();
+
         // Perun contracts.
         let pcls: Bytes = Loader::default().load_binary("perun-channel-lockscript");
         let pcts: Bytes = Loader::default().load_binary("perun-channel-typescript");
@@ -69,39 +76,39 @@ impl Env {
         let pfls: Bytes = Loader::default().load_binary("perun-funds-lockscript");
         let sample_udt: Bytes = Loader::default().load_binary("sample-udt");
         // Deploying the contracts returns the cell they are deployed in.
-        let pcls_out_point = context.deploy_cell(pcls);
-        let pcts_out_point = context.deploy_cell(pcts);
-        let vcls_out_point = context.deploy_cell(vcls);
-        let vcts_out_point = context.deploy_cell(vcts);
-        let pfls_out_point = context.deploy_cell(pfls);
-        let sample_udt_out_point = context.deploy_cell(sample_udt);
+        let pcls_out_point = ctx.borrow_mut().deploy_cell(pcls);
+        let pcts_out_point = ctx.borrow_mut().deploy_cell(pcts);
+        let vcls_out_point = ctx.borrow_mut().deploy_cell(vcls);
+        let vcts_out_point = ctx.borrow_mut().deploy_cell(vcts);
+        let pfls_out_point = ctx.borrow_mut().deploy_cell(pfls);
+        let sample_udt_out_point = ctx.borrow_mut().deploy_cell(sample_udt);
         // Auxiliary contracts.
-        let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+        let always_success_out_point = ctx.borrow_mut().deploy_cell(ALWAYS_SUCCESS.clone());
 
         // Prepare scripts.
         // Perun scripts.
-        let pcls_script = context
+        let pcls_script = ctx.borrow_mut()
             .build_script(&pcls_out_point, Default::default())
             .ok_or("perun-channel-lockscript")?;
-        let pcts_script = context
+        let pcts_script = ctx.borrow_mut()
             .build_script(
                 &pcts_out_point,
                 perun_types::ChannelConstants::default().as_bytes(),
             )
             .ok_or("perun-channel-typescript")?;
-        let vcls_script = context
+        let vcls_script = ctx.borrow_mut()
             .build_script(&vcls_out_point, Default::default())
             .ok_or("perun-virtual-channel-lockscript")?;
-        let vcts_script = context
+        let vcts_script = ctx.borrow_mut()
             .build_script(
                 &vcts_out_point,
                 perun_types::ChannelConstants::default().as_bytes(),
             )
             .ok_or("perun-virtual-channel-typescript")?;
-        let pfls_script = context
+        let pfls_script = ctx.borrow_mut()
             .build_script(&pfls_out_point, Default::default())
             .ok_or("perun-funds-lockscript")?;
-        let sample_udt_script = context
+        let sample_udt_script = ctx.borrow_mut()
             .build_script(&sample_udt_out_point, Default::default())
             .ok_or("sample-udt")?;
         let pcls_script_dep = CellDep::new_builder()
@@ -124,7 +131,7 @@ impl Env {
             .build();
         let sample_udt_max_cap = sample_udt_script.occupied_capacity()?.safe_mul(Capacity::shannons(10))?;
         // Auxiliary scripts.
-        let always_success_script = context
+        let always_success_script = ctx.borrow_mut()
             .build_script(&always_success_out_point, Bytes::from(vec![0]))
             .expect("always_success");
         let always_success_script_dep = CellDep::new_builder()
