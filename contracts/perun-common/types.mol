@@ -108,6 +108,11 @@ table ChannelConstants {
   thread_token: ChannelToken,
 }
 
+table VCChannelConstants{
+  params: ChannelParameters,
+  vcls_code_hash: Byte32,
+  vcls_hash_type: byte,
+}
 array Fund [byte; 1];
 
 array Abort [byte; 1];
@@ -120,7 +125,7 @@ table VCDispute {
 table Dispute {
   sig_a: Bytes,
   sig_b: Bytes,
-  vc_sigs: VCDispute,
+  vc_sigs: VCDispute, // probably doesn't have to be part of Dispute 
 }
 table Close {
   state: ChannelState,
@@ -150,6 +155,7 @@ table ChannelStatus {
   state: ChannelState,
   funded: Bool,
   disputed: Bool,
+  vcts_hash: Byte32, // if nil, then it's a nomral dispute, else vc dispute
 }
 
 struct ChannelToken {
@@ -165,20 +171,20 @@ table ParentData {
   idx_map: index_map,
 }
 
-vector LcStatusVec<ChannelStatus>;
 
 table VirtualChannelStatus {
-  lcstatus: ChannelStatus,
+  // lcstatus: ChannelStatus,
   vcstate: ChannelState,
-  funded: Bool,
-  disputed: Bool,
-  params: ChannelParameters,
+  // funded: Bool,
+  // disputed: Bool,
+  // params: ChannelParameters,
   parents:  ParentsVec,
+  FirstForceClose: Bool,
 }
 
-union LedgerChannelOrVirtualChannel {
-    ChannelStatus,  //ledger channel
-    VirtualChannelStatus, //virtual channel
-}
+// union LedgerChannelOrVirtualChannel {
+//     ChannelStatus,  //ledger channel
+//     VirtualChannelStatus, //virtual channel
+// }
 
-vector channelCellData <LedgerChannelOrVirtualChannel>;
+// vector channelCellData <LedgerChannelOrVirtualChannel>;

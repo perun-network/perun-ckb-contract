@@ -311,6 +311,8 @@ pub fn check_valid_close(
             debug!("verify_time_lock_expired passed");
             verify_status_disputed(old_status)?;
             debug!("verify_status_disputed passed");
+            
+            // Check if this is a case where vc cell is being closed
             verify_all_paid(
                 &old_status.state().balances(),
                 channel_capacity,

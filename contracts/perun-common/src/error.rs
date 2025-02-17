@@ -96,6 +96,21 @@ pub enum Error {
     InvalidSUDTDataLength,
     DecreasingAmount,
     WrongChannelType,
+    InvalidVCTx,
+    InvalidVCTxStart,
+    ParentsOfVCNotFound,
+    VCInputCellMissingInMergeTx,
+    FundsForVCNotLocked,
+    InvalidVCMergeTx,
+    FirstForceCloseFlagSet,
+    FirstForceCloseFlagNotSet,
+    InvalidVCLockScript,
+    ParentNotFoundInOutputs,
+    InvalidVersionNumberVCProgressTx,
+    InvalidVCClose1Tx,
+    ParentsLengthMismatch,
+    ParentsMismatch
+
 }
 
 impl From<SysError> for Error {

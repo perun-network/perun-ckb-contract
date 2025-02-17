@@ -5258,6 +5258,308 @@ impl molecule::prelude::Builder for ChannelConstantsBuilder {
     }
 }
 #[derive(Clone)]
+pub struct VCChannelConstants(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for VCChannelConstants {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for VCChannelConstants {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for VCChannelConstants {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "params", self.params())?;
+        write!(f, ", {}: {}", "vcls_code_hash", self.vcls_code_hash())?;
+        write!(f, ", {}: {}", "vcls_hash_type", self.vcls_hash_type())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for VCChannelConstants {
+    fn default() -> Self {
+        let v: Vec<u8> = vec![
+            125, 1, 0, 0, 16, 0, 0, 0, 92, 1, 0, 0, 124, 1, 0, 0, 76, 1, 0, 0, 32, 0, 0, 0, 157, 0,
+            0, 0, 26, 1, 0, 0, 58, 1, 0, 0, 66, 1, 0, 0, 66, 1, 0, 0, 71, 1, 0, 0, 125, 0, 0, 0,
+            20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        VCChannelConstants::new_unchecked(v.into())
+    }
+}
+impl VCChannelConstants {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn params(&self) -> ChannelParameters {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ChannelParameters::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn vcls_code_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn vcls_hash_type(&self) -> Byte {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Byte::new_unchecked(self.0.slice(start..end))
+        } else {
+            Byte::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> VCChannelConstantsReader<'r> {
+        VCChannelConstantsReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for VCChannelConstants {
+    type Builder = VCChannelConstantsBuilder;
+    const NAME: &'static str = "VCChannelConstants";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        VCChannelConstants(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        VCChannelConstantsReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        VCChannelConstantsReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .params(self.params())
+            .vcls_code_hash(self.vcls_code_hash())
+            .vcls_hash_type(self.vcls_hash_type())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct VCChannelConstantsReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for VCChannelConstantsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for VCChannelConstantsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for VCChannelConstantsReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "params", self.params())?;
+        write!(f, ", {}: {}", "vcls_code_hash", self.vcls_code_hash())?;
+        write!(f, ", {}: {}", "vcls_hash_type", self.vcls_hash_type())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> VCChannelConstantsReader<'r> {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn params(&self) -> ChannelParametersReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ChannelParametersReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn vcls_code_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn vcls_hash_type(&self) -> ByteReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            ByteReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            ByteReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for VCChannelConstantsReader<'r> {
+    type Entity = VCChannelConstants;
+    const NAME: &'static str = "VCChannelConstantsReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        VCChannelConstantsReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len == molecule::NUMBER_SIZE && Self::FIELD_COUNT == 0 {
+            return Ok(());
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        ChannelParametersReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        ByteReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Debug, Default)]
+pub struct VCChannelConstantsBuilder {
+    pub(crate) params: ChannelParameters,
+    pub(crate) vcls_code_hash: Byte32,
+    pub(crate) vcls_hash_type: Byte,
+}
+impl VCChannelConstantsBuilder {
+    pub const FIELD_COUNT: usize = 3;
+    pub fn params(mut self, v: ChannelParameters) -> Self {
+        self.params = v;
+        self
+    }
+    pub fn vcls_code_hash(mut self, v: Byte32) -> Self {
+        self.vcls_code_hash = v;
+        self
+    }
+    pub fn vcls_hash_type(mut self, v: Byte) -> Self {
+        self.vcls_hash_type = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for VCChannelConstantsBuilder {
+    type Entity = VCChannelConstants;
+    const NAME: &'static str = "VCChannelConstantsBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.params.as_slice().len()
+            + self.vcls_code_hash.as_slice().len()
+            + self.vcls_hash_type.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.params.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.vcls_code_hash.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.vcls_hash_type.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.params.as_slice())?;
+        writer.write_all(self.vcls_code_hash.as_slice())?;
+        writer.write_all(self.vcls_hash_type.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        VCChannelConstants::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
 pub struct Fund(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for Fund {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -7320,6 +7622,7 @@ impl ::core::fmt::Display for ChannelStatus {
         write!(f, "{}: {}", "state", self.state())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
+        write!(f, ", {}: {}", "vcts_hash", self.vcts_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7330,17 +7633,18 @@ impl ::core::fmt::Display for ChannelStatus {
 impl ::core::default::Default for ChannelStatus {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            131, 0, 0, 0, 16, 0, 0, 0, 121, 0, 0, 0, 126, 0, 0, 0, 105, 0, 0, 0, 20, 0, 0, 0, 52,
-            0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 36,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            167, 0, 0, 0, 20, 0, 0, 0, 125, 0, 0, 0, 130, 0, 0, 0, 135, 0, 0, 0, 105, 0, 0, 0, 20,
+            0, 0, 0, 52, 0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32,
+            0, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelStatus::new_unchecked(v.into())
     }
 }
 impl ChannelStatus {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -7372,11 +7676,17 @@ impl ChannelStatus {
     pub fn disputed(&self) -> Bool {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        Bool::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn vcts_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            Bool::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Byte32::new_unchecked(self.0.slice(start..end))
         } else {
-            Bool::new_unchecked(self.0.slice(start..))
+            Byte32::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> ChannelStatusReader<'r> {
@@ -7409,6 +7719,7 @@ impl molecule::prelude::Entity for ChannelStatus {
             .state(self.state())
             .funded(self.funded())
             .disputed(self.disputed())
+            .vcts_hash(self.vcts_hash())
     }
 }
 #[derive(Clone, Copy)]
@@ -7433,6 +7744,7 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
         write!(f, "{}: {}", "state", self.state())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
+        write!(f, ", {}: {}", "vcts_hash", self.vcts_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -7441,7 +7753,7 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
     }
 }
 impl<'r> ChannelStatusReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -7473,11 +7785,17 @@ impl<'r> ChannelStatusReader<'r> {
     pub fn disputed(&self) -> BoolReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[12..]) as usize;
+        let end = molecule::unpack_number(&slice[16..]) as usize;
+        BoolReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn vcts_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[16..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            BoolReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[20..]) as usize;
+            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            BoolReader::new_unchecked(&self.as_slice()[start..])
+            Byte32Reader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -7533,6 +7851,7 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelStatusReader<'r> {
         ChannelStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BoolReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         BoolReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
@@ -7541,9 +7860,10 @@ pub struct ChannelStatusBuilder {
     pub(crate) state: ChannelState,
     pub(crate) funded: Bool,
     pub(crate) disputed: Bool,
+    pub(crate) vcts_hash: Byte32,
 }
 impl ChannelStatusBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 4;
     pub fn state(mut self, v: ChannelState) -> Self {
         self.state = v;
         self
@@ -7556,6 +7876,10 @@ impl ChannelStatusBuilder {
         self.disputed = v;
         self
     }
+    pub fn vcts_hash(mut self, v: Byte32) -> Self {
+        self.vcts_hash = v;
+        self
+    }
 }
 impl molecule::prelude::Builder for ChannelStatusBuilder {
     type Entity = ChannelStatus;
@@ -7565,6 +7889,7 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
             + self.state.as_slice().len()
             + self.funded.as_slice().len()
             + self.disputed.as_slice().len()
+            + self.vcts_hash.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -7575,6 +7900,8 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         total_size += self.funded.as_slice().len();
         offsets.push(total_size);
         total_size += self.disputed.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.vcts_hash.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
@@ -7582,6 +7909,7 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         writer.write_all(self.state.as_slice())?;
         writer.write_all(self.funded.as_slice())?;
         writer.write_all(self.disputed.as_slice())?;
+        writer.write_all(self.vcts_hash.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -8539,12 +8867,9 @@ impl ::core::fmt::Debug for VirtualChannelStatus {
 impl ::core::fmt::Display for VirtualChannelStatus {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "lcstatus", self.lcstatus())?;
-        write!(f, ", {}: {}", "vcstate", self.vcstate())?;
-        write!(f, ", {}: {}", "funded", self.funded())?;
-        write!(f, ", {}: {}", "disputed", self.disputed())?;
-        write!(f, ", {}: {}", "params", self.params())?;
+        write!(f, "{}: {}", "vcstate", self.vcstate())?;
         write!(f, ", {}: {}", "parents", self.parents())?;
+        write!(f, ", {}: {}", "FirstForceClose", self.first_force_close())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -8555,34 +8880,17 @@ impl ::core::fmt::Display for VirtualChannelStatus {
 impl ::core::default::Default for VirtualChannelStatus {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            98, 2, 0, 0, 28, 0, 0, 0, 159, 0, 0, 0, 8, 1, 0, 0, 13, 1, 0, 0, 18, 1, 0, 0, 94, 2, 0,
-            0, 131, 0, 0, 0, 16, 0, 0, 0, 121, 0, 0, 0, 126, 0, 0, 0, 105, 0, 0, 0, 20, 0, 0, 0,
-            52, 0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32, 0, 0, 0,
-            36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 105, 0, 0, 0, 20, 0,
-            0, 0, 52, 0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32, 0,
-            0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 76, 1, 0, 0,
-            32, 0, 0, 0, 157, 0, 0, 0, 26, 1, 0, 0, 58, 1, 0, 0, 66, 1, 0, 0, 66, 1, 0, 0, 71, 1,
-            0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 125, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 60, 0,
-            0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+            130, 0, 0, 0, 16, 0, 0, 0, 121, 0, 0, 0, 125, 0, 0, 0, 105, 0, 0, 0, 20, 0, 0, 0, 52,
+            0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 36,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         VirtualChannelStatus::new_unchecked(v.into())
     }
 }
 impl VirtualChannelStatus {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -8599,44 +8907,26 @@ impl VirtualChannelStatus {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn lcstatus(&self) -> ChannelStatus {
+    pub fn vcstate(&self) -> ChannelState {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        ChannelStatus::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn vcstate(&self) -> ChannelState {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         ChannelState::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn funded(&self) -> Bool {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        Bool::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn disputed(&self) -> Bool {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
-        Bool::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn params(&self) -> ChannelParameters {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
-        let end = molecule::unpack_number(&slice[24..]) as usize;
-        ChannelParameters::new_unchecked(self.0.slice(start..end))
     }
     pub fn parents(&self) -> ParentsVec {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        ParentsVec::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn first_force_close(&self) -> Bool {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            ParentsVec::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Bool::new_unchecked(self.0.slice(start..end))
         } else {
-            ParentsVec::new_unchecked(self.0.slice(start..))
+            Bool::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> VirtualChannelStatusReader<'r> {
@@ -8666,12 +8956,9 @@ impl molecule::prelude::Entity for VirtualChannelStatus {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .lcstatus(self.lcstatus())
             .vcstate(self.vcstate())
-            .funded(self.funded())
-            .disputed(self.disputed())
-            .params(self.params())
             .parents(self.parents())
+            .first_force_close(self.first_force_close())
     }
 }
 #[derive(Clone, Copy)]
@@ -8693,12 +8980,9 @@ impl<'r> ::core::fmt::Debug for VirtualChannelStatusReader<'r> {
 impl<'r> ::core::fmt::Display for VirtualChannelStatusReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "lcstatus", self.lcstatus())?;
-        write!(f, ", {}: {}", "vcstate", self.vcstate())?;
-        write!(f, ", {}: {}", "funded", self.funded())?;
-        write!(f, ", {}: {}", "disputed", self.disputed())?;
-        write!(f, ", {}: {}", "params", self.params())?;
+        write!(f, "{}: {}", "vcstate", self.vcstate())?;
         write!(f, ", {}: {}", "parents", self.parents())?;
+        write!(f, ", {}: {}", "FirstForceClose", self.first_force_close())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -8707,7 +8991,7 @@ impl<'r> ::core::fmt::Display for VirtualChannelStatusReader<'r> {
     }
 }
 impl<'r> VirtualChannelStatusReader<'r> {
-    pub const FIELD_COUNT: usize = 6;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -8724,44 +9008,26 @@ impl<'r> VirtualChannelStatusReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn lcstatus(&self) -> ChannelStatusReader<'r> {
+    pub fn vcstate(&self) -> ChannelStateReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        ChannelStatusReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn vcstate(&self) -> ChannelStateReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
         ChannelStateReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn funded(&self) -> BoolReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        BoolReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn disputed(&self) -> BoolReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        let end = molecule::unpack_number(&slice[20..]) as usize;
-        BoolReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn params(&self) -> ChannelParametersReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[20..]) as usize;
-        let end = molecule::unpack_number(&slice[24..]) as usize;
-        ChannelParametersReader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn parents(&self) -> ParentsVecReader<'r> {
         let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[24..]) as usize;
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        ParentsVecReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn first_force_close(&self) -> BoolReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[28..]) as usize;
-            ParentsVecReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            BoolReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            ParentsVecReader::new_unchecked(&self.as_slice()[start..])
+            BoolReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -8814,48 +9080,30 @@ impl<'r> molecule::prelude::Reader<'r> for VirtualChannelStatusReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        ChannelStatusReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        ChannelStateReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        ChannelStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        ParentsVecReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         BoolReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        BoolReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
-        ChannelParametersReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
-        ParentsVecReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct VirtualChannelStatusBuilder {
-    pub(crate) lcstatus: ChannelStatus,
     pub(crate) vcstate: ChannelState,
-    pub(crate) funded: Bool,
-    pub(crate) disputed: Bool,
-    pub(crate) params: ChannelParameters,
     pub(crate) parents: ParentsVec,
+    pub(crate) first_force_close: Bool,
 }
 impl VirtualChannelStatusBuilder {
-    pub const FIELD_COUNT: usize = 6;
-    pub fn lcstatus(mut self, v: ChannelStatus) -> Self {
-        self.lcstatus = v;
-        self
-    }
+    pub const FIELD_COUNT: usize = 3;
     pub fn vcstate(mut self, v: ChannelState) -> Self {
         self.vcstate = v;
         self
     }
-    pub fn funded(mut self, v: Bool) -> Self {
-        self.funded = v;
-        self
-    }
-    pub fn disputed(mut self, v: Bool) -> Self {
-        self.disputed = v;
-        self
-    }
-    pub fn params(mut self, v: ChannelParameters) -> Self {
-        self.params = v;
-        self
-    }
     pub fn parents(mut self, v: ParentsVec) -> Self {
         self.parents = v;
+        self
+    }
+    pub fn first_force_close(mut self, v: Bool) -> Self {
+        self.first_force_close = v;
         self
     }
 }
@@ -8864,38 +9112,26 @@ impl molecule::prelude::Builder for VirtualChannelStatusBuilder {
     const NAME: &'static str = "VirtualChannelStatusBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.lcstatus.as_slice().len()
             + self.vcstate.as_slice().len()
-            + self.funded.as_slice().len()
-            + self.disputed.as_slice().len()
-            + self.params.as_slice().len()
             + self.parents.as_slice().len()
+            + self.first_force_close.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.lcstatus.as_slice().len();
-        offsets.push(total_size);
         total_size += self.vcstate.as_slice().len();
         offsets.push(total_size);
-        total_size += self.funded.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.disputed.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.params.as_slice().len();
-        offsets.push(total_size);
         total_size += self.parents.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.first_force_close.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.lcstatus.as_slice())?;
         writer.write_all(self.vcstate.as_slice())?;
-        writer.write_all(self.funded.as_slice())?;
-        writer.write_all(self.disputed.as_slice())?;
-        writer.write_all(self.params.as_slice())?;
         writer.write_all(self.parents.as_slice())?;
+        writer.write_all(self.first_force_close.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -8903,678 +9139,5 @@ impl molecule::prelude::Builder for VirtualChannelStatusBuilder {
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         VirtualChannelStatus::new_unchecked(inner.into())
-    }
-}
-#[derive(Clone)]
-pub struct LedgerChannelOrVirtualChannel(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for LedgerChannelOrVirtualChannel {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for LedgerChannelOrVirtualChannel {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for LedgerChannelOrVirtualChannel {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl ::core::default::Default for LedgerChannelOrVirtualChannel {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![
-            0, 0, 0, 0, 131, 0, 0, 0, 16, 0, 0, 0, 121, 0, 0, 0, 126, 0, 0, 0, 105, 0, 0, 0, 20, 0,
-            0, 0, 52, 0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32, 0,
-            0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        LedgerChannelOrVirtualChannel::new_unchecked(v.into())
-    }
-}
-impl LedgerChannelOrVirtualChannel {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> LedgerChannelOrVirtualChannelUnion {
-        let inner = self.0.slice(molecule::NUMBER_SIZE..);
-        match self.item_id() {
-            0 => ChannelStatus::new_unchecked(inner).into(),
-            1 => VirtualChannelStatus::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> LedgerChannelOrVirtualChannelReader<'r> {
-        LedgerChannelOrVirtualChannelReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for LedgerChannelOrVirtualChannel {
-    type Builder = LedgerChannelOrVirtualChannelBuilder;
-    const NAME: &'static str = "LedgerChannelOrVirtualChannel";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        LedgerChannelOrVirtualChannel(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LedgerChannelOrVirtualChannelReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        LedgerChannelOrVirtualChannelReader::from_compatible_slice(slice)
-            .map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().set(self.to_enum())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct LedgerChannelOrVirtualChannelReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for LedgerChannelOrVirtualChannelReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for LedgerChannelOrVirtualChannelReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for LedgerChannelOrVirtualChannelReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}(", Self::NAME)?;
-        self.to_enum().display_inner(f)?;
-        write!(f, ")")
-    }
-}
-impl<'r> LedgerChannelOrVirtualChannelReader<'r> {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn item_id(&self) -> molecule::Number {
-        molecule::unpack_number(self.as_slice())
-    }
-    pub fn to_enum(&self) -> LedgerChannelOrVirtualChannelUnionReader<'r> {
-        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
-        match self.item_id() {
-            0 => ChannelStatusReader::new_unchecked(inner).into(),
-            1 => VirtualChannelStatusReader::new_unchecked(inner).into(),
-            _ => panic!("{}: invalid data", Self::NAME),
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for LedgerChannelOrVirtualChannelReader<'r> {
-    type Entity = LedgerChannelOrVirtualChannel;
-    const NAME: &'static str = "LedgerChannelOrVirtualChannelReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        LedgerChannelOrVirtualChannelReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let item_id = molecule::unpack_number(slice);
-        let inner_slice = &slice[molecule::NUMBER_SIZE..];
-        match item_id {
-            0 => ChannelStatusReader::verify(inner_slice, compatible),
-            1 => VirtualChannelStatusReader::verify(inner_slice, compatible),
-            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
-        }?;
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct LedgerChannelOrVirtualChannelBuilder(pub(crate) LedgerChannelOrVirtualChannelUnion);
-impl LedgerChannelOrVirtualChannelBuilder {
-    pub const ITEMS_COUNT: usize = 2;
-    pub fn set<I>(mut self, v: I) -> Self
-    where
-        I: ::core::convert::Into<LedgerChannelOrVirtualChannelUnion>,
-    {
-        self.0 = v.into();
-        self
-    }
-}
-impl molecule::prelude::Builder for LedgerChannelOrVirtualChannelBuilder {
-    type Entity = LedgerChannelOrVirtualChannel;
-    const NAME: &'static str = "LedgerChannelOrVirtualChannelBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE + self.0.as_slice().len()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
-        writer.write_all(self.0.as_slice())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        LedgerChannelOrVirtualChannel::new_unchecked(inner.into())
-    }
-}
-#[derive(Debug, Clone)]
-pub enum LedgerChannelOrVirtualChannelUnion {
-    ChannelStatus(ChannelStatus),
-    VirtualChannelStatus(VirtualChannelStatus),
-}
-#[derive(Debug, Clone, Copy)]
-pub enum LedgerChannelOrVirtualChannelUnionReader<'r> {
-    ChannelStatus(ChannelStatusReader<'r>),
-    VirtualChannelStatus(VirtualChannelStatusReader<'r>),
-}
-impl ::core::default::Default for LedgerChannelOrVirtualChannelUnion {
-    fn default() -> Self {
-        LedgerChannelOrVirtualChannelUnion::ChannelStatus(::core::default::Default::default())
-    }
-}
-impl ::core::fmt::Display for LedgerChannelOrVirtualChannelUnion {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            LedgerChannelOrVirtualChannelUnion::ChannelStatus(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, ChannelStatus::NAME, item)
-            }
-            LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(ref item) => {
-                write!(
-                    f,
-                    "{}::{}({})",
-                    Self::NAME,
-                    VirtualChannelStatus::NAME,
-                    item
-                )
-            }
-        }
-    }
-}
-impl<'r> ::core::fmt::Display for LedgerChannelOrVirtualChannelUnionReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(ref item) => {
-                write!(f, "{}::{}({})", Self::NAME, ChannelStatus::NAME, item)
-            }
-            LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(ref item) => {
-                write!(
-                    f,
-                    "{}::{}({})",
-                    Self::NAME,
-                    VirtualChannelStatus::NAME,
-                    item
-                )
-            }
-        }
-    }
-}
-impl LedgerChannelOrVirtualChannelUnion {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            LedgerChannelOrVirtualChannelUnion::ChannelStatus(ref item) => write!(f, "{}", item),
-            LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(ref item) => {
-                write!(f, "{}", item)
-            }
-        }
-    }
-}
-impl<'r> LedgerChannelOrVirtualChannelUnionReader<'r> {
-    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        match self {
-            LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(ref item) => {
-                write!(f, "{}", item)
-            }
-            LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(ref item) => {
-                write!(f, "{}", item)
-            }
-        }
-    }
-}
-impl ::core::convert::From<ChannelStatus> for LedgerChannelOrVirtualChannelUnion {
-    fn from(item: ChannelStatus) -> Self {
-        LedgerChannelOrVirtualChannelUnion::ChannelStatus(item)
-    }
-}
-impl ::core::convert::From<VirtualChannelStatus> for LedgerChannelOrVirtualChannelUnion {
-    fn from(item: VirtualChannelStatus) -> Self {
-        LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(item)
-    }
-}
-impl<'r> ::core::convert::From<ChannelStatusReader<'r>>
-    for LedgerChannelOrVirtualChannelUnionReader<'r>
-{
-    fn from(item: ChannelStatusReader<'r>) -> Self {
-        LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(item)
-    }
-}
-impl<'r> ::core::convert::From<VirtualChannelStatusReader<'r>>
-    for LedgerChannelOrVirtualChannelUnionReader<'r>
-{
-    fn from(item: VirtualChannelStatusReader<'r>) -> Self {
-        LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(item)
-    }
-}
-impl LedgerChannelOrVirtualChannelUnion {
-    pub const NAME: &'static str = "LedgerChannelOrVirtualChannelUnion";
-    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
-        match self {
-            LedgerChannelOrVirtualChannelUnion::ChannelStatus(item) => item.as_bytes(),
-            LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(item) => item.as_bytes(),
-        }
-    }
-    pub fn as_slice(&self) -> &[u8] {
-        match self {
-            LedgerChannelOrVirtualChannelUnion::ChannelStatus(item) => item.as_slice(),
-            LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            LedgerChannelOrVirtualChannelUnion::ChannelStatus(_) => 0,
-            LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            LedgerChannelOrVirtualChannelUnion::ChannelStatus(_) => "ChannelStatus",
-            LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(_) => "VirtualChannelStatus",
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> LedgerChannelOrVirtualChannelUnionReader<'r> {
-        match self {
-            LedgerChannelOrVirtualChannelUnion::ChannelStatus(item) => item.as_reader().into(),
-            LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(item) => {
-                item.as_reader().into()
-            }
-        }
-    }
-}
-impl<'r> LedgerChannelOrVirtualChannelUnionReader<'r> {
-    pub const NAME: &'r str = "LedgerChannelOrVirtualChannelUnionReader";
-    pub fn as_slice(&self) -> &'r [u8] {
-        match self {
-            LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(item) => item.as_slice(),
-            LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(item) => item.as_slice(),
-        }
-    }
-    pub fn item_id(&self) -> molecule::Number {
-        match self {
-            LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(_) => 0,
-            LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(_) => 1,
-        }
-    }
-    pub fn item_name(&self) -> &str {
-        match self {
-            LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(_) => "ChannelStatus",
-            LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(_) => {
-                "VirtualChannelStatus"
-            }
-        }
-    }
-}
-#[derive(Clone)]
-pub struct ChannelCellData(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for ChannelCellData {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for ChannelCellData {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for ChannelCellData {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl ::core::default::Default for ChannelCellData {
-    fn default() -> Self {
-        let v: Vec<u8> = vec![4, 0, 0, 0];
-        ChannelCellData::new_unchecked(v.into())
-    }
-}
-impl ChannelCellData {
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<LedgerChannelOrVirtualChannel> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> LedgerChannelOrVirtualChannel {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            LedgerChannelOrVirtualChannel::new_unchecked(self.0.slice(start..))
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            LedgerChannelOrVirtualChannel::new_unchecked(self.0.slice(start..end))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> ChannelCellDataReader<'r> {
-        ChannelCellDataReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for ChannelCellData {
-    type Builder = ChannelCellDataBuilder;
-    const NAME: &'static str = "ChannelCellData";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        ChannelCellData(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ChannelCellDataReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ChannelCellDataReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().extend(self.into_iter())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct ChannelCellDataReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for ChannelCellDataReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for ChannelCellDataReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for ChannelCellDataReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl<'r> ChannelCellDataReader<'r> {
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<LedgerChannelOrVirtualChannelReader<'r>> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> LedgerChannelOrVirtualChannelReader<'r> {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            LedgerChannelOrVirtualChannelReader::new_unchecked(&self.as_slice()[start..])
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            LedgerChannelOrVirtualChannelReader::new_unchecked(&self.as_slice()[start..end])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for ChannelCellDataReader<'r> {
-    type Entity = ChannelCellData;
-    const NAME: &'static str = "ChannelCellDataReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        ChannelCellDataReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(
-                Self,
-                TotalSizeNotMatch,
-                molecule::NUMBER_SIZE * 2,
-                slice_len
-            );
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        for pair in offsets.windows(2) {
-            let start = pair[0];
-            let end = pair[1];
-            LedgerChannelOrVirtualChannelReader::verify(&slice[start..end], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Debug, Default)]
-pub struct ChannelCellDataBuilder(pub(crate) Vec<LedgerChannelOrVirtualChannel>);
-impl ChannelCellDataBuilder {
-    pub fn set(mut self, v: Vec<LedgerChannelOrVirtualChannel>) -> Self {
-        self.0 = v;
-        self
-    }
-    pub fn push(mut self, v: LedgerChannelOrVirtualChannel) -> Self {
-        self.0.push(v);
-        self
-    }
-    pub fn extend<T: ::core::iter::IntoIterator<Item = LedgerChannelOrVirtualChannel>>(
-        mut self,
-        iter: T,
-    ) -> Self {
-        for elem in iter {
-            self.0.push(elem);
-        }
-        self
-    }
-    pub fn replace(
-        &mut self,
-        index: usize,
-        v: LedgerChannelOrVirtualChannel,
-    ) -> Option<LedgerChannelOrVirtualChannel> {
-        self.0
-            .get_mut(index)
-            .map(|item| ::core::mem::replace(item, v))
-    }
-}
-impl molecule::prelude::Builder for ChannelCellDataBuilder {
-    type Entity = ChannelCellData;
-    const NAME: &'static str = "ChannelCellDataBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (self.0.len() + 1)
-            + self
-                .0
-                .iter()
-                .map(|inner| inner.as_slice().len())
-                .sum::<usize>()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let item_count = self.0.len();
-        if item_count == 0 {
-            writer.write_all(&molecule::pack_number(
-                molecule::NUMBER_SIZE as molecule::Number,
-            ))?;
-        } else {
-            let (total_size, offsets) = self.0.iter().fold(
-                (
-                    molecule::NUMBER_SIZE * (item_count + 1),
-                    Vec::with_capacity(item_count),
-                ),
-                |(start, mut offsets), inner| {
-                    offsets.push(start);
-                    (start + inner.as_slice().len(), offsets)
-                },
-            );
-            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-            for offset in offsets.into_iter() {
-                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-            }
-            for inner in self.0.iter() {
-                writer.write_all(inner.as_slice())?;
-            }
-        }
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        ChannelCellData::new_unchecked(inner.into())
-    }
-}
-pub struct ChannelCellDataIterator(ChannelCellData, usize, usize);
-impl ::core::iter::Iterator for ChannelCellDataIterator {
-    type Item = LedgerChannelOrVirtualChannel;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl ::core::iter::ExactSizeIterator for ChannelCellDataIterator {
-    fn len(&self) -> usize {
-        self.2 - self.1
-    }
-}
-impl ::core::iter::IntoIterator for ChannelCellData {
-    type Item = LedgerChannelOrVirtualChannel;
-    type IntoIter = ChannelCellDataIterator;
-    fn into_iter(self) -> Self::IntoIter {
-        let len = self.len();
-        ChannelCellDataIterator(self, 0, len)
-    }
-}
-impl<'r> ChannelCellDataReader<'r> {
-    pub fn iter<'t>(&'t self) -> ChannelCellDataReaderIterator<'t, 'r> {
-        ChannelCellDataReaderIterator(&self, 0, self.len())
-    }
-}
-pub struct ChannelCellDataReaderIterator<'t, 'r>(&'t ChannelCellDataReader<'r>, usize, usize);
-impl<'t: 'r, 'r> ::core::iter::Iterator for ChannelCellDataReaderIterator<'t, 'r> {
-    type Item = LedgerChannelOrVirtualChannelReader<'t>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for ChannelCellDataReaderIterator<'t, 'r> {
-    fn len(&self) -> usize {
-        self.2 - self.1
     }
 }

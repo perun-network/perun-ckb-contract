@@ -1,8 +1,7 @@
 use crate::error::Error;
 use crate::helpers::blake2b256;
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken,
-    LockedBalances, SEC1EncodedPubKey, SubBalances, VirtualChannelStatus,
+    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken, LockedBalances, SEC1EncodedPubKey, SubBalances, VCChannelConstants, VirtualChannelStatus
 };
 
 extern crate alloc;
@@ -40,13 +39,30 @@ pub enum VChannelAction {
         new_vc_status: VirtualChannelStatus,
         old_lc_status: ChannelStatus,
         new_lc_status: ChannelStatus,
-    }, // no PCTS input, one PCTS output
+    }, // no VCTS input, one VCTS output
+    
+    // Merge indicates that two virtual channels are being merged into a single one
+    Merge {
+        input_vc_status1: VirtualChannelStatus,
+        input_vc_status2: VirtualChannelStatus,
+        merged_vc_status: VirtualChannelStatus, 
+    },
 
-    /// Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
-    /// recreated in the outputs with updated state. The possible redeemers associated with the Close action are
-    /// Close, Abort and ForceClose.
-    /// The channel type script assures that all funds are paid out to the correct parties upon closing.
-    Close { old_status: VirtualChannelStatus }, // one PCTS input, no PCTS output
+    Close1{
+        input_vc_status: VirtualChannelStatus,
+        output_vc_status: VirtualChannelStatus,
+    },
+
+    Close2{
+        input_lc_status: ChannelStatus,
+        input_vc_status: VirtualChannelStatus,
+    },
+
+    // Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
+    // recreated in the outputs with updated state. The possible redeemers associated with the Close action are
+    // Close, Abort and ForceClose.
+    // The channel type script assures that all funds are paid out to the correct parties upon closing.
+    //Close { old_status: VirtualChannelStatus }, // one PCTS input, no PCTS output
 }
 
 pub enum PChannelAction {

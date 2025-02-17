@@ -1,5 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+use core::{hash, panic::PanicMessage, result::Result};
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{self, vec, vec::Vec};
@@ -29,10 +29,7 @@ use perun_common::{
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, Bool, ChannelCellData, ChannelConstants, ChannelParameters, ChannelState,
-        ChannelStatus, ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute,
-        LedgerChannelOrVirtualChannelUnion, LedgerChannelOrVirtualChannelUnionReader,
-        LockedBalances, SEC1EncodedPubKey, SubAlloc, VirtualChannelStatus,
+        Balances, Bool, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute, LockedBalances, ParentsVec, SEC1EncodedPubKey, SubAlloc, VCChannelConstants, VCDispute, VirtualChannelStatus
     },
     sig::verify_signature,
 };
@@ -68,18 +65,13 @@ pub fn main() -> Result<(), Error> {
         return Err(Error::NoArgs);
     }
 
-    // We verify that there is at most one channel in the GroupInputs and GroupOutputs respectively.
-
-    // this does not need to be the case for vcs  - if there is a dispute, there are two channel cells in the inputs
-
-    // The channel constants do not change during the lifetime of a channel. They are located in the
-    // args field of the pcts.
-
+    //VC channels neither require funding nor they have lock scirpts, hence information for this is not needed
+    // therefore, we only need channelParams in the args for vcts script
     let channel_constants =
-        ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelConstants");
-    debug!("parsing channel constants passed");
+        VCChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParams");
+    debug!("parsing channel parameters passed");
 
-    debug!("channel_constants: {:?}", channel_constants);
+    debug!("channel_params: {:?}", channel_constants);
 
     // Verify that the channel parameters are compatible with the currently supported
     // features of perun channels.
@@ -89,7 +81,7 @@ pub fn main() -> Result<(), Error> {
     // Next, we determine whether the transaction starts, progresses or closes the channel and fetch
     // the respective old and/or new channel status.
 
-    let channel_action = get_vchannel_action()?;
+    let channel_action = get_vchannel_action2()?;
     debug!("get_channel_action passed");
 
     match channel_action {
@@ -99,327 +91,468 @@ pub fn main() -> Result<(), Error> {
             new_lc_status,
         } => {
             debug!("Start action detected");
-            check_valid_vc_start(&new_vc_status, &channel_constants)
+            check_valid_vc_start(&old_lc_status, &new_lc_status, &new_vc_status, &channel_constants)
         }
         VChannelAction::Progress {
             old_status,
             new_status,
         } => {
-            let channel_witness = load_witness()?;
+            // let channel_witness = load_witness()?;
             debug!("load_witness passed");
-            check_valid_vc_progress(
-                &old_status,
-                &new_status,
-                &channel_witness,
-                &channel_constants,
-            )
+            check_valid_vc_progress(&old_status,&new_status, &channel_constants)
         }
-        VChannelAction::Close { old_status } => {
-            debug!("Close action detected");
-            let channel_witness = load_witness()?;
-            debug!("load_witness passed");
-            check_valid_vc_close(&old_status, &channel_witness, &channel_constants)
+        VChannelAction::Merge {
+             input_vc_status1,
+              input_vc_status2,
+               merged_vc_status} =>{
+                debug!("Merge Tx detected");
+                check_valid_vc_merge(&input_vc_status1, &input_vc_status2, &merged_vc_status)
         }
+
+        VChannelAction::Close1 {
+              input_vc_status,
+               output_vc_status } => {
+                debug!("Close1 Tx detected");
+                check_valid_close1(&input_vc_status, &output_vc_status, &channel_constants)
+        }
+
+        VChannelAction::Close2 {
+             input_lc_status,
+              input_vc_status } => {
+                debug!("Close2 Tx detected");
+                check_valid_close2(&input_lc_status, &input_vc_status)
+        }
+        // VChannelAction::Close { old_status } => {
+        //     debug!("Close action detected");
+        //     let channel_witness = load_witness()?;
+        //     debug!("load_witness passed");
+        //     check_valid_vc_close(&old_status, &channel_witness, &channel_constants)
+        // }
     }
 }
 
 pub fn check_valid_vc_start(
-    new_status: &VirtualChannelStatus,
-    channel_constants: &ChannelConstants,
-) -> Result<(), Error> {
-    const FUNDER_INDEX: usize = 0;
+    old_lc_status: &ChannelStatus,
+    new_lc_status: &ChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+    vc_channel_constants: &VCChannelConstants,
+) -> Result<(), Error>{
 
-    debug!("check_valid_start");
-
-    // Upon start of a channel, the channel constants are stored in the args field of the pcts output.
-    // We uniquely identify a channel through the combination of the channel id (hash of ChannelParameters,
-    // which is part of the ChannelConstants) and the "thread token".
-    // The thread token contains an OutPoint and the channel type script verifies, that that outpoint is
-    // consumed in the inputs of the transaction that starts the channel.
-    // This means: Once a (pcts-hash, channel-id, thread-token) tuple appears once on chain and is recognized
-    // as the on-chain representation of this channel by all peers, no other "copy" or "fake" of that channel
-    // can be created on chain, as an OutPoint can only be consumed once.
-
-    // here, we verify that the OutPoint in the thread token is actually consumed.
-    verify_thread_token_integrity(&channel_constants.thread_token())?;
-    debug!("verify_thread_token_integrity passed");
-
-    // We verify that the channel id is the hash of the channel parameters.
-
-    let vc_chanid = new_status.vcstate().channel_id();
-
-    verify_vchannel_id_integrity(&vc_chanid, &channel_constants.params())?;
+    debug!("check_valid_vc_start");
+    
+    //channel_id is the hash of channel parameters
+    let vc_chanid = new_vc_status.vcstate().channel_id();
+    verify_vchannel_id_integrity(&vc_chanid, &vc_channel_constants.params())?;
     debug!("verify_channel_id_integrity passed");
 
-    // We verify that the pcts is guarded by the pcls script specified in the channel constants
-    verify_valid_lock_script(channel_constants)?;
-    debug!("verify_valid_lock_script passed");
+    //validate newly created vc state
+    verify_vc_sigs(&new_vc_status, &vc_channel_constants.params())?;
+    debug!("verify_vc_sigs passed");
+    
+    //verify that FirstForceCloseFlag is not set
+    verify_first_forced_closed_flag_not_set(&new_vc_status)?;
 
-    // We verify that the channel participants have different payment addresses
-    // For this purpose we consider a payment address to be the script hash of the lock script used for payments to that party
-    verify_different_payment_addresses(channel_constants)?;
-    debug!("verify_different_payment_addresses passed");
+    //verify that the lock script is always success lock-script
+    verify_always_success_lock_script(vc_channel_constants)?;
+    
+    // verify that there is only one and the same lc cell in inputs and outputs 
+    verify_max_one_parent(&new_vc_status)?;
+    debug!("verify_max_one_parent passed");
+    
+    //VC cell can only be created once by a lc parent cell
+    verify_unique_creation(&new_vc_status)?;
+    debug!("verify_unique_creation passed");
 
-    // We verify that there are no funds locked by the pfls hash of this channel in the inputs of the transaction.
-    // This check is not strictly necessary for the current implementation of the pfls, but it is good practice to
-    // verify this anyway, as there is no reason to include funds locked for any channel in the input of a transaction
-    // that creates a new channel besides trying some kind of attack.
-    verify_no_funds_in_inputs(channel_constants)?;
-    debug!("verify_no_funds_in_inputs passed");
+    //funds for vc are blocked in parent lc
+    verify_locked_funds(new_lc_status, new_vc_status)?;
+    debug!("verify_locked_funds passed");
 
-    // We verify that the state the channel starts with is valid according to the utxo-adaption of the perun protocol.
-    // For example, the channel must not be final and the version number must be 0.
-    verify_vcstate_valid_as_start(
-        &new_status.vcstate(),
-        channel_constants.pfls_min_capacity().unpack(),
-    )?;
-    debug!("verify_vcstate_valid_as_start passed");
-
-    // Here we verify that the first party completes its funding and that itsfunds are actually locked to the pfls with correct args.
-    verify_funding_in_outputs(
-        FUNDER_INDEX,
-        &new_status.vcstate().balances().locked(),
-        channel_constants,
-    )?;
-    debug!("verify_vcfunding_in_outputs passed");
-
-    // We check that the funded bit in the channel status is set to true, exactly if the funding is complete.
-    verify_funded_vc_status(new_status, true)?;
-    debug!("verify_vc_funded_status passed");
-
-    // We verify that the channel status is not disputed upon start.
-    verify_vc_status_not_disputed(new_status)?;
-    debug!("verify_vc_status_not_disputed passed");
     Ok(())
 }
 
 pub fn check_valid_vc_progress(
-    old_status: &VirtualChannelStatus,
-    new_status: &VirtualChannelStatus,
-    witness: &ChannelWitness,
-    channel_constants: &ChannelConstants,
+    old_vc_status: &VirtualChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+    vc_constants: &VCChannelConstants,
 ) -> Result<(), Error> {
     debug!("check_valid_vc_progress");
 
-    // At this point we know that the transaction progresses the channel. There are two different
-    // kinds of channel progression: Funding and Dispute. Which kind of progression is performed
-    // depends on the witness.
+    verify_equal_channel_id_vc(old_vc_status, new_vc_status)?;
+    debug!("verify_equal_channel_id_vc passed");
+    
+    verify_first_forced_closed_flag_not_set(new_vc_status)?;
+    debug!("verify_first_forced_closed_flag_not_set passed");
 
-    // Some checks are common to both kinds of progression and are performed here.
-    // We check that both the old and the new state have the same channel id.
-    verify_equal_channel_id(&old_status.vcstate(), &new_status.vcstate())?;
-    debug!("verify_equal_channel_id passed");
+    verify_non_decreasing_version_number_vc(old_vc_status, new_vc_status)?;
+    debug!("verify_increasing_version_number_vc passed");
 
-    // No kind of channel progression should pay out any funds locked by the pfls, so we just check
-    // that there are no funds locked by the pfls in the inputs of the transaction.
-    verify_no_funds_in_inputs(channel_constants)?;
-    debug!("verify_no_funds_in_inputs passed");
-    // Here we verify that the cell with the PCTS in the outputs is locked by the same lock script
-    // as the input channel cell.
-    verify_channel_continues_locked()?;
-    debug!("verify_channel_continues_locked passed");
-
-    match witness.to_enum() {
-        ChannelWitnessUnion::Fund(_) => {
-            const FUNDER_INDEX: usize = 1;
-            debug!("ChannelWitnessUnion::Fund");
-
-            // The funding array in a channel status reflects how much each party has funded up to that point.
-            // Funding must not alter the channel's state.
-            verify_equal_channel_state(&old_status.vcstate(), &new_status.vcstate())?;
-            debug!("verify_equal_channel_state passed");
-
-            // Funding an already funded status is invalid.
-            verify_vc_status_not_funded(old_status)?;
-            debug!("verify_status_not_funded passed");
-
-            verify_funding_in_outputs(
-                FUNDER_INDEX,
-                &old_status.vcstate().balances().locked(),
-                channel_constants,
-            )?;
-            debug!("verify_funding_in_outputs passed");
-
-            // Funding a disputed status is invalid. This should not be able to happen anyway, but we check
-            // it nontheless.
-            verify_status_not_disputed(new_status)?;
-            debug!("verify_status_not_disputed passed");
-
-            // We check that the funded bit in the channel status is set to true, iff the funding is complete.
-            verify_funded_vc_status(&new_status, false)?;
-            debug!("verify_funded_status passed");
-            Ok(())
-        }
-        ChannelWitnessUnion::Dispute(d) => {
-            debug!("ChannelWitnessUnion::Dispute VC");
-            let dispute_mode = get_dispute_mode(old_status, new_status)?;
-
-            match dispute_mode {
-                DisputeMode::Normal => verify_normal_dispute(
-                    &old_status.lcstatus(),
-                    &new_status.lcstatus(),
-                    &channel_constants,
-                    &d,
-                ),
-                DisputeMode::VCDisputeStart {
-                    old_lc_status,
-                    new_lc_status,
-                    new_vc_status,
-                } => verify_vc_dispute_start(&old_lc_status, &new_lc_status, &new_vc_status, &d),
-                DisputeMode::VCDisputeProgress {
-                    old_lc_status,
-                    old_vc_status,
-                    new_lc_status,
-                    new_vc_status,
-                } => verify_vc_dispute_progress(
-                    &old_lc_status,
-                    &old_vc_status,
-                    &new_lc_status,
-                    &new_vc_status,
-                    channel_constants,
-                    &d,
-                ),
-            };
-
-            // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
-            // the channel. For this, the honest party needs to provide the latest state (in the "new" channel status)
-            // as well as a valid signature by each party on that state (in the witness). After the expiration of the
-            // relative time lock (challenge duration), the honest party can forcibly close the channel.
-            // If a malicious party disputes with an old channel state, an honest party can dispute again with
-            // the latest state (with higher version number) and the corresponding signatures within the challenge
-            // duration.
-
-            // First, we verify the integrity of the channel state. For this, the following must hold:
-            // - channel id is equal
-            // - version number is increasing (see verify_increasing_version_number)
-            // - sum of balances is equal
-            // - old state is not final
-            verify_channel_state_progression(
-                &old_status.lcstatus(),
-                &new_status.lcstatus().state(),
-            )?;
-            debug!("verify_channel_state_progression passed");
-
-            // One cannot dispute if funding is not complete.
-            verify_vc_status_funded(&old_status)?;
-            debug!("verify_status_funded passed");
-
-            // The disputed flag in the new status must be set. This indicates that the channel can be closed
-            // forcibly after the expiration of the challenge duration in a later transaction.
-            verify_status_disputed(&new_status.lcstatus())?;
-            debug!("verify_status_disputed passed");
-
-            // We verify that the signatures of both parties are valid on the new channel state.
-            verify_valid_state_sigs(
-                &d.sig_a().unpack(),
-                &d.sig_b().unpack(),
-                &new_status.lcstatus().state(),
-                &channel_constants.params().party_a().pub_key(),
-                &channel_constants.params().party_b().pub_key(),
-            )?;
-            debug!("verify_valid_state_sigs passed");
-            Ok(())
-        }
-        // Close, ForceClose and Abort may not happen as channel progression (if there is a continuing channel output).
-        ChannelWitnessUnion::Close(_) => Err(Error::ChannelCloseWithChannelOutput),
-        ChannelWitnessUnion::ForceClose(_) => Err(Error::ChannelForceCloseWithChannelOutput),
-        ChannelWitnessUnion::Abort(_) => Err(Error::ChannelAbortWithChannelOutput),
+    if old_vc_status.vcstate().version().unpack() < new_vc_status.vcstate().version().unpack() {
+        verify_vc_sigs(new_vc_status, &vc_constants.params())?;
     }
+    
+    verify_equal_sum_of_balances(&old_vc_status.vcstate().balances(), &new_vc_status.vcstate().balances())?;
+    debug!("verify_equal_sum_of_balances passed");
+    
+    debug!("verify_valid_vc_progress passed");
+    Ok(())
 }
 
-pub fn check_valid_vc_close(
-    old_status: &VirtualChannelStatus,
-    channel_witness: &ChannelWitness,
-    channel_constants: &ChannelConstants,
+pub fn check_valid_vc_merge(
+    input_vc_stats1: &VirtualChannelStatus,
+    input_vc_stats2: &VirtualChannelStatus,
+    merged_vc_status: &VirtualChannelStatus,
 ) -> Result<(), Error> {
-    debug!("check_valid_vc_close");
+    // Anyone should be able to merge the two vc cells into one
 
-    // At this point we know that this transaction closes the channel. There are three different kinds of
-    // closing: Abort, ForceClose and Close. Which kind of closing is performed depends on the witness.
-    // Every channel closing transaction must pay out all funds the the channel participants. The amount
-    // to be transfered to each party
-    let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
-    match channel_witness.to_enum() {
-        ChannelWitnessUnion::Abort(_) => {
-            const PARTY_B_INDEX: usize = 1;
+    // 1. We take the vc cell that was created first i.e., lower block number
+    let vc_cell1_block_num = load_header(0, Source::GroupInput)?.raw().number().unpack();
+    let vc_cell2_block_num = load_header(1, Source::GroupInput)?.raw().number().unpack();
 
-            debug!("ChannelWitnessUnion::Abort");
+    let mut selected_vc_cell = None;
 
-            // An abort can be performed at any time by a channel participant on a channel for which funding
-            // is not yet complete. It allows the initial party to reclaim its funds if e.g. the other party
-            // refuses to fund the channel.
-            verify_vc_status_not_funded(old_status)?;
-            debug!("verify_vc_status_not_funded passed");
-
-            // We verify that every party is paid the amount of funds that it has locked to the channel so far.
-            // If abort is called, Party A must have fully funded the channel and Party B can not have funded
-            // the channel because of our funding protocol.
-            verify_vc_all_paid(
-                &old_status
-                    .lcstatus()
-                    .state()
-                    .balances()
-                    .clear_index(PARTY_B_INDEX)?,
-                channel_capacity,
-                channel_constants,
-                true,
-            )?;
-            debug!("verify_all_paid passed");
-            Ok(())
+    if vc_cell1_block_num < vc_cell2_block_num {
+        selected_vc_cell = Some(input_vc_stats1);
+    } else if vc_cell1_block_num > vc_cell2_block_num {
+        selected_vc_cell = Some(input_vc_stats2);
+    }else{
+        return Err(Error::InvalidVCMergeTx);
+    }
+    // 2. Output vc cell should be contain a copy of the data of the selected input cell 
+    if let Some(vc_cell) = selected_vc_cell {
+        if vc_cell.as_slice() != merged_vc_status.as_slice(){
+            return Err(Error::InvalidVCMergeTx);
         }
-        ChannelWitnessUnion::ForceClose(_) => {
-            debug!("ChannelWitnessUnion::ForceClose");
-            // A force close can be performed after the channel was disputed and the challenge duration has
-            // expired. Upon force close, each party is paid according to the balance distribution in the
-            // latest state.
-            verify_vc_status_funded(old_status)?;
-            debug!("verify_status_funded passed");
-            verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
-            debug!("verify_time_lock_expired passed");
-            verify_vc_status_disputed(old_status)?;
-            debug!("verify_status_disputed passed");
-            verify_vc_all_paid(
-                &old_status.vcstate().balances(),
-                channel_capacity,
-                channel_constants,
-                false,
-            )?;
-            debug!("verify_all_paid passed");
-            Ok(())
-        }
-        ChannelWitnessUnion::Close(c) => {
-            debug!("check_valid_close: Close");
+        // verify_equal_channel_id_vc(vc_cell, merged_vc_status)?;
+        // verify_equal_version_number(vc_cell, merged_vc_status)?;
+        // verify_vc_sigs(merged_vc_status, &vc_constants.params())?;
 
-            // A channel can be closed by either party at any time after funding is complete.
-            // For this the party needs to provide a final state (final bit set) and signatures
-            // by all peers on that state.
-            verify_equal_channel_id(&old_status.vcstate(), &c.state())?;
-            debug!("check_valid_close: Channel id verified");
-            verify_vc_status_funded(old_status)?;
-            debug!("check_valid_close: Status funded verified");
-            verify_state_finalized(&c.state())?;
-            debug!("check_valid_close: State finalized verified");
-            verify_valid_state_sigs(
-                &c.sig_a().unpack(),
-                &c.sig_b().unpack(),
-                &c.state(),
-                &channel_constants.params().party_a().pub_key(),
-                &channel_constants.params().party_b().pub_key(),
-            )?;
-            // We verify that each party is paid according to the balance distribution in the final state.
-            verify_vc_all_paid(
-                &c.state().balances(),
-                channel_capacity,
-                channel_constants,
-                false,
-            )?;
-            debug!("verify_all_paid passed");
-            Ok(())
+    }
+    Ok(())
+}
+
+
+pub fn check_valid_close1(
+    input_vc_status: &VirtualChannelStatus,
+    output_vc_status: &VirtualChannelStatus,
+    vc_constants: &VCChannelConstants,
+) -> Result<(), Error> {
+     debug!("check_valid_close1");
+    
+    // a parent pcts must appear as input
+    if let Err(e) = get_parent_of_vc2(input_vc_status, Source::Input){
+        return Err(e);
+    }
+
+    verify_first_forced_closed_flag_set(output_vc_status)?;
+    debug!("verify first force close flag set passed");
+
+    verify_time_lock_expired(vc_constants.params().challenge_duration().unpack())?;
+    debug!("verify_time_lock_expired passed");
+    
+    if input_vc_status.vcstate().as_slice() != output_vc_status.vcstate().as_slice(){
+        return Err(Error::InvalidVCMergeTx);
+    }
+    debug!("Input vc state and output vc state are same");   
+
+    verify_same_parents(&input_vc_status.parents(), &output_vc_status.parents())?;
+    debug!("verify_same_parents passed");
+    
+    Ok(())
+}
+
+///verify that parents of two vc cells are the same
+pub fn verify_same_parents(parents_vc_cell_1: &ParentsVec, parents_vc_cell_2: &ParentsVec) -> Result<(), Error>{
+    if parents_vc_cell_1.len() != parents_vc_cell_2.len(){
+        return Err(Error::InvalidVCClose1Tx);
+    }
+    for i in 0..parents_vc_cell_1.len(){
+        let parent1 = parents_vc_cell_1.get(i).unwrap();
+        let parent2 = parents_vc_cell_2.get(i).unwrap();
+        if parent1.as_slice() != parent2.as_slice(){
+            return Err(Error::InvalidVCClose1Tx);
         }
-        ChannelWitnessUnion::Fund(_) => Err(Error::ChannelFundWithoutChannelOutput),
-        ChannelWitnessUnion::Dispute(_) => Err(Error::ChannelDisputeWithoutChannelOutput),
+
+    }
+    Ok(())
+}
+
+pub fn check_valid_close2(
+    input_lc_status: &ChannelStatus,
+    input_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    unimplemented!()
+}
+
+// pub fn check_valid_vc_close(
+//     old_status: &VirtualChannelStatus,
+//     channel_witness: &ChannelWitness,
+//     channel_constants: &ChannelConstants,
+// ) -> Result<(), Error> {
+//     debug!("check_valid_vc_close");
+
+//     // At this point we know that this transaction closes the channel. There are three different kinds of
+//     // closing: Abort, ForceClose and Close. Which kind of closing is performed depends on the witness.
+//     // Every channel closing transaction must pay out all funds the the channel participants. The amount
+//     // to be transfered to each party
+//     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
+//     match channel_witness.to_enum() {
+//         ChannelWitnessUnion::Abort(_) => {
+//             const PARTY_B_INDEX: usize = 1;
+
+//             debug!("ChannelWitnessUnion::Abort");
+
+//             // An abort can be performed at any time by a channel participant on a channel for which funding
+//             // is not yet complete. It allows the initial party to reclaim its funds if e.g. the other party
+//             // refuses to fund the channel.
+//             verify_vc_status_not_funded(old_status)?;
+//             debug!("verify_vc_status_not_funded passed");
+
+//             // We verify that every party is paid the amount of funds that it has locked to the channel so far.
+//             // If abort is called, Party A must have fully funded the channel and Party B can not have funded
+//             // the channel because of our funding protocol.
+//             verify_vc_all_paid(
+//                 &old_status
+//                     .lcstatus()
+//                     .state()
+//                     .balances()
+//                     .clear_index(PARTY_B_INDEX)?,
+//                 channel_capacity,
+//                 channel_constants,
+//                 true,
+//             )?;
+//             debug!("verify_all_paid passed");
+//             Ok(())
+//         }
+//         ChannelWitnessUnion::ForceClose(_) => {
+//             debug!("ChannelWitnessUnion::ForceClose");
+//             // A force close can be performed after the channel was disputed and the challenge duration has
+//             // expired. Upon force close, each party is paid according to the balance distribution in the
+//             // latest state.
+//             verify_vc_status_funded(old_status)?;
+//             debug!("verify_status_funded passed");
+//             verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
+//             debug!("verify_time_lock_expired passed");
+//             verify_vc_status_disputed(old_status)?;
+//             debug!("verify_status_disputed passed");
+//             verify_vc_all_paid(
+//                 &old_status.vcstate().balances(),
+//                 channel_capacity,
+//                 channel_constants,
+//                 false,
+//             )?;
+//             debug!("verify_all_paid passed");
+//             Ok(())
+//         }
+//         ChannelWitnessUnion::Close(c) => {
+//             debug!("check_valid_close: Close");
+
+//             // A channel can be closed by either party at any time after funding is complete.
+//             // For this the party needs to provide a final state (final bit set) and signatures
+//             // by all peers on that state.
+//             verify_equal_channel_id(&old_status.vcstate(), &c.state())?;
+//             debug!("check_valid_close: Channel id verified");
+//             verify_vc_status_funded(old_status)?;
+//             debug!("check_valid_close: Status funded verified");
+//             verify_state_finalized(&c.state())?;
+//             debug!("check_valid_close: State finalized verified");
+//             verify_valid_state_sigs(
+//                 &c.sig_a().unpack(),
+//                 &c.sig_b().unpack(),
+//                 &c.state(),
+//                 &channel_constants.params().party_a().pub_key(),
+//                 &channel_constants.params().party_b().pub_key(),
+//             )?;
+//             // We verify that each party is paid according to the balance distribution in the final state.
+//             verify_vc_all_paid(
+//                 &c.state().balances(),
+//                 channel_capacity,
+//                 channel_constants,
+//                 false,
+//             )?;
+//             debug!("verify_all_paid passed");
+//             Ok(())
+//         }
+//         ChannelWitnessUnion::Fund(_) => Err(Error::ChannelFundWithoutChannelOutput),
+//         ChannelWitnessUnion::Dispute(_) => Err(Error::ChannelDisputeWithoutChannelOutput),
+//     }
+// }
+
+pub fn verify_always_success_lock_script(vc_constants: &VCChannelConstants) -> Result<(), Error> {
+    let lock_script_hash = load_cell_lock_hash(0, Source::GroupOutput)?;
+    if lock_script_hash != vc_constants.vcls_code_hash().as_slice(){
+        return Err(Error::InvalidVCLockScript);
+    }
+    Ok(())
+}
+
+pub fn verify_first_forced_closed_flag_not_set(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
+    if vc_status.first_force_close().to_bool() {
+        return Err(Error::FirstForceCloseFlagSet);
+    }
+    Ok(())
+}
+
+pub fn verify_first_forced_closed_flag_set(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
+    if !vc_status.first_force_close().to_bool() {
+        return Err(Error::FirstForceCloseFlagNotSet);
+    }
+    Ok(())
+}
+
+pub fn verify_equal_version_number(
+    old_vc_status: &VirtualChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    if old_vc_status.vcstate().version().unpack() != new_vc_status.vcstate().version().unpack() {
+        return Err(Error::InvalidVCMergeTx);
+    }
+    Ok(())
+}
+
+
+pub fn verify_non_decreasing_version_number_vc(
+    old_vc_status: &VirtualChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    debug!(
+        "verify_non-decreasing_version_number old: {},  new: {}",
+        old_vc_status.vcstate().version().unpack(),
+        new_vc_status.vcstate().version().unpack()
+    );
+
+    if old_vc_status.vcstate().version().unpack() <= new_vc_status.vcstate().version().unpack() {
+        return Ok(());
+    }
+    Err(Error::InvalidVersionNumberVCProgressTx)
+}
+
+pub fn verify_equal_channel_id_vc(
+    old_vc_status: &VirtualChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    if old_vc_status.vcstate().channel_id().unpack()[..] != new_vc_status.vcstate().channel_id().unpack()[..] {
+        return Err(Error::ChannelIdMismatch);
+    }
+    Ok(())
+}
+
+pub fn verify_vc_sigs(new_vc_status: &VirtualChannelStatus, vc_params: &ChannelParameters) -> Result<(), Error>{
+    let witnes_args = load_witness_args(0, Source::GroupInput)?;
+    let witness_bytes: Bytes = witnes_args.input_type().to_opt().ok_or(Error::NoWitness)?.unpack();
+    let vc_witness = VCDispute::from_slice(&witness_bytes)?;
+
+    verify_valid_state_sigs(
+        &vc_witness.sig_a().unpack(),
+        &vc_witness.sig_b().unpack(),
+        &new_vc_status.vcstate(),
+        &vc_params.party_a().pub_key(),
+        &vc_params.party_b().pub_key(),
+    )?;
+    Ok(())
+}
+
+/// Checks that funds for virtual channel have been locked in the parent channel
+pub fn verify_locked_funds(new_lc_status: &ChannelStatus, new_vc_status: &VirtualChannelStatus) -> Result<(), Error> {
+    let vc_balances = new_vc_status.vcstate().balances();
+    let locked_funds_in_lc = new_lc_status.state().balances().locked();
+    let vc_id = new_vc_status.vcstate().channel_id();
+
+    for sub_alloc in locked_funds_in_lc.into_iter(){
+        if sub_alloc.id().as_slice() == vc_id.as_slice(){
+            if sub_alloc.balances().equal_in_sum(&vc_balances)?{
+                return Ok(());
+            }else{
+                return Err(Error::UnequalBalanceInLockedFundsAndVirtualChannelBalance)
+            }
+        }
+    }
+    Err(Error::FundsForVCNotLocked)
+}
+
+/// checks that only one parent exists in the inputs of the Tx
+// pub fn verify_max_one_parent(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
+//     let parent1_hash = match vc_status.parents().get(0) {
+//         Some(parent) => parent.pcts_hash().unpack(),
+//         None => return Err(Error::ParentPCTSHashNotFound),
+//     };
+
+//     let parent2_hash = match vc_status.parents().get(1) {
+//         Some(parent) => parent.pcts_hash().unpack(),
+//         None => return Err(Error::ParentPCTSHashNotFound),
+//     };
+//     let mut counter = 0;
+//     let mut parent_idx = 0;
+//     let hashes = &[&parent1_hash, &parent2_hash];
+    
+//     for hash in hashes.iter() {
+//         let cell_index = find_cell_by_type_hash(&hash, Source::Input)?;
+//         if cell_index.is_some() {
+//             counter += 1;
+//             parent_idx = cell_index.unwrap();
+//         }
+//     }
+//     if counter != 1 {
+//         return Err(Error::MoreThanOneParentCellInVCInput);
+//     }
+
+    
+//     Ok(())
+// }
+
+pub fn verify_unique_creation(new_vc_status: &VirtualChannelStatus) -> Result<(), Error>{
+    let parent_input_idx = get_parent_of_vc2(new_vc_status, Source::Input)?;
+    let parent_output_idx = get_parent_of_vc2(new_vc_status,Source::Output)?;
+
+    let parent_input_data = match load_cell_data(parent_input_idx, Source::Input) {
+        Ok(data) => ChannelStatus::from_slice(data.as_slice())?,
+        Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+    };
+
+    let parent_output_data = match load_cell_data(parent_output_idx, Source::Output) {
+        Ok(data) => ChannelStatus::from_slice(data.as_slice())?,
+        Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+    };
+
+    if !parent_input_data.disputed().to_bool() && parent_output_data.disputed().to_bool(){
+        return Ok(()); 
+    }else{
+        return Err(Error::InvalidVCTxStart);
     }
 }
+
+//checks that only one (and the sam) parent ledger channel cell exists in inputs and outputs 
+pub fn verify_max_one_parent(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
+    let parent1_hash = match vc_status.parents().get(0) {
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
+
+    let parent2_hash = match vc_status.parents().get(1) {
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
+
+    let hashes = &[(&parent1_hash, "parent1"), (&parent2_hash, "parent2")];
+    let mut found_parent = None;
+
+    for (hash, parent) in hashes.iter() {
+        if let Some(_) = find_cell_by_type_hash(&hash, Source::Input)? {
+            found_parent = Some(*parent);
+            break;
+        }
+    }
+
+    if let Some(parent) = found_parent {
+        let parent_hash = if parent == "parent1" { &parent1_hash } else { &parent2_hash };
+        if find_cell_by_type_hash(parent_hash, Source::Output)?.is_none() {
+            return Err(Error::ParentNotFoundInOutputs);
+        }
+        Ok(())
+    } else {
+        Err(Error::InvalidVCTx)
+    }
+}
+
 
 pub fn load_witness() -> Result<ChannelWitness, Error> {
     debug!("load_witness");
@@ -482,12 +615,12 @@ pub fn verify_state_not_finalized(state: &ChannelState) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_vc_status_funded(status: &VirtualChannelStatus) -> Result<(), Error> {
-    if !status.funded().to_bool() {
-        return Err(Error::ChannelNotFunded);
-    }
-    Ok(())
-}
+// pub fn verify_vc_status_funded(status: &VirtualChannelStatus) -> Result<(), Error> {
+//     if !status.funded().to_bool() {
+//         return Err(Error::ChannelNotFunded);
+//     }
+//     Ok(())
+// }
 
 pub fn verify_equal_sum_of_balances(
     old_balances: &Balances,
@@ -608,55 +741,55 @@ pub fn verify_funding_in_outputs(
     Ok(())
 }
 
-pub fn verify_funded_vc_status(status: &VirtualChannelStatus, is_start: bool) -> Result<(), Error> {
-    if !is_start {
-        if !status.funded().to_bool() {
-            return Err(Error::FundedBitStatusNotCorrect);
-        }
-        return Ok(());
-    }
-    if status
-        .vcstate()
-        .balances()
-        .locked()
-        .get_unchecked(1)
-        .balances()
-        .ckbytes()
-        .get(1)?
-        != 0
-    {
-        if status.funded().to_bool() {
-            return Err(Error::FundedBitStatusNotCorrect);
-        }
-        return Ok(());
-    }
-    if status
-        .vcstate()
-        .balances()
-        .locked()
-        .get_unchecked(1)
-        .balances()
-        .sudts()
-        .len()
-        != 0
-    {
-        if status.funded().to_bool() {
-            return Err(Error::FundedBitStatusNotCorrect);
-        }
-        return Ok(());
-    }
-    if !status.funded().to_bool() {
-        return Err(Error::FundedBitStatusNotCorrect);
-    }
-    Ok(())
-}
+// pub fn verify_funded_vc_status(status: &VirtualChannelStatus, is_start: bool) -> Result<(), Error> {
+//     if !is_start {
+//         if !status.funded().to_bool() {
+//             return Err(Error::FundedBitStatusNotCorrect);
+//         }
+//         return Ok(());
+//     }
+//     if status
+//         .vcstate()
+//         .balances()
+//         .locked()
+//         .get_unchecked(1)
+//         .balances()
+//         .ckbytes()
+//         .get(1)?
+//         != 0
+//     {
+//         if status.funded().to_bool() {
+//             return Err(Error::FundedBitStatusNotCorrect);
+//         }
+//         return Ok(());
+//     }
+//     if status
+//         .vcstate()
+//         .balances()
+//         .locked()
+//         .get_unchecked(1)
+//         .balances()
+//         .sudts()
+//         .len()
+//         != 0
+//     {
+//         if status.funded().to_bool() {
+//             return Err(Error::FundedBitStatusNotCorrect);
+//         }
+//         return Ok(());
+//     }
+//     if !status.funded().to_bool() {
+//         return Err(Error::FundedBitStatusNotCorrect);
+//     }
+//     Ok(())
+// }
 
-pub fn verify_vc_status_not_funded(status: &VirtualChannelStatus) -> Result<(), Error> {
-    if status.funded().to_bool() {
-        return Err(Error::StateIsFunded);
-    }
-    Ok(())
-}
+// pub fn verify_vc_status_not_funded(status: &VirtualChannelStatus) -> Result<(), Error> {
+//     if status.funded().to_bool() {
+//         return Err(Error::StateIsFunded);
+//     }
+//     Ok(())
+// }
 
 pub fn verify_vchannel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
@@ -703,41 +836,41 @@ pub fn verify_vchannel_id_integrity(
     Ok(())
 }
 
-pub fn verify_vcstate_valid_as_start(
-    state: &ChannelState,
-    pfls_min_capacity: u64,
-) -> Result<(), Error> {
-    if state.version().unpack() != 0 {
-        return Err(Error::StartWithNonZeroVersion);
-    }
-    if state.is_final().to_bool() {
-        return Err(Error::StartWithFinalizedState);
-    }
+// pub fn verify_vcstate_valid_as_start(
+//     state: &ChannelState,
+//     pfls_min_capacity: u64,
+// ) -> Result<(), Error> {
+//     if state.version().unpack() != 0 {
+//         return Err(Error::StartWithNonZeroVersion);
+//     }
+//     if state.is_final().to_bool() {
+//         return Err(Error::StartWithFinalizedState);
+//     }
 
-    // We verify that each participant's initial balance is at least the minimum capacity of a PFLS (or zero),
-    // to ensure that funding is possible for the initial balance distribution.
-    let balance_a = state
-        .balances()
-        .locked()
-        .get_unchecked(0)
-        .balances()
-        .ckbytes()
-        .get(0)?; //virtual channel balances
-    let balance_b = state
-        .balances()
-        .locked()
-        .get_unchecked(1)
-        .balances()
-        .ckbytes()
-        .get(1)?;
-    if balance_a < pfls_min_capacity && balance_a != 0 {
-        return Err(Error::BalanceBelowPFLSMinCapacity);
-    }
-    if balance_b < pfls_min_capacity && balance_b != 0 {
-        return Err(Error::BalanceBelowPFLSMinCapacity);
-    }
-    Ok(())
-}
+//     // We verify that each participant's initial balance is at least the minimum capacity of a PFLS (or zero),
+//     // to ensure that funding is possible for the initial balance distribution.
+//     let balance_a = state
+//         .balances()
+//         .locked()
+//         .get_unchecked(0)
+//         .balances()
+//         .ckbytes()
+//         .get(0)?; //virtual channel balances
+//     let balance_b = state
+//         .balances()
+//         .locked()
+//         .get_unchecked(1)
+//         .balances()
+//         .ckbytes()
+//         .get(1)?;
+//     if balance_a < pfls_min_capacity && balance_a != 0 {
+//         return Err(Error::BalanceBelowPFLSMinCapacity);
+//     }
+//     if balance_b < pfls_min_capacity && balance_b != 0 {
+//         return Err(Error::BalanceBelowPFLSMinCapacity);
+//     }
+//     Ok(())
+// }
 
 pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let lock_script = load_cell_lock(0, Source::GroupOutput)?;
@@ -757,12 +890,12 @@ pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<
     Ok(())
 }
 
-pub fn verify_vc_status_not_disputed(status: &VirtualChannelStatus) -> Result<(), Error> {
-    if status.disputed().to_bool() {
-        return Err(Error::StatusDisputed);
-    }
-    Ok(())
-}
+// pub fn verify_vc_status_not_disputed(status: &VirtualChannelStatus) -> Result<(), Error> {
+//     if status.disputed().to_bool() {
+//         return Err(Error::StatusDisputed);
+//     }
+//     Ok(())
+// }
 
 pub fn verify_status_disputed(status: &ChannelStatus) -> Result<(), Error> {
     if !status.disputed().to_bool() {
@@ -778,12 +911,12 @@ pub fn verify_status_funded(status: &ChannelStatus) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_vc_status_disputed(status: &VirtualChannelStatus) -> Result<(), Error> {
-    if !status.disputed().to_bool() {
-        return Err(Error::StatusNotDisputed);
-    }
-    Ok(())
-}
+// pub fn verify_vc_status_disputed(status: &VirtualChannelStatus) -> Result<(), Error> {
+//     if !status.disputed().to_bool() {
+//         return Err(Error::StatusNotDisputed);
+//     }
+//     Ok(())
+// }
 
 pub fn verify_vc_all_paid(
     final_balance: &Balances,
@@ -894,143 +1027,324 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
     }
     Ok(())
 }
-pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
-    // Count the number of input and output cells
-    let cell_num_in = count_cells(Source::Input)?;
-    let cell_num_out = count_cells(Source::Output)?;
 
-    // If there are exactly two input cells, determine the action based on their data
-    if cell_num_in == 2 {
-        // Load data for both input cells
-        let cell_in0_data = load_cell_data(0, Source::Input).ok();
-        let cell_in1_data = load_cell_data(1, Source::Input).ok();
-
-        // Use the helper function to determine the action for two cells
-        return determine_channel_action_for_two_cells(cell_in0_data, cell_in1_data, cell_num_out);
-    } else if cell_num_in == 1 && cell_num_out == 1 {
-        // Progress action: one input and one output
-        let cell_input_data = load_cell_data(0, Source::GroupInput)
-            .ok()
-            .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
-            .map_or(Ok(None), |v| v.map(Some))?
-            .ok_or(Error::UnableToLoadAnyChannelStatus)?;
-        let cell_output_data = load_cell_data(0, Source::GroupOutput)
-            .ok()
-            .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
-            .map_or(Ok(None), |v| v.map(Some))?
-            .ok_or(Error::UnableToLoadAnyChannelStatus)?;
-
-        return Ok(VChannelAction::Progress {
-            old_status: cell_input_data,
-            new_status: cell_output_data,
-        });
-    } else if cell_num_in == 1 && cell_num_out == 0 {
-        // Close action: one input and no outputs
-        let cell_input_data = load_cell_data(0, Source::GroupInput)
-            .ok()
-            .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
-            .map_or(Ok(None), |v| v.map(Some))?
-            .ok_or(Error::UnableToLoadAnyChannelStatus)?;
-
-        return Ok(VChannelAction::Close {
-            old_status: cell_input_data,
-        });
-    } else {
-        // Invalid number of cells
-        return Err(Error::UnableToLoadAnyChannelStatus);
-    }
-}
-
-fn determine_channel_action_for_two_cells(
-    cell_in0_data: Option<Vec<u8>>,
-    cell_in1_data: Option<Vec<u8>>,
-    cell_out_data: usize,
-) -> Result<VChannelAction, Error> {
-    // Attempt to parse each cell as PCTS or VCTS
-    let pcts_opt_0 = cell_in0_data
-        .as_ref()
-        .and_then(|data| ChannelStatus::from_slice(data).ok());
-    let vcts_opt_0 = cell_in0_data
-        .as_ref()
-        .and_then(|data| VirtualChannelStatus::from_slice(data).ok());
-
-    let pcts_opt_1 = cell_in1_data
-        .as_ref()
-        .and_then(|data| ChannelStatus::from_slice(data).ok());
-    let vcts_opt_1 = cell_in1_data
-        .as_ref()
-        .and_then(|data| VirtualChannelStatus::from_slice(data).ok());
-
-    // Case 1: One PCTS and no VCTS (Start), then one PCTS, one VCTS as outputs
-    if (pcts_opt_0.is_some() && vcts_opt_1.is_none())
-        || (pcts_opt_1.is_some() && vcts_opt_0.is_none())
-    {
-        let new_vc_status = if let Some(ref pcts_status) = pcts_opt_0 {
-            build_vchannel_status(pcts_status)
-        } else {
-            build_vchannel_status(pcts_opt_1.as_ref().unwrap())
+pub fn get_vchannel_action2() -> Result<VChannelAction, Error>{
+    //vcts start
+    //load this vcts script hash
+    // iterate through all input cells and count the number of cells have the same type hash as this one
+    // pass if and only if there are none. 
+    // iterate through all output cells. 
+    //pass iff there is exactly one cell with the same type hash as this
+    let mut input_cell_counter = 0;
+    let mut output_cell_counter = 0;
+    let max_input_vc_channels = 2;
+    let vcts_hash = load_script_hash().unwrap();
+    for i in 0..{
+        let input_cell_hash = match load_cell_type_hash(i, Source::GroupInput){
+            Ok(Some(hash)) => hash,
+            Ok(None) => continue,
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()), 
         };
-
-        let old_lc_status = if let Some(ref pcts_status) = pcts_opt_0 {
-            pcts_status.clone()
-        } else {
-            pcts_opt_1.unwrap()
-        };
-
-        // Simulate fetching new_lc_status (replace this with actual logic)
-        let new_lc_status = old_lc_status.clone(); // Replace with actual logic to fetch or compute new_lc_status
-
-        return Ok(VChannelAction::Start {
-            new_vc_status,
-            old_lc_status,
-            new_lc_status,
-        });
-    }
-
-    // Case 2: Two VCTS and zero PCTS (Progress) -> one (merged) VCTS as output
-    if vcts_opt_0.is_some() && vcts_opt_1.is_some() {
-        // if number of outputs is not 1, return an error
-        if cell_out_data != 1 {
-            return Err(Error::InvalidNumberOfOutputs);
-        }
-
-        let vcell_in0_data = load_cell_data(0, Source::GroupInput)
-            .ok()
-            .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
-            .map_or(Ok(None), |v| v.map(Some))?
-            .ok_or(Error::UnableToLoadAnyChannelStatus)?;
-        let vcell_in1_data = load_cell_data(1, Source::GroupInput)
-            .ok()
-            .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
-            .map_or(Ok(None), |v| v.map(Some))?
-            .ok_or(Error::UnableToLoadAnyChannelStatus)?;
-
-        let vcell_out_data = load_cell_data(0, Source::GroupOutput)
-            .ok()
-            .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
-            .map_or(Ok(None), |v| v.map(Some))?
-            .ok_or(Error::UnableToLoadAnyChannelStatus)?;
-
-        let v0 = vcts_opt_0.unwrap().vcstate().version().unpack();
-        let v1 = vcts_opt_1.unwrap().vcstate().version().unpack();
-
-        // compare versions, pick the one with higher version as new status
-        if v0 > v1 {
-            return Ok(VChannelAction::Progress {
-                old_status: vcell_in0_data,
-                new_status: vcell_out_data,
-            });
-        } else {
-            return Ok(VChannelAction::Progress {
-                old_status: vcell_in1_data,
-                new_status: vcell_out_data,
-            });
+        if vcts_hash == input_cell_hash{
+            input_cell_counter += 1;
         }
     }
+    for i in 0 ..{
+        let output_cell_hash = match load_cell_type_hash(i, Source::GroupOutput){
+            Ok(Some(hash)) => hash,
+            Ok(None) => continue,
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into())
+        };
 
-    // If no valid case is matched, return an error
-    Err(Error::UnableToLoadAnyChannelStatus)
+        if vcts_hash == output_cell_hash{
+            output_cell_counter += 1;
+        }
+    }
+    //MODE: VC Start Tx
+    if input_cell_counter == 0 && output_cell_counter == 1{
+        
+        let vc_status = match load_cell_data(0, Source::GroupOutput){
+            Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+            // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),
+            Err(err) => return Err(err.into()) 
+        };
+
+        let parent_input_idx = get_parent_of_vc2(&vc_status, Source::Input).unwrap();
+        let parent_input_data = match load_cell_data(parent_input_idx, Source::Input) {
+            Ok(data) => ChannelStatus::from_slice(data.as_slice())?,
+            Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+        };
+        let parent_output_idx = get_parent_of_vc2(&vc_status, Source::Output).unwrap();
+        let parent_output_data = match load_cell_data(parent_output_idx, Source::Output) {
+            Ok(data) => ChannelStatus::from_slice(data.as_slice())?,
+            Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+        };
+
+        return Ok(VChannelAction::Start { new_vc_status: vc_status, old_lc_status: parent_input_data, new_lc_status: parent_output_data });
+
+    //MODE: VC Merge Tx
+    } else if input_cell_counter == 2 && output_cell_counter == 1 {
+        
+        let mut input_vc_statuses: [Option<VirtualChannelStatus>;2] = [None, None];
+        for i in 0..{
+            let vc_status = match load_cell_data(i, Source::GroupInput){
+                Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+                Err(err) => return Err(err.into())
+            };
+
+            if i < max_input_vc_channels{
+                input_vc_statuses[i] = Some(vc_status);
+            }
+        }
+
+        if input_vc_statuses.iter().all(|status| !status.is_some()){
+            return Err(Error::VCInputCellMissingInMergeTx);
+        }
+
+        let output_vc_status = match load_cell_data(0, Source::GroupInput){
+            Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+            Err(err) => return Err(err.into()),
+        };
+
+        return Ok(VChannelAction::Merge { 
+            input_vc_status1: input_vc_statuses[0].clone().unwrap(),
+             input_vc_status2: input_vc_statuses[1].clone().unwrap(),
+              merged_vc_status: output_vc_status,
+            });
+    
+    //MODE: Either VC Dispute Progress or VC Close 1
+    }else if input_cell_counter == 1 && output_cell_counter == 1{
+        //TODO: What about a dispute, where the vc state is not being progressed but only the parent lc cell is
+        let input_vc_status = match load_cell_data(0, Source::GroupInput){
+            Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+            // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),
+            Err(err) => return Err(err.into()) 
+        };
+        let output_vc_status = match load_cell_data(0, Source::GroupInput){
+            Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+            Err(err) => return Err(err.into())
+        };
+
+        let parent_input_idx = get_parent_of_vc2(&input_vc_status, Source::Input).unwrap();
+        let witness_args = load_witness_args(parent_input_idx, Source::Input)?;
+        let witness_bytes: Bytes = witness_args
+            .input_type()
+            .to_opt()
+            .ok_or(Error::NoWitness)?
+            .unpack();
+        let channel_witness = ChannelWitness::from_slice(&witness_bytes)?; 
+        match channel_witness.to_enum(){
+            //MODE: VC Progress
+            ChannelWitnessUnion::Dispute(_) =>{
+                return Ok(VChannelAction::Progress { old_status: input_vc_status, new_status: output_vc_status});
+            }
+            //MODE: VC Close 1
+            ChannelWitnessUnion::ForceClose(_) => {
+                // find the input parent lc status
+                return Ok(VChannelAction::Close1 {input_vc_status: input_vc_status, output_vc_status:output_vc_status });
+            }
+            _ => {
+                return Err(Error::InvalidVCTx)
+            }
+        }
+    }else if input_cell_counter == 1 && output_cell_counter == 0{
+        //MODE: VC Close 2
+        // 1 input parent lc + 1 input vc
+        // 0 output lc + 0 output vc
+        let input_vc_status = match load_cell_data(0, Source::GroupInput){
+            Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+            // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),
+            Err(err) => return Err(err.into()) 
+        };
+
+        let parent_input_idx = get_parent_of_vc2(&input_vc_status, Source::Input).unwrap();
+        let parent_data = match load_cell_data(parent_input_idx, Source::Input){
+            Ok(data) => ChannelStatus::from_slice(data.as_slice())?,
+            Err(err) => return Err(err.into())
+        };
+
+        return Ok(VChannelAction::Close2 { input_lc_status: parent_data, input_vc_status:input_vc_status});
+    }else{
+        return Err(Error::InvalidVCTx);
+    }
+
 }
+
+/// finds either one of the two parents of the virtual channel for the given source
+pub fn get_parent_of_vc2(vc_status: &VirtualChannelStatus, source: Source) -> Result<usize, Error>{
+    if vc_status.parents().len() != 2 {
+        return Err(Error::InvalidParentsCountForVC);
+    }
+    let parent1_hash = match vc_status.parents().get(0) {
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
+
+    let parent2_hash = match vc_status.parents().get(1) {
+        Some(parent) => parent.pcts_hash().unpack(),
+        None => return Err(Error::ParentPCTSHashNotFound),
+    };
+
+    let parent_idx = match find_cell_by_type_hash(&parent1_hash, source) {
+        Ok(Some(i)) => i,
+        Ok(None) => {
+            match find_cell_by_type_hash(&parent2_hash, source) {
+                Ok(Some(i)) => i, 
+                Ok(None) => return Err(Error::ParentsOfVCNotFound),
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Err(err) => return Err(err.into()),
+    };
+    Ok(parent_idx)
+}
+
+
+// pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
+//     // Count the number of input and output cells
+//     let cell_num_in = count_cells(Source::Input)?;
+//     let cell_num_out = count_cells(Source::Output)?;
+
+//     // If there are exactly two input cells, determine the action based on their data
+//     //NOTE: This does not always have to be the case that there are exatly two input cells
+//     // There will always be one extra cell to pay the fees for the Tx. 
+//     //vc start will have 2 input cells (lc cell + gas fees)
+//     //vc progress will also have at least 3 input cells (lc cell + vc cell + gas fees)
+//     //vc closing will have at least 5 input cells (lc cell+ vc cell+ 2 funding cells + gas fees)
+//     //merge vc Tx will have 3 Cells
+//     if cell_num_in == 2 {
+//         // Load data for both input cells
+//         let cell_in0_data = load_cell_data(0, Source::Input).ok();
+//         let cell_in1_data = load_cell_data(1, Source::Input).ok();
+
+//         // Use the helper function to determine the action for two cells
+//         return determine_channel_action_for_two_cells(cell_in0_data, cell_in1_data, cell_num_out);
+//     } else if cell_num_in == 1 && cell_num_out == 1 {
+//         // Progress action: one input and one output
+//         let cell_input_data = load_cell_data(0, Source::GroupInput)
+//             .ok()
+//             .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
+//             .map_or(Ok(None), |v| v.map(Some))?
+//             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
+//         let cell_output_data = load_cell_data(0, Source::GroupOutput)
+//             .ok()
+//             .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
+//             .map_or(Ok(None), |v| v.map(Some))?
+//             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
+
+//         return Ok(VChannelAction::Progress {
+//             old_status: cell_input_data,
+//             new_status: cell_output_data,
+//         });
+//     } else if cell_num_in == 1 && cell_num_out == 0 {
+//         // Close action: one input and no outputs
+//         let cell_input_data = load_cell_data(0, Source::GroupInput)
+//             .ok()
+//             .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
+//             .map_or(Ok(None), |v| v.map(Some))?
+//             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
+
+//         return Ok(VChannelAction::Close {
+//             old_status: cell_input_data,
+//         });
+//     } else {
+//         // Invalid number of cells
+//         return Err(Error::UnableToLoadAnyChannelStatus);
+//     }
+// }
+
+// fn determine_channel_action_for_two_cells(
+//     cell_in0_data: Option<Vec<u8>>,
+//     cell_in1_data: Option<Vec<u8>>,
+//     cell_out_data: usize,
+// ) -> Result<VChannelAction, Error> {
+//     // Attempt to parse each cell as PCTS or VCTS
+//     let pcts_opt_0 = cell_in0_data
+//         .as_ref()
+//         .and_then(|data| ChannelStatus::from_slice(data).ok());
+//     let vcts_opt_0 = cell_in0_data
+//         .as_ref()
+//         .and_then(|data| VirtualChannelStatus::from_slice(data).ok());
+
+//     let pcts_opt_1 = cell_in1_data
+//         .as_ref()
+//         .and_then(|data| ChannelStatus::from_slice(data).ok());
+//     let vcts_opt_1 = cell_in1_data
+//         .as_ref()
+//         .and_then(|data| VirtualChannelStatus::from_slice(data).ok());
+
+//     // Case 1: One PCTS and no VCTS (Start), then one PCTS, one VCTS as outputs
+//     if (pcts_opt_0.is_some() && vcts_opt_1.is_none())
+//         || (pcts_opt_1.is_some() && vcts_opt_0.is_none())
+//     {
+//         let new_vc_status = if let Some(ref pcts_status) = pcts_opt_0 {
+//             build_vchannel_status(pcts_status)
+//         } else {
+//             build_vchannel_status(pcts_opt_1.as_ref().unwrap())
+//         };
+
+//         let old_lc_status = if let Some(ref pcts_status) = pcts_opt_0 {
+//             pcts_status.clone()
+//         } else {
+//             pcts_opt_1.unwrap()
+//         };
+
+//         // Simulate fetching new_lc_status (replace this with actual logic)
+//         let new_lc_status = old_lc_status.clone(); // Replace with actual logic to fetch or compute new_lc_status
+
+//         return Ok(VChannelAction::Start {
+//             new_vc_status,
+//             old_lc_status,
+//             new_lc_status,
+//         });
+//     }
+
+//     // Case 2: Two VCTS and zero PCTS (Progress) -> one (merged) VCTS as output
+//     if vcts_opt_0.is_some() && vcts_opt_1.is_some() {
+//         // if number of outputs is not 1, return an error
+//         if cell_out_data != 1 {
+//             return Err(Error::InvalidNumberOfOutputs);
+//         }
+
+//         let vcell_in0_data = load_cell_data(0, Source::GroupInput)
+//             .ok()
+//             .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
+//             .map_or(Ok(None), |v| v.map(Some))?
+//             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
+//         let vcell_in1_data = load_cell_data(1, Source::GroupInput)
+//             .ok()
+//             .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
+//             .map_or(Ok(None), |v| v.map(Some))?
+//             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
+
+//         let vcell_out_data = load_cell_data(0, Source::GroupOutput)
+//             .ok()
+//             .map(|data| VirtualChannelStatus::from_slice(data.as_slice()))
+//             .map_or(Ok(None), |v| v.map(Some))?
+//             .ok_or(Error::UnableToLoadAnyChannelStatus)?;
+
+//         let v0 = vcts_opt_0.unwrap().vcstate().version().unpack();
+//         let v1 = vcts_opt_1.unwrap().vcstate().version().unpack();
+
+//         // compare versions, pick the one with higher version as new status
+//         if v0 > v1 {
+//             return Ok(VChannelAction::Progress {
+//                 old_status: vcell_in0_data,
+//                 new_status: vcell_out_data,
+//             });
+//         } else {
+//             return Ok(VChannelAction::Progress {
+//                 old_status: vcell_in1_data,
+//                 new_status: vcell_out_data,
+//             });
+//         }
+//     }
+
+//     // If no valid case is matched, return an error
+//     Err(Error::UnableToLoadAnyChannelStatus)
+// }
 
 pub fn verify_different_payment_addresses(
     channel_constants: &ChannelConstants,
@@ -1081,70 +1395,70 @@ pub fn verify_different_payment_addresses(
 //     Err(Error::InvalidDisputeMode)
 // }
 
-pub fn verify_vc_dispute_start(
-    old_lc_status: &ChannelStatus,
-    new_lc_status: &ChannelStatus,
-    new_vc_status: &VirtualChannelStatus,
-    dispute: &Dispute,
-) -> Result<(), Error> {
-    // verify that the parents mentioned in the vc status are the two channel cells included in input and output
-    verify_parents_of_vc_exist(new_vc_status)?;
-    debug!("verify_parents_of_vc_exist passed");
+// pub fn verify_vc_dispute_start(
+//     old_lc_status: &ChannelStatus,
+//     new_lc_status: &ChannelStatus,
+//     new_vc_status: &VirtualChannelStatus,
+//     dispute: &Dispute,
+// ) -> Result<(), Error> {
+//     // verify that the parents mentioned in the vc status are the two channel cells included in input and output
+//     verify_parents_of_vc_exist(new_vc_status)?;
+//     debug!("verify_parents_of_vc_exist passed");
 
-    // verify that both parents in output have the same vc status and the sigs of vc status are valid
-    verify_vc_integrity(new_vc_status, dispute)?;
-    debug!("verify_vc_integrity passed");
+//     // verify that both parents in output have the same vc status and the sigs of vc status are valid
+//     verify_vc_integrity(new_vc_status, dispute)?;
+//     debug!("verify_vc_integrity passed");
 
-    // verify that funds locked in the parent output cell, is the balance of vc state
-    verify_vc_locked_funds(new_lc_status, new_vc_status)?;
-    debug!("verify_vc_locked_funds passed");
+//     // verify that funds locked in the parent output cell, is the balance of vc state
+//     verify_vc_locked_funds(new_lc_status, new_vc_status)?;
+//     debug!("verify_vc_locked_funds passed");
 
-    //verify third party access
-    let third_party_flag = match verify_vc_third_party_access(new_vc_status) {
-        Ok(Some(flag)) => flag,
-        Ok(None) => return Err(Error::UndefinedBehavior),
-        Err(err) => return Err(err),
-    };
-    debug!("verify_vc_third_party_access passed");
+//     //verify third party access
+//     let third_party_flag = match verify_vc_third_party_access(new_vc_status) {
+//         Ok(Some(flag)) => flag,
+//         Ok(None) => return Err(Error::UndefinedBehavior),
+//         Err(err) => return Err(err),
+//     };
+//     debug!("verify_vc_third_party_access passed");
 
-    // verify integrity of ledger channel state
-    if third_party_flag {
-        verify_lc_channel_state_progression_in_vc_dispute_start_in_case_of_third_party(
-            old_lc_status,
-            new_lc_status,
-            new_vc_status,
-        )?;
-    } else {
-        verify_channel_state_progression(old_lc_status, &new_lc_status.state())?;
-    }
-    Ok(())
-}
+//     // verify integrity of ledger channel state
+//     if third_party_flag {
+//         verify_lc_channel_state_progression_in_vc_dispute_start_in_case_of_third_party(
+//             old_lc_status,
+//             new_lc_status,
+//             new_vc_status,
+//         )?;
+//     } else {
+//         verify_channel_state_progression(old_lc_status, &new_lc_status.state())?;
+//     }
+//     Ok(())
+// }
 
 // check C_IB's integrity in case Alice posted a VC Dispute Start Tx
-pub fn verify_lc_channel_state_progression_in_vc_dispute_start_in_case_of_third_party(
-    old_lc_status: &ChannelStatus,
-    new_lc_status: &ChannelStatus,
-    new_vc_status: &VirtualChannelStatus,
-) -> Result<(), Error> {
-    verify_equal_channel_id(&old_lc_status.state(), &new_lc_status.state())?;
-    verify_equal_sum_of_balances(
-        &old_lc_status.state().balances(),
-        &new_lc_status.state().balances(),
-    )?;
-    verify_state_not_finalized(&old_lc_status.state())?;
-    verify_state_finalized(&new_lc_status.state())?;
-    // since this the registerer of this Tx is a third party to this channel cell, it cannot change its lc state.
-    // However it can add a vc state to indicate a dispute for vc was registered
-    // Nevertheless we still verify that the ledger channel has enough funds to cover vc channel's balances, even if the funds were not locked
-    verify_vc_unregistered_locked_funds(
-        &new_lc_status.state().balances(),
-        &new_vc_status.vcstate().balances(),
-    );
-    if old_lc_status.state().version().unpack() != new_lc_status.state().version().unpack() {
-        return Err(Error::ThirdPartyCannotChangeLedgerChannelStateInVCDisputeStart);
-    }
-    Ok(())
-}
+// pub fn verify_lc_channel_state_progression_in_vc_dispute_start_in_case_of_third_party(
+//     old_lc_status: &ChannelStatus,
+//     new_lc_status: &ChannelStatus,
+//     new_vc_status: &VirtualChannelStatus,
+// ) -> Result<(), Error> {
+//     verify_equal_channel_id(&old_lc_status.state(), &new_lc_status.state())?;
+//     verify_equal_sum_of_balances(
+//         &old_lc_status.state().balances(),
+//         &new_lc_status.state().balances(),
+//     )?;
+//     verify_state_not_finalized(&old_lc_status.state())?;
+//     verify_state_finalized(&new_lc_status.state())?;
+//     // since this the registerer of this Tx is a third party to this channel cell, it cannot change its lc state.
+//     // However it can add a vc state to indicate a dispute for vc was registered
+//     // Nevertheless we still verify that the ledger channel has enough funds to cover vc channel's balances, even if the funds were not locked
+//     verify_vc_unregistered_locked_funds(
+//         &new_lc_status.state().balances(),
+//         &new_vc_status.vcstate().balances(),
+//     );
+//     if old_lc_status.state().version().unpack() != new_lc_status.state().version().unpack() {
+//         return Err(Error::ThirdPartyCannotChangeLedgerChannelStateInVCDisputeStart);
+//     }
+//     Ok(())
+// }
 
 pub fn verify_vc_dispute_progress(
     old_lc_status: &ChannelStatus,
@@ -1160,7 +1474,7 @@ pub fn verify_vc_dispute_progress(
         verify_normal_dispute(old_lc_status, new_lc_status, channel_constants, dispute);
         debug!("lc state was changed. Lc state progression verified");
     }
-    // verify that funds locked in both the parent output cells, is the balance of vc state
+    // verify that total funds locked in the parent output cell, is equal to the sum of the balances of new vc_state
     verify_vc_locked_funds(new_lc_status, new_vc_status)?;
     debug!("verify_vc_locked_funds passed");
 
@@ -1317,142 +1631,143 @@ pub fn verify_vc_third_party_access(
     }
 }
 
-pub fn get_dispute_mode(
-    old_vc_status: &VirtualChannelStatus,
-    new_vc_status: &VirtualChannelStatus,
-) -> Result<DisputeMode, Error> {
-    if !old_vc_status.lcstatus().disputed().to_bool()
-        && !new_vc_status.lcstatus().disputed().to_bool()
-    {
-        // TODO: think if we need another condition for DisputeMode::Normal
-        return Ok(DisputeMode::Normal);
-    }
+// pub fn get_dispute_mode(
+//     old_vc_status: &VirtualChannelStatus,
+//     new_vc_status: &VirtualChannelStatus,
+// ) -> Result<DisputeMode, Error> {
+//     if !old_vc_status.lcstatus().disputed().to_bool()
+//         && !new_vc_status.lcstatus().disputed().to_bool()
+//     {
+//         // TODO: think if we need another condition for DisputeMode::Normal
+//         return Ok(DisputeMode::Normal);
+//     }
 
-    if !old_vc_status.disputed().to_bool() && new_vc_status.disputed().to_bool() {
-        let old_state = old_vc_status.lcstatus();
-        let new_state = new_vc_status.lcstatus();
+//     if !old_vc_status.disputed().to_bool() && new_vc_status.disputed().to_bool() {
+//         let old_state = old_vc_status.lcstatus();
+//         let new_state = new_vc_status.lcstatus();
 
-        return Ok(DisputeMode::VCDisputeStart {
-            old_lc_status: old_state,
-            new_lc_status: new_state,
-            new_vc_status: new_vc_status.clone(),
-        });
-    }
+//         return Ok(DisputeMode::VCDisputeStart {
+//             old_lc_status: old_state,
+//             new_lc_status: new_state,
+//             new_vc_status: new_vc_status.clone(),
+//         });
+//     }
 
-    if old_vc_status.disputed().to_bool() && new_vc_status.disputed().to_bool() {
-        return Ok(DisputeMode::VCDisputeProgress {
-            old_lc_status: old_vc_status.lcstatus(),
-            old_vc_status: old_vc_status.clone(),
-            new_lc_status: new_vc_status.lcstatus(),
-            new_vc_status: new_vc_status.clone(),
-        });
-    }
-    Err(Error::InvalidDisputeMode)
-}
+//     if old_vc_status.disputed().to_bool() && new_vc_status.disputed().to_bool() {
+//         return Ok(DisputeMode::VCDisputeProgress {
+//             old_lc_status: old_vc_status.lcstatus(),
+//             old_vc_status: old_vc_status.clone(),
+//             new_lc_status: new_vc_status.lcstatus(),
+//             new_vc_status: new_vc_status.clone(),
+//         });
+//     }
+//     Err(Error::InvalidDisputeMode)
+// }
 
-pub fn verify_parents_of_vc_exist(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
-    match get_parents_of_vc(vc_status) {
-        Ok(_) => Ok(()),
-        Err(err) => Err(err),
-    }
-}
+// pub fn verify_parents_of_vc_exist(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
+//     match get_parents_of_vc(vc_status) {
+//         Ok(_) => Ok(()),
+//         Err(err) => Err(err),
+//     }
+// }
 
-pub fn verify_status_not_disputed(status: &VirtualChannelStatus) -> Result<(), Error> {
-    if status.disputed().to_bool() {
-        return Err(Error::StatusDisputed);
-    }
-    Ok(())
-}
+// pub fn verify_status_not_disputed(status: &VirtualChannelStatus) -> Result<(), Error> {
+//     if status.disputed().to_bool() {
+//         return Err(Error::StatusDisputed);
+//     }
+//     Ok(())
+// }
 
-pub fn get_parents_of_vc(
-    vc_status: &VirtualChannelStatus,
-) -> Result<
-    (
-        [Option<ChannelStatus>; 2],
-        [Option<VirtualChannelStatus>; 2],
-    ),
-    Error,
-> {
-    if vc_status.parents().len() != 2 {
-        return Err(Error::InvalidParentsCountForVC);
-    }
-    let parent1_hash = match vc_status.parents().get(0) {
-        Some(parent) => parent.pcts_hash().unpack(),
-        None => return Err(Error::ParentPCTSHashNotFound),
-    };
 
-    let parent2_hash = match vc_status.parents().get(1) {
-        Some(parent) => parent.pcts_hash().unpack(),
-        None => return Err(Error::ParentPCTSHashNotFound),
-    };
+// pub fn  get_parents_of_vc(
+//     vc_status: &VirtualChannelStatus,
+// ) -> Result<
+//     (
+//         [Option<ChannelStatus>; 2],
+//         [Option<VirtualChannelStatus>; 2],
+//     ),
+//     Error,
+// > {
+//     if vc_status.parents().len() != 2 {
+//         return Err(Error::InvalidParentsCountForVC);
+//     }
+//     let parent1_hash = match vc_status.parents().get(0) {
+//         Some(parent) => parent.pcts_hash().unpack(),
+//         None => return Err(Error::ParentPCTSHashNotFound),
+//     };
 
-    let parents_hashes: [[u8; 32]; 2] = [parent1_hash, parent2_hash];
+//     let parent2_hash = match vc_status.parents().get(1) {
+//         Some(parent) => parent.pcts_hash().unpack(),
+//         None => return Err(Error::ParentPCTSHashNotFound),
+//     };
 
-    let mut parents_output_status: [Option<ChannelStatus>; 2] = [None, None];
-    let mut output_vc_statuses: [Option<VirtualChannelStatus>; 2] = [None, None];
-    let mut index = 0;
-    //iterate through parents pcts hashes
-    // find the input parent cell and check that it contains only channel status
-    // find the output parent cell and check that it contains a channel status and vc status
-    for parent_hash in &parents_hashes {
-        let parent_input_idx = match find_cell_by_type_hash(parent_hash, Source::Input) {
-            Ok(Some(idx)) => idx,
-            Ok(None) => return Err(Error::InputCellForGivenParticipantNotFound),
-            Err(err) => return Err(err.into()),
-        };
+//     let parents_hashes: [[u8; 32]; 2] = [parent1_hash, parent2_hash];
 
-        let parent_output_idx = match find_cell_by_type_hash(parent_hash, Source::Output) {
-            Ok(Some(idx)) => idx,
-            Ok(None) => return Err(Error::OutputCellForGivenParticipantNotFound),
-            Err(err) => return Err(err.into()),
-        };
+//     let mut parents_output_status: [Option<ChannelStatus>; 2] = [None, None];
+//     let mut output_vc_statuses: [Option<VirtualChannelStatus>; 2] = [None, None];
+//     let mut index = 0;
+//     //iterate through parents pcts hashes
+//     // find the input parent cell and check that it contains only channel status
+//     // find the output parent cell and check that it contains a channel status and vc status
+//     for parent_hash in &parents_hashes {
+//         let parent_input_idx = match find_cell_by_type_hash(parent_hash, Source::Input) {
+//             Ok(Some(idx)) => idx,
+//             Ok(None) => return Err(Error::InputCellForGivenParticipantNotFound),
+//             Err(err) => return Err(err.into()),
+//         };
 
-        let parent_input_data = match load_cell_data(parent_input_idx, Source::Input) {
-            Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
-            Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
-        };
-        //check that the input parent cell contains only channel status
-        verify_only_channel_status(&parent_input_data)?;
+//         let parent_output_idx = match find_cell_by_type_hash(parent_hash, Source::Output) {
+//             Ok(Some(idx)) => idx,
+//             Ok(None) => return Err(Error::OutputCellForGivenParticipantNotFound),
+//             Err(err) => return Err(err.into()),
+//         };
 
-        let output_data = match load_cell_data(parent_output_idx, Source::Output) {
-            Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
-            Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
-        };
-        if output_data.item_count() == 2 {
-            return Err(Error::InvalidOutputTxForVCDisputeStart);
-        }
-        let mut output_lc_status: Option<ChannelStatus> = None;
-        let mut output_vc_status: Option<VirtualChannelStatus> = None;
-        for i in 0..output_data.item_count() {
-            let output_enum = match output_data.get(i) {
-                Some(output) => output.to_enum(),
-                None => return Err(Error::InvalidOutputTxForVCDisputeStart),
-            };
-            match output_enum {
-                LedgerChannelOrVirtualChannelUnion::ChannelStatus(status) => {
-                    output_lc_status = Some(status)
-                }
-                LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(status) => {
-                    output_vc_status = Some(status)
-                }
-            }
-        }
+//         let parent_input_data = match load_cell_data(parent_input_idx, Source::Input) {
+//             Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
+//             Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+//         };
+//         //check that the input parent cell contains only channel status
+//         verify_only_channel_status(&parent_input_data)?;
 
-        if index < 2 {
-            parents_output_status[index] = output_lc_status;
-            output_vc_statuses[index] = output_vc_status;
-            index += 1;
-        }
-    }
-    Ok((parents_output_status, output_vc_statuses))
-}
+//         let output_data = match load_cell_data(parent_output_idx, Source::Output) {
+//             Ok(data) => ChannelCellData::from_slice(data.as_slice())?,
+//             Err(_) => return Err(Error::UnableToLoadAnyChannelStatus),
+//         };
+//         if output_data.item_count() == 2 {
+//             return Err(Error::InvalidOutputTxForVCDisputeStart);
+//         }
+//         let mut output_lc_status: Option<ChannelStatus> = None;
+//         let mut output_vc_status: Option<VirtualChannelStatus> = None;
+//         for i in 0..output_data.item_count() {
+//             let output_enum = match output_data.get(i) {
+//                 Some(output) => output.to_enum(),
+//                 None => return Err(Error::InvalidOutputTxForVCDisputeStart),
+//             };
+//             match output_enum {
+//                 LedgerChannelOrVirtualChannelUnion::ChannelStatus(status) => {
+//                     output_lc_status = Some(status)
+//                 }
+//                 LedgerChannelOrVirtualChannelUnion::VirtualChannelStatus(status) => {
+//                     output_vc_status = Some(status)
+//                 }
+//             }
+//         }
 
-pub fn verify_only_channel_status(cell_data: &ChannelCellData) -> Result<(), Error> {
-    match get_channel_status(cell_data) {
-        Ok(_) => Ok(()),
-        Err(_) => Err(Error::OnlyChannelStatusExpectedButThatIsNotTheCase),
-    }
-}
+//         if index < 2 {
+//             parents_output_status[index] = output_lc_status;
+//             output_vc_statuses[index] = output_vc_status;
+//             index += 1;
+//         }
+//     }
+//     Ok((parents_output_status, output_vc_statuses))
+// }
+
+// pub fn verify_only_channel_status(cell_data: &ChannelCellData) -> Result<(), Error> {
+//     match get_channel_status(cell_data) {
+//         Ok(_) => Ok(()),
+//         Err(_) => Err(Error::OnlyChannelStatusExpectedButThatIsNotTheCase),
+//     }
+// }
 
 pub fn verify_vc_unregistered_locked_funds(
     new_lc_balance: &Balances,
@@ -1465,23 +1780,23 @@ pub fn verify_vc_unregistered_locked_funds(
     }
 }
 
-pub fn get_channel_status(cell_data: &ChannelCellData) -> Result<ChannelStatus, Error> {
-    if cell_data.as_reader().item_count() == 0 {
-        return Err(Error::ChannelCellDataIsEmpty);
-    }
-    let item = match cell_data.as_reader().get(0) {
-        Some(item) => item,
-        None => return Err(Error::UnableToLoadAnyChannelStatus),
-    };
-    match item.to_enum() {
-        LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(channel_status) => {
-            return Ok(channel_status.to_entity());
-        }
-        LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(_) => {
-            return Err(Error::VirtualChannelStatusInChannelCellWhereChannelStatusExpected);
-        }
-    }
-}
+// pub fn get_channel_status(cell_data: &ChannelCellData) -> Result<ChannelStatus, Error> {
+//     if cell_data.as_reader().item_count() == 0 {
+//         return Err(Error::ChannelCellDataIsEmpty);
+//     }
+//     let item = match cell_data.as_reader().get(0) {
+//         Some(item) => item,
+//         None => return Err(Error::UnableToLoadAnyChannelStatus),
+//     };
+//     match item.to_enum() {
+//         LedgerChannelOrVirtualChannelUnionReader::ChannelStatus(channel_status) => {
+//             return Ok(channel_status.to_entity());
+//         }
+//         LedgerChannelOrVirtualChannelUnionReader::VirtualChannelStatus(_) => {
+//             return Err(Error::VirtualChannelStatusInChannelCellWhereChannelStatusExpected);
+//         }
+//     }
+// }
 
 pub fn find_cell_by_type_hash(
     pcts_hash: &[u8; 32],
@@ -1523,30 +1838,30 @@ pub fn find_other_party(
     }
 }
 
-pub fn verify_vc_integrity(
-    vc_status: &VirtualChannelStatus,
-    dispute: &Dispute,
-) -> Result<(), Error> {
-    let (_, output2) = get_parents_of_vc(vc_status)?;
+// pub fn verify_vc_integrity(
+//     vc_status: &VirtualChannelStatus,
+//     dispute: &Dispute,
+// ) -> Result<(), Error> {
+//     let (_, output2) = get_parents_of_vc(vc_status)?;
 
-    // Convert Option to Result for error handling
-    let vc_status1 = output2[0].as_ref().unwrap();
-    let vc_status2 = output2[1].as_ref().unwrap();
+//     // Convert Option to Result for error handling
+//     let vc_status1 = output2[0].as_ref().unwrap();
+//     let vc_status2 = output2[1].as_ref().unwrap();
 
-    // both vc states in the output cells must be the same
-    if vc_status1.as_slice() != vc_status2.as_slice() {
-        return Err(Error::ParentsOfVCInOutputHaveDifferentVCStatus);
-    }
-    verify_valid_state_sigs(
-        &dispute.vc_sigs().sig_a().as_bytes(),
-        &dispute.vc_sigs().sig_b().as_bytes(),
-        &vc_status.vcstate(),
-        &vc_status.params().party_a().pub_key(),
-        &vc_status.params().party_b().pub_key(),
-    );
+//     // both vc states in the output cells must be the same
+//     if vc_status1.as_slice() != vc_status2.as_slice() {
+//         return Err(Error::ParentsOfVCInOutputHaveDifferentVCStatus);
+//     }
+//     verify_valid_state_sigs(
+//         &dispute.vc_sigs().sig_a().as_bytes(),
+//         &dispute.vc_sigs().sig_b().as_bytes(),
+//         &vc_status.vcstate(),
+//         &vc_status.params().party_a().pub_key(),
+//         &vc_status.params().party_b().pub_key(),
+//     );
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 pub fn verify_vc_locked_funds(
     lc_status: &ChannelStatus,
@@ -1610,24 +1925,24 @@ pub fn get_vc_sudt_amount(
     return Ok((sudt_idx, u128::from_le_bytes(buf)));
 }
 
-pub fn build_vchannel_status(pcts_status: &ChannelStatus) -> VirtualChannelStatus {
-    let locked_bals = pcts_status.state().balances().locked().get_unchecked(0);
+// pub fn build_vchannel_status(pcts_status: &ChannelStatus) -> VirtualChannelStatus {
+//     let locked_bals = pcts_status.state().balances().locked().get_unchecked(0);
 
-    let bals = Balances::new_builder()
-        .ckbytes(locked_bals.balances().ckbytes().clone())
-        .sudts(locked_bals.balances().sudts().clone())
-        .build();
+//     let bals = Balances::new_builder()
+//         .ckbytes(locked_bals.balances().ckbytes().clone())
+//         .sudts(locked_bals.balances().sudts().clone())
+//         .build();
 
-    let vc_chanstate = ChannelState::new_builder()
-        .version(0u64.pack())
-        .balances(bals)
-        .is_final(Bool::from_bool(false))
-        .build();
+//     let vc_chanstate = ChannelState::new_builder()
+//         .version(0u64.pack())
+//         .balances(bals)
+//         .is_final(Bool::from_bool(false))
+//         .build();
 
-    VirtualChannelStatus::new_builder()
-        .lcstatus(pcts_status.clone())
-        .vcstate(vc_chanstate)
-        .disputed(Bool::from_bool(true))
-        .funded(Bool::from_bool(true))
-        .build()
-}
+//     VirtualChannelStatus::new_builder()
+//         .lcstatus(pcts_status.clone())
+//         .vcstate(vc_chanstate)
+//         .disputed(Bool::from_bool(true))
+//         .funded(Bool::from_bool(true))
+//         .build()
+// }
