@@ -6170,7 +6170,6 @@ impl ::core::fmt::Display for Dispute {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "sig_a", self.sig_a())?;
         write!(f, ", {}: {}", "sig_b", self.sig_b())?;
-        write!(f, ", {}: {}", "vc_sigs", self.vc_sigs())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -6181,14 +6180,13 @@ impl ::core::fmt::Display for Dispute {
 impl ::core::default::Default for Dispute {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            44, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0,
-            0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         Dispute::new_unchecked(v.into())
     }
 }
 impl Dispute {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6214,17 +6212,11 @@ impl Dispute {
     pub fn sig_b(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        Bytes::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn vc_sigs(&self) -> VCDispute {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            VCDispute::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Bytes::new_unchecked(self.0.slice(start..end))
         } else {
-            VCDispute::new_unchecked(self.0.slice(start..))
+            Bytes::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> DisputeReader<'r> {
@@ -6253,10 +6245,7 @@ impl molecule::prelude::Entity for Dispute {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .sig_a(self.sig_a())
-            .sig_b(self.sig_b())
-            .vc_sigs(self.vc_sigs())
+        Self::new_builder().sig_a(self.sig_a()).sig_b(self.sig_b())
     }
 }
 #[derive(Clone, Copy)]
@@ -6280,7 +6269,6 @@ impl<'r> ::core::fmt::Display for DisputeReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "sig_a", self.sig_a())?;
         write!(f, ", {}: {}", "sig_b", self.sig_b())?;
-        write!(f, ", {}: {}", "vc_sigs", self.vc_sigs())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -6289,7 +6277,7 @@ impl<'r> ::core::fmt::Display for DisputeReader<'r> {
     }
 }
 impl<'r> DisputeReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6315,17 +6303,11 @@ impl<'r> DisputeReader<'r> {
     pub fn sig_b(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        BytesReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn vc_sigs(&self) -> VCDisputeReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            VCDisputeReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            BytesReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            VCDisputeReader::new_unchecked(&self.as_slice()[start..])
+            BytesReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -6380,7 +6362,6 @@ impl<'r> molecule::prelude::Reader<'r> for DisputeReader<'r> {
         }
         BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        VCDisputeReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -6388,20 +6369,15 @@ impl<'r> molecule::prelude::Reader<'r> for DisputeReader<'r> {
 pub struct DisputeBuilder {
     pub(crate) sig_a: Bytes,
     pub(crate) sig_b: Bytes,
-    pub(crate) vc_sigs: VCDispute,
 }
 impl DisputeBuilder {
-    pub const FIELD_COUNT: usize = 3;
+    pub const FIELD_COUNT: usize = 2;
     pub fn sig_a(mut self, v: Bytes) -> Self {
         self.sig_a = v;
         self
     }
     pub fn sig_b(mut self, v: Bytes) -> Self {
         self.sig_b = v;
-        self
-    }
-    pub fn vc_sigs(mut self, v: VCDispute) -> Self {
-        self.vc_sigs = v;
         self
     }
 }
@@ -6412,7 +6388,6 @@ impl molecule::prelude::Builder for DisputeBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.sig_a.as_slice().len()
             + self.sig_b.as_slice().len()
-            + self.vc_sigs.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -6421,15 +6396,12 @@ impl molecule::prelude::Builder for DisputeBuilder {
         total_size += self.sig_a.as_slice().len();
         offsets.push(total_size);
         total_size += self.sig_b.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.vc_sigs.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.sig_a.as_slice())?;
         writer.write_all(self.sig_b.as_slice())?;
-        writer.write_all(self.vc_sigs.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -7622,6 +7594,7 @@ impl ::core::fmt::Display for ChannelStatus {
         write!(f, "{}: {}", "state", self.state())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
+        write!(f, ", {}: {}", "vc_disputed", self.vc_disputed())?;
         write!(f, ", {}: {}", "vcts_hash", self.vcts_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -7633,18 +7606,19 @@ impl ::core::fmt::Display for ChannelStatus {
 impl ::core::default::Default for ChannelStatus {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            167, 0, 0, 0, 20, 0, 0, 0, 125, 0, 0, 0, 130, 0, 0, 0, 135, 0, 0, 0, 105, 0, 0, 0, 20,
-            0, 0, 0, 52, 0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 16, 0, 0, 0, 32,
-            0, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0,
+            176, 0, 0, 0, 24, 0, 0, 0, 129, 0, 0, 0, 134, 0, 0, 0, 139, 0, 0, 0, 144, 0, 0, 0, 105,
+            0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 92, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0,
+            16, 0, 0, 0, 32, 0, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         ChannelStatus::new_unchecked(v.into())
     }
 }
 impl ChannelStatus {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -7679,11 +7653,17 @@ impl ChannelStatus {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         Bool::new_unchecked(self.0.slice(start..end))
     }
-    pub fn vcts_hash(&self) -> Byte32 {
+    pub fn vc_disputed(&self) -> Bool {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        Bool::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn vcts_hash(&self) -> Byte32 {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
+            let end = molecule::unpack_number(&slice[24..]) as usize;
             Byte32::new_unchecked(self.0.slice(start..end))
         } else {
             Byte32::new_unchecked(self.0.slice(start..))
@@ -7719,6 +7699,7 @@ impl molecule::prelude::Entity for ChannelStatus {
             .state(self.state())
             .funded(self.funded())
             .disputed(self.disputed())
+            .vc_disputed(self.vc_disputed())
             .vcts_hash(self.vcts_hash())
     }
 }
@@ -7744,6 +7725,7 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
         write!(f, "{}: {}", "state", self.state())?;
         write!(f, ", {}: {}", "funded", self.funded())?;
         write!(f, ", {}: {}", "disputed", self.disputed())?;
+        write!(f, ", {}: {}", "vc_disputed", self.vc_disputed())?;
         write!(f, ", {}: {}", "vcts_hash", self.vcts_hash())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -7753,7 +7735,7 @@ impl<'r> ::core::fmt::Display for ChannelStatusReader<'r> {
     }
 }
 impl<'r> ChannelStatusReader<'r> {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 5;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -7788,11 +7770,17 @@ impl<'r> ChannelStatusReader<'r> {
         let end = molecule::unpack_number(&slice[16..]) as usize;
         BoolReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn vcts_hash(&self) -> Byte32Reader<'r> {
+    pub fn vc_disputed(&self) -> BoolReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[16..]) as usize;
+        let end = molecule::unpack_number(&slice[20..]) as usize;
+        BoolReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn vcts_hash(&self) -> Byte32Reader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[20..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
+            let end = molecule::unpack_number(&slice[24..]) as usize;
             Byte32Reader::new_unchecked(&self.as_slice()[start..end])
         } else {
             Byte32Reader::new_unchecked(&self.as_slice()[start..])
@@ -7851,7 +7839,8 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelStatusReader<'r> {
         ChannelStateReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BoolReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         BoolReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        BoolReader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
+        Byte32Reader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         Ok(())
     }
 }
@@ -7860,10 +7849,11 @@ pub struct ChannelStatusBuilder {
     pub(crate) state: ChannelState,
     pub(crate) funded: Bool,
     pub(crate) disputed: Bool,
+    pub(crate) vc_disputed: Bool,
     pub(crate) vcts_hash: Byte32,
 }
 impl ChannelStatusBuilder {
-    pub const FIELD_COUNT: usize = 4;
+    pub const FIELD_COUNT: usize = 5;
     pub fn state(mut self, v: ChannelState) -> Self {
         self.state = v;
         self
@@ -7874,6 +7864,10 @@ impl ChannelStatusBuilder {
     }
     pub fn disputed(mut self, v: Bool) -> Self {
         self.disputed = v;
+        self
+    }
+    pub fn vc_disputed(mut self, v: Bool) -> Self {
+        self.vc_disputed = v;
         self
     }
     pub fn vcts_hash(mut self, v: Byte32) -> Self {
@@ -7889,6 +7883,7 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
             + self.state.as_slice().len()
             + self.funded.as_slice().len()
             + self.disputed.as_slice().len()
+            + self.vc_disputed.as_slice().len()
             + self.vcts_hash.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
@@ -7901,6 +7896,8 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         offsets.push(total_size);
         total_size += self.disputed.as_slice().len();
         offsets.push(total_size);
+        total_size += self.vc_disputed.as_slice().len();
+        offsets.push(total_size);
         total_size += self.vcts_hash.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
@@ -7909,6 +7906,7 @@ impl molecule::prelude::Builder for ChannelStatusBuilder {
         writer.write_all(self.state.as_slice())?;
         writer.write_all(self.funded.as_slice())?;
         writer.write_all(self.disputed.as_slice())?;
+        writer.write_all(self.vc_disputed.as_slice())?;
         writer.write_all(self.vcts_hash.as_slice())?;
         Ok(())
     }

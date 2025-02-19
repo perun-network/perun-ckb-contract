@@ -124,8 +124,7 @@ table VCDispute {
 
 table Dispute {
   sig_a: Bytes,
-  sig_b: Bytes,
-  vc_sigs: VCDispute, // probably doesn't have to be part of Dispute 
+  sig_b: Bytes, 
 }
 table Close {
   state: ChannelState,
@@ -133,7 +132,6 @@ table Close {
   sig_b: Bytes,
 }
 array ForceClose [byte; 1];
-
 
 union ChannelWitness {
   Fund,
@@ -144,7 +142,6 @@ union ChannelWitness {
 }
 
 table ChannelState {
-  // 
   channel_id: Byte32,
   balances: Balances,
   version: Uint64,
@@ -155,7 +152,8 @@ table ChannelStatus {
   state: ChannelState,
   funded: Bool,
   disputed: Bool,
-  vcts_hash: Byte32, // if nil, then it's a nomral dispute, else vc dispute
+  vc_disputed: Bool,
+  vcts_hash: Byte32, 
 }
 
 struct ChannelToken {
@@ -173,18 +171,7 @@ table ParentData {
 
 
 table VirtualChannelStatus {
-  // lcstatus: ChannelStatus,
   vcstate: ChannelState,
-  // funded: Bool,
-  // disputed: Bool,
-  // params: ChannelParameters,
   parents:  ParentsVec,
   FirstForceClose: Bool,
 }
-
-// union LedgerChannelOrVirtualChannel {
-//     ChannelStatus,  //ledger channel
-//     VirtualChannelStatus, //virtual channel
-// }
-
-// vector channelCellData <LedgerChannelOrVirtualChannel>;

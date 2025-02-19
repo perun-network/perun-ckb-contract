@@ -17,7 +17,7 @@ use ckb_std::{
     debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_header,
-        load_script, load_script_hash, load_transaction, load_witness_args,
+        load_script, load_script_hash, load_transaction, load_witness_args,load_cell_type_hash,
     },
     syscalls::{self, SysError},
 };
@@ -129,6 +129,24 @@ pub fn find_cell_by_lock_hash(
             Err(err) => return Err(err.into()),
         };
         if &lock_hash == party_a_unlock_hash || &lock_hash == party_b_unlock_script_hash {
+            return Ok(Some(i));
+        }
+    }
+    Ok(None)
+}
+
+pub fn find_cell_by_type_hash(
+    pcts_hash: &[u8; 32],
+    source: Source,
+) -> Result<Option<usize>, Error> {
+    for i in 0.. {
+        let type_hash = match load_cell_type_hash(i, source) {
+            Ok(Some(script)) => script,
+            Ok(None) => panic!("type script not found"),
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+        if &type_hash == pcts_hash {
             return Ok(Some(i));
         }
     }
