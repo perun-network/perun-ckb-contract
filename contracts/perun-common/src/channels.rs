@@ -1,8 +1,7 @@
 use crate::error::Error;
 use crate::helpers::blake2b256;
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken,
-    LockedBalances, SEC1EncodedPubKey, SubBalances, VirtualChannelStatus,
+    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken, LockedBalances, SEC1EncodedPubKey, SubBalances, VCChannelConstants, VirtualChannelStatus
 };
 
 extern crate alloc;
@@ -18,7 +17,7 @@ use ckb_std::{
     debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_header,
-        load_script, load_script_hash, load_transaction, load_witness_args,
+        load_script, load_script_hash, load_transaction, load_witness_args,load_cell_type_hash,
     },
     syscalls::{self, SysError},
 };
@@ -40,13 +39,30 @@ pub enum VChannelAction {
         new_vc_status: VirtualChannelStatus,
         old_lc_status: ChannelStatus,
         new_lc_status: ChannelStatus,
-    }, // no PCTS input, one PCTS output
+    }, // no VCTS input, one VCTS output
+    
+    // Merge indicates that two virtual channels are being merged into a single one
+    Merge {
+        input_vc_status1: VirtualChannelStatus,
+        input_vc_status2: VirtualChannelStatus,
+        merged_vc_status: VirtualChannelStatus, 
+    },
 
-    /// Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
-    /// recreated in the outputs with updated state. The possible redeemers associated with the Close action are
-    /// Close, Abort and ForceClose.
-    /// The channel type script assures that all funds are paid out to the correct parties upon closing.
-    Close { old_status: VirtualChannelStatus }, // one PCTS input, no PCTS output
+    Close1{
+        input_vc_status: VirtualChannelStatus,
+        output_vc_status: VirtualChannelStatus,
+    },
+
+    Close2{
+        input_lc_status: ChannelStatus,
+        input_vc_status: VirtualChannelStatus,
+    },
+
+    // Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
+    // recreated in the outputs with updated state. The possible redeemers associated with the Close action are
+    // Close, Abort and ForceClose.
+    // The channel type script assures that all funds are paid out to the correct parties upon closing.
+    //Close { old_status: VirtualChannelStatus }, // one PCTS input, no PCTS output
 }
 
 pub enum PChannelAction {
@@ -119,6 +135,24 @@ pub fn find_cell_by_lock_hash(
     Ok(None)
 }
 
+pub fn find_cell_by_type_hash(
+    pcts_hash: &[u8; 32],
+    source: Source,
+) -> Result<Option<usize>, Error> {
+    for i in 0.. {
+        let type_hash = match load_cell_type_hash(i, source) {
+            Ok(Some(script)) => script,
+            Ok(None) => panic!("type script not found"),
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+        if &type_hash == pcts_hash {
+            return Ok(Some(i));
+        }
+    }
+    Ok(None)
+}
+
 pub fn verify_channel_id_integrity(
     channel_id: &Byte32,
     params: &ChannelParameters,
@@ -164,4 +198,26 @@ pub fn find_closest_current_time() -> u64 {
         }
     }
     latest_time
+}
+
+// verify_max_one_channel verifies that there is at most one channel in the group input and group output respectively.
+pub fn verify_max_one_channel() -> Result<(), Error> {
+    if count_cells(Source::GroupInput)? > 1 || count_cells(Source::GroupOutput)? > 1 {
+        return Err(Error::MoreThanOneChannel);
+    } else {
+        return Ok(());
+    }
+}
+
+pub fn count_cells(source: Source) -> Result<usize, Error> {
+    let mut null_buf: [u8; 0] = [];
+    for i in 0.. {
+        match syscalls::load_cell(&mut null_buf, 0, i, source) {
+            Ok(_) => continue,
+            Err(SysError::LengthNotEnough(_)) => continue,
+            Err(SysError::IndexOutOfBound) => return Ok(i),
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(0)
 }

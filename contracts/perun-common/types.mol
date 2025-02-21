@@ -108,6 +108,11 @@ table ChannelConstants {
   thread_token: ChannelToken,
 }
 
+table VCChannelConstants{
+  params: ChannelParameters,
+  vcls_code_hash: Byte32,
+  vcls_hash_type: byte,
+}
 array Fund [byte; 1];
 
 array Abort [byte; 1];
@@ -119,8 +124,7 @@ table VCDispute {
 
 table Dispute {
   sig_a: Bytes,
-  sig_b: Bytes,
-  vc_sigs: VCDispute,
+  sig_b: Bytes, 
 }
 table Close {
   state: ChannelState,
@@ -128,7 +132,6 @@ table Close {
   sig_b: Bytes,
 }
 array ForceClose [byte; 1];
-
 
 union ChannelWitness {
   Fund,
@@ -139,7 +142,6 @@ union ChannelWitness {
 }
 
 table ChannelState {
-  // 
   channel_id: Byte32,
   balances: Balances,
   version: Uint64,
@@ -150,6 +152,8 @@ table ChannelStatus {
   state: ChannelState,
   funded: Bool,
   disputed: Bool,
+  vc_disputed: Bool,
+  vcts_hash: Byte32, 
 }
 
 struct ChannelToken {
@@ -165,20 +169,9 @@ table ParentData {
   idx_map: index_map,
 }
 
-vector LcStatusVec<ChannelStatus>;
 
 table VirtualChannelStatus {
-  lcstatus: ChannelStatus, //ChannelStatus,
   vcstate: ChannelState,
-  funded: Bool,
-  disputed: Bool,
-  params: ChannelParameters,
   parents:  ParentsVec,
+  FirstForceClose: Bool,
 }
-
-union LedgerChannelOrVirtualChannel {
-    ChannelStatus,  //ledger channel
-    VirtualChannelStatus, //virtual channel
-}
-
-vector channelCellData <LedgerChannelOrVirtualChannel>;
