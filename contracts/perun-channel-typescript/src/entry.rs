@@ -222,12 +222,13 @@ pub fn check_valid_progress(
         }
         ChannelWitnessUnion::Dispute(d) => {
             debug!("ChannelWitnessUnion::Dispute");
-            if new_status.vc_disputed().to_bool() {
-                check_normal_dispute(old_status, new_status, channel_constants, &d)?;
+            check_normal_dispute(old_status, new_status, channel_constants, &d)
+        }
+
+        ChannelWitnessUnion::VCDispute(vcd) =>{
+            debug!("ChannelWitnessUnion::VCDispute");
+                check_normal_dispute(old_status, new_status, channel_constants, &vcd.parent_state_sigs())?;
                 check_vc_dispute(old_status, new_status)
-            } else {
-                check_normal_dispute(old_status, new_status, channel_constants, &d)
-            }
         }
         // Close, ForceClose and Abort may not happen as channel progression (if there is a continuing channel output).
         ChannelWitnessUnion::Close(_) => Err(Error::ChannelCloseWithChannelOutput),
@@ -406,6 +407,7 @@ pub fn check_valid_close(
         }
         ChannelWitnessUnion::Fund(_) => Err(Error::ChannelFundWithoutChannelOutput),
         ChannelWitnessUnion::Dispute(_) => Err(Error::ChannelDisputeWithoutChannelOutput),
+        ChannelWitnessUnion::VCDispute(_) => Err(Error::VCDisputeWithoutChannelOutput),
     }
 }
 

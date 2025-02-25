@@ -287,12 +287,6 @@ impl SubBalances {
     /// Compares the sum of balances for each asset in SubBalances to the same in Balances(locked funds)
     /// Returns true if the sum of balances for each asset in SubBalances is equal to the sum of balances for each asset in Balances
     /// Returns false otherwise
-    ///
-    /// # Arguments
-    ///     * `locked` - Balances
-    ///
-    /// # Returns
-    ///    * `Result<bool, Error>` - true if locked funds(Balances) are equal to Subbalnces, false otherwise
     pub fn equal_in_sum(&self, vc_balances: &Balances) -> Result<bool, Error> {
         let self_total_ckbytes = self.ckbytes().sum();
         let vc_ckbytes = vc_balances.ckbytes().sum();

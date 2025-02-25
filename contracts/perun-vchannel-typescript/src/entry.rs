@@ -155,7 +155,7 @@ pub fn check_valid_vc_start(
     debug!("verify_channel_id_integrity passed");
 
     //validate newly created vc state
-    verify_vc_sigs(&new_vc_status, &vc_channel_constants.params())?;
+    verify_vc_sigs_start(&new_vc_status, &vc_channel_constants.params())?;
     debug!("verify_vc_sigs passed");
 
     //verify that FirstForceCloseFlag is not set
@@ -189,7 +189,7 @@ pub fn check_valid_vc_progress(
     debug!("verify_non_decreasing_version_number_vc passed");
 
     if old_vc_status.vcstate().version().unpack() < new_vc_status.vcstate().version().unpack() {
-        verify_vc_sigs(new_vc_status, &vc_constants.params())?;
+        verify_vc_sigs_progress(new_vc_status, &vc_constants.params())?;
     }
 
     verify_equal_sum_of_balances(
@@ -341,7 +341,33 @@ pub fn verify_equal_channel_id_vc(
     Ok(())
 }
 
-pub fn verify_vc_sigs(
+pub fn verify_vc_sigs_start(
+    new_vc_status: &VirtualChannelStatus,
+    vc_params: &ChannelParameters,
+) -> Result<(), Error> {
+    let parent_input_idx = match get_parent_of_vc(new_vc_status, Source::Input) {
+        Ok(idx) => idx,
+        Err(e) => return Err(e),
+    };
+    let witnes_args = load_witness_args(parent_input_idx, Source::Input)?;
+    let witness_bytes: Bytes = witnes_args
+        .input_type()
+        .to_opt()
+        .ok_or(Error::NoWitness)?
+        .unpack();
+    let vc_witness = VCDispute::from_slice(&witness_bytes)?;
+
+    verify_valid_state_sigs(
+        &vc_witness.sig_a().unpack(),
+        &vc_witness.sig_b().unpack(),
+        &new_vc_status.vcstate(),
+        &vc_params.party_a().pub_key(),
+        &vc_params.party_b().pub_key(),
+    )?;
+    Ok(())
+}
+
+pub fn verify_vc_sigs_progress(
     new_vc_status: &VirtualChannelStatus,
     vc_params: &ChannelParameters,
 ) -> Result<(), Error> {
@@ -567,7 +593,6 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
 
     //MODE: Either VC Dispute Progress or VC Close 1
     } else if input_cell_counter == 1 && output_cell_counter == 1 {
-        //TODO: What about a dispute, where the vc state is not being progressed but only the parent lc cell is
         let input_vc_status = match load_cell_data(0, Source::GroupInput) {
             Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
             // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),

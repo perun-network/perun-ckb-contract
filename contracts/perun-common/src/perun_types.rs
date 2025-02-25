@@ -5909,6 +5909,7 @@ impl ::core::fmt::Display for VCDispute {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "sig_a", self.sig_a())?;
         write!(f, ", {}: {}", "sig_b", self.sig_b())?;
+        write!(f, ", {}: {}", "parent_state_sigs", self.parent_state_sigs())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -5919,13 +5920,14 @@ impl ::core::fmt::Display for VCDispute {
 impl ::core::default::Default for VCDispute {
     fn default() -> Self {
         let v: Vec<u8> = vec![
-            20, 0, 0, 0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            44, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0,
+            0, 12, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         VCDispute::new_unchecked(v.into())
     }
 }
 impl VCDispute {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -5951,11 +5953,17 @@ impl VCDispute {
     pub fn sig_b(&self) -> Bytes {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        Bytes::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn parent_state_sigs(&self) -> Dispute {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            Bytes::new_unchecked(self.0.slice(start..end))
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            Dispute::new_unchecked(self.0.slice(start..end))
         } else {
-            Bytes::new_unchecked(self.0.slice(start..))
+            Dispute::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> VCDisputeReader<'r> {
@@ -5984,7 +5992,10 @@ impl molecule::prelude::Entity for VCDispute {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder().sig_a(self.sig_a()).sig_b(self.sig_b())
+        Self::new_builder()
+            .sig_a(self.sig_a())
+            .sig_b(self.sig_b())
+            .parent_state_sigs(self.parent_state_sigs())
     }
 }
 #[derive(Clone, Copy)]
@@ -6008,6 +6019,7 @@ impl<'r> ::core::fmt::Display for VCDisputeReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "sig_a", self.sig_a())?;
         write!(f, ", {}: {}", "sig_b", self.sig_b())?;
+        write!(f, ", {}: {}", "parent_state_sigs", self.parent_state_sigs())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -6016,7 +6028,7 @@ impl<'r> ::core::fmt::Display for VCDisputeReader<'r> {
     }
 }
 impl<'r> VCDisputeReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -6042,11 +6054,17 @@ impl<'r> VCDisputeReader<'r> {
     pub fn sig_b(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[8..]) as usize;
+        let end = molecule::unpack_number(&slice[12..]) as usize;
+        BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn parent_state_sigs(&self) -> DisputeReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
         if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[12..]) as usize;
-            BytesReader::new_unchecked(&self.as_slice()[start..end])
+            let end = molecule::unpack_number(&slice[16..]) as usize;
+            DisputeReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            BytesReader::new_unchecked(&self.as_slice()[start..])
+            DisputeReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -6101,6 +6119,7 @@ impl<'r> molecule::prelude::Reader<'r> for VCDisputeReader<'r> {
         }
         BytesReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         BytesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        DisputeReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
         Ok(())
     }
 }
@@ -6108,15 +6127,20 @@ impl<'r> molecule::prelude::Reader<'r> for VCDisputeReader<'r> {
 pub struct VCDisputeBuilder {
     pub(crate) sig_a: Bytes,
     pub(crate) sig_b: Bytes,
+    pub(crate) parent_state_sigs: Dispute,
 }
 impl VCDisputeBuilder {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn sig_a(mut self, v: Bytes) -> Self {
         self.sig_a = v;
         self
     }
     pub fn sig_b(mut self, v: Bytes) -> Self {
         self.sig_b = v;
+        self
+    }
+    pub fn parent_state_sigs(mut self, v: Dispute) -> Self {
+        self.parent_state_sigs = v;
         self
     }
 }
@@ -6127,6 +6151,7 @@ impl molecule::prelude::Builder for VCDisputeBuilder {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
             + self.sig_a.as_slice().len()
             + self.sig_b.as_slice().len()
+            + self.parent_state_sigs.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
@@ -6135,12 +6160,15 @@ impl molecule::prelude::Builder for VCDisputeBuilder {
         total_size += self.sig_a.as_slice().len();
         offsets.push(total_size);
         total_size += self.sig_b.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.parent_state_sigs.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
         writer.write_all(self.sig_a.as_slice())?;
         writer.write_all(self.sig_b.as_slice())?;
+        writer.write_all(self.parent_state_sigs.as_slice())?;
         Ok(())
     }
     fn build(&self) -> Self::Entity {
@@ -6899,7 +6927,7 @@ impl ::core::default::Default for ChannelWitness {
     }
 }
 impl ChannelWitness {
-    pub const ITEMS_COUNT: usize = 5;
+    pub const ITEMS_COUNT: usize = 6;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -6909,8 +6937,9 @@ impl ChannelWitness {
             0 => Fund::new_unchecked(inner).into(),
             1 => Abort::new_unchecked(inner).into(),
             2 => Dispute::new_unchecked(inner).into(),
-            3 => Close::new_unchecked(inner).into(),
-            4 => ForceClose::new_unchecked(inner).into(),
+            3 => VCDispute::new_unchecked(inner).into(),
+            4 => Close::new_unchecked(inner).into(),
+            5 => ForceClose::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -6967,7 +6996,7 @@ impl<'r> ::core::fmt::Display for ChannelWitnessReader<'r> {
     }
 }
 impl<'r> ChannelWitnessReader<'r> {
-    pub const ITEMS_COUNT: usize = 5;
+    pub const ITEMS_COUNT: usize = 6;
     pub fn item_id(&self) -> molecule::Number {
         molecule::unpack_number(self.as_slice())
     }
@@ -6977,8 +7006,9 @@ impl<'r> ChannelWitnessReader<'r> {
             0 => FundReader::new_unchecked(inner).into(),
             1 => AbortReader::new_unchecked(inner).into(),
             2 => DisputeReader::new_unchecked(inner).into(),
-            3 => CloseReader::new_unchecked(inner).into(),
-            4 => ForceCloseReader::new_unchecked(inner).into(),
+            3 => VCDisputeReader::new_unchecked(inner).into(),
+            4 => CloseReader::new_unchecked(inner).into(),
+            5 => ForceCloseReader::new_unchecked(inner).into(),
             _ => panic!("{}: invalid data", Self::NAME),
         }
     }
@@ -7007,8 +7037,9 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelWitnessReader<'r> {
             0 => FundReader::verify(inner_slice, compatible),
             1 => AbortReader::verify(inner_slice, compatible),
             2 => DisputeReader::verify(inner_slice, compatible),
-            3 => CloseReader::verify(inner_slice, compatible),
-            4 => ForceCloseReader::verify(inner_slice, compatible),
+            3 => VCDisputeReader::verify(inner_slice, compatible),
+            4 => CloseReader::verify(inner_slice, compatible),
+            5 => ForceCloseReader::verify(inner_slice, compatible),
             _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
         }?;
         Ok(())
@@ -7017,7 +7048,7 @@ impl<'r> molecule::prelude::Reader<'r> for ChannelWitnessReader<'r> {
 #[derive(Debug, Default)]
 pub struct ChannelWitnessBuilder(pub(crate) ChannelWitnessUnion);
 impl ChannelWitnessBuilder {
-    pub const ITEMS_COUNT: usize = 5;
+    pub const ITEMS_COUNT: usize = 6;
     pub fn set<I>(mut self, v: I) -> Self
     where
         I: ::core::convert::Into<ChannelWitnessUnion>,
@@ -7048,6 +7079,7 @@ pub enum ChannelWitnessUnion {
     Fund(Fund),
     Abort(Abort),
     Dispute(Dispute),
+    VCDispute(VCDispute),
     Close(Close),
     ForceClose(ForceClose),
 }
@@ -7056,6 +7088,7 @@ pub enum ChannelWitnessUnionReader<'r> {
     Fund(FundReader<'r>),
     Abort(AbortReader<'r>),
     Dispute(DisputeReader<'r>),
+    VCDispute(VCDisputeReader<'r>),
     Close(CloseReader<'r>),
     ForceClose(ForceCloseReader<'r>),
 }
@@ -7075,6 +7108,9 @@ impl ::core::fmt::Display for ChannelWitnessUnion {
             }
             ChannelWitnessUnion::Dispute(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, Dispute::NAME, item)
+            }
+            ChannelWitnessUnion::VCDispute(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, VCDispute::NAME, item)
             }
             ChannelWitnessUnion::Close(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, Close::NAME, item)
@@ -7097,6 +7133,9 @@ impl<'r> ::core::fmt::Display for ChannelWitnessUnionReader<'r> {
             ChannelWitnessUnionReader::Dispute(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, Dispute::NAME, item)
             }
+            ChannelWitnessUnionReader::VCDispute(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, VCDispute::NAME, item)
+            }
             ChannelWitnessUnionReader::Close(ref item) => {
                 write!(f, "{}::{}({})", Self::NAME, Close::NAME, item)
             }
@@ -7112,6 +7151,7 @@ impl ChannelWitnessUnion {
             ChannelWitnessUnion::Fund(ref item) => write!(f, "{}", item),
             ChannelWitnessUnion::Abort(ref item) => write!(f, "{}", item),
             ChannelWitnessUnion::Dispute(ref item) => write!(f, "{}", item),
+            ChannelWitnessUnion::VCDispute(ref item) => write!(f, "{}", item),
             ChannelWitnessUnion::Close(ref item) => write!(f, "{}", item),
             ChannelWitnessUnion::ForceClose(ref item) => write!(f, "{}", item),
         }
@@ -7123,6 +7163,7 @@ impl<'r> ChannelWitnessUnionReader<'r> {
             ChannelWitnessUnionReader::Fund(ref item) => write!(f, "{}", item),
             ChannelWitnessUnionReader::Abort(ref item) => write!(f, "{}", item),
             ChannelWitnessUnionReader::Dispute(ref item) => write!(f, "{}", item),
+            ChannelWitnessUnionReader::VCDispute(ref item) => write!(f, "{}", item),
             ChannelWitnessUnionReader::Close(ref item) => write!(f, "{}", item),
             ChannelWitnessUnionReader::ForceClose(ref item) => write!(f, "{}", item),
         }
@@ -7141,6 +7182,11 @@ impl ::core::convert::From<Abort> for ChannelWitnessUnion {
 impl ::core::convert::From<Dispute> for ChannelWitnessUnion {
     fn from(item: Dispute) -> Self {
         ChannelWitnessUnion::Dispute(item)
+    }
+}
+impl ::core::convert::From<VCDispute> for ChannelWitnessUnion {
+    fn from(item: VCDispute) -> Self {
+        ChannelWitnessUnion::VCDispute(item)
     }
 }
 impl ::core::convert::From<Close> for ChannelWitnessUnion {
@@ -7168,6 +7214,11 @@ impl<'r> ::core::convert::From<DisputeReader<'r>> for ChannelWitnessUnionReader<
         ChannelWitnessUnionReader::Dispute(item)
     }
 }
+impl<'r> ::core::convert::From<VCDisputeReader<'r>> for ChannelWitnessUnionReader<'r> {
+    fn from(item: VCDisputeReader<'r>) -> Self {
+        ChannelWitnessUnionReader::VCDispute(item)
+    }
+}
 impl<'r> ::core::convert::From<CloseReader<'r>> for ChannelWitnessUnionReader<'r> {
     fn from(item: CloseReader<'r>) -> Self {
         ChannelWitnessUnionReader::Close(item)
@@ -7185,6 +7236,7 @@ impl ChannelWitnessUnion {
             ChannelWitnessUnion::Fund(item) => item.as_bytes(),
             ChannelWitnessUnion::Abort(item) => item.as_bytes(),
             ChannelWitnessUnion::Dispute(item) => item.as_bytes(),
+            ChannelWitnessUnion::VCDispute(item) => item.as_bytes(),
             ChannelWitnessUnion::Close(item) => item.as_bytes(),
             ChannelWitnessUnion::ForceClose(item) => item.as_bytes(),
         }
@@ -7194,6 +7246,7 @@ impl ChannelWitnessUnion {
             ChannelWitnessUnion::Fund(item) => item.as_slice(),
             ChannelWitnessUnion::Abort(item) => item.as_slice(),
             ChannelWitnessUnion::Dispute(item) => item.as_slice(),
+            ChannelWitnessUnion::VCDispute(item) => item.as_slice(),
             ChannelWitnessUnion::Close(item) => item.as_slice(),
             ChannelWitnessUnion::ForceClose(item) => item.as_slice(),
         }
@@ -7203,8 +7256,9 @@ impl ChannelWitnessUnion {
             ChannelWitnessUnion::Fund(_) => 0,
             ChannelWitnessUnion::Abort(_) => 1,
             ChannelWitnessUnion::Dispute(_) => 2,
-            ChannelWitnessUnion::Close(_) => 3,
-            ChannelWitnessUnion::ForceClose(_) => 4,
+            ChannelWitnessUnion::VCDispute(_) => 3,
+            ChannelWitnessUnion::Close(_) => 4,
+            ChannelWitnessUnion::ForceClose(_) => 5,
         }
     }
     pub fn item_name(&self) -> &str {
@@ -7212,6 +7266,7 @@ impl ChannelWitnessUnion {
             ChannelWitnessUnion::Fund(_) => "Fund",
             ChannelWitnessUnion::Abort(_) => "Abort",
             ChannelWitnessUnion::Dispute(_) => "Dispute",
+            ChannelWitnessUnion::VCDispute(_) => "VCDispute",
             ChannelWitnessUnion::Close(_) => "Close",
             ChannelWitnessUnion::ForceClose(_) => "ForceClose",
         }
@@ -7221,6 +7276,7 @@ impl ChannelWitnessUnion {
             ChannelWitnessUnion::Fund(item) => item.as_reader().into(),
             ChannelWitnessUnion::Abort(item) => item.as_reader().into(),
             ChannelWitnessUnion::Dispute(item) => item.as_reader().into(),
+            ChannelWitnessUnion::VCDispute(item) => item.as_reader().into(),
             ChannelWitnessUnion::Close(item) => item.as_reader().into(),
             ChannelWitnessUnion::ForceClose(item) => item.as_reader().into(),
         }
@@ -7233,6 +7289,7 @@ impl<'r> ChannelWitnessUnionReader<'r> {
             ChannelWitnessUnionReader::Fund(item) => item.as_slice(),
             ChannelWitnessUnionReader::Abort(item) => item.as_slice(),
             ChannelWitnessUnionReader::Dispute(item) => item.as_slice(),
+            ChannelWitnessUnionReader::VCDispute(item) => item.as_slice(),
             ChannelWitnessUnionReader::Close(item) => item.as_slice(),
             ChannelWitnessUnionReader::ForceClose(item) => item.as_slice(),
         }
@@ -7242,8 +7299,9 @@ impl<'r> ChannelWitnessUnionReader<'r> {
             ChannelWitnessUnionReader::Fund(_) => 0,
             ChannelWitnessUnionReader::Abort(_) => 1,
             ChannelWitnessUnionReader::Dispute(_) => 2,
-            ChannelWitnessUnionReader::Close(_) => 3,
-            ChannelWitnessUnionReader::ForceClose(_) => 4,
+            ChannelWitnessUnionReader::VCDispute(_) => 3,
+            ChannelWitnessUnionReader::Close(_) => 4,
+            ChannelWitnessUnionReader::ForceClose(_) => 5,
         }
     }
     pub fn item_name(&self) -> &str {
@@ -7251,6 +7309,7 @@ impl<'r> ChannelWitnessUnionReader<'r> {
             ChannelWitnessUnionReader::Fund(_) => "Fund",
             ChannelWitnessUnionReader::Abort(_) => "Abort",
             ChannelWitnessUnionReader::Dispute(_) => "Dispute",
+            ChannelWitnessUnionReader::VCDispute(_) => "VCDispute",
             ChannelWitnessUnionReader::Close(_) => "Close",
             ChannelWitnessUnionReader::ForceClose(_) => "ForceClose",
         }
@@ -9207,7 +9266,7 @@ impl ::core::fmt::Display for VirtualChannelStatus {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "vcstate", self.vcstate())?;
         write!(f, ", {}: {}", "parents", self.parents())?;
-        write!(f, ", {}: {}", "FirstForceClose", self.first_force_close())?;
+        write!(f, ", {}: {}", "first_force_close", self.first_force_close())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;
@@ -9320,7 +9379,7 @@ impl<'r> ::core::fmt::Display for VirtualChannelStatusReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "vcstate", self.vcstate())?;
         write!(f, ", {}: {}", "parents", self.parents())?;
-        write!(f, ", {}: {}", "FirstForceClose", self.first_force_close())?;
+        write!(f, ", {}: {}", "first_force_close", self.first_force_close())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
             write!(f, ", .. ({} fields)", extra_count)?;

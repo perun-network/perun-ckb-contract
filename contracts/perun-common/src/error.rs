@@ -114,6 +114,7 @@ pub enum Error {
     InvalidVCParentData,
     SUDTAllocationLengthMismatch,
     VCOutputCellMissingIngStartTx,
+    VCDisputeWithoutChannelOutput,
 
 }
 
