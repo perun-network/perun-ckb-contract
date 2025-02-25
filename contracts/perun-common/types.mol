@@ -125,7 +125,6 @@ table VCDispute {
 
 table Dispute {
   sig_a: Bytes,
-  sig_b: Bytes, 
 }
 table Close {
   state: ChannelState,
