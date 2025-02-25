@@ -120,6 +120,7 @@ array Abort [byte; 1];
 table VCDispute {
   sig_a: Bytes,
   sig_b: Bytes,
+  parent_state_sigs: Dispute,
 }
 
 table Dispute {
@@ -137,6 +138,7 @@ union ChannelWitness {
   Fund,
   Abort,
   Dispute,
+  VCDispute,
   Close,
   ForceClose,
 }
@@ -173,5 +175,5 @@ table ParentData {
 table VirtualChannelStatus {
   vcstate: ChannelState,
   parents:  ParentsVec,
-  FirstForceClose: Bool,
+  first_force_close: Bool,
 }
