@@ -14,6 +14,7 @@ use perun_common::{ctrue, cfalse};
 use perun_common::perun_types::{
     Balances, Bool, CKByteDistribution, ChannelState, SEC1EncodedPubKey, ChannelParametersBuilder
 };
+use rand::seq::index;
 
 use std::cell::RefCell;
 use std::sync::Mutex;
@@ -567,6 +568,71 @@ fn test_multi_asset_force_close(
     })
 }
 
+// fn test_vc_start(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::Env) -> Result<(), perun::Error> {
+//     let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
+//     let alice_acc = random::account(alice);
+//     let bob_acc = random::account(bob);
+//     let ingrid_acc = random::account(ingrid);
+
+//     let parts_ai = [alice_acc.clone(), ingrid_acc.clone()];
+//     let parts_bi = [bob_acc.clone(), ingrid_acc.clone()];
+//     let parts_ab = [alice_acc.clone(), bob_acc.clone()];
+//     let funding = [
+//         Capacity::bytes(100)?.as_u64(),
+//         Capacity::bytes(100)?.as_u64(),
+//     ];
+
+//     let funding_vc = [
+//         Capacity::bytes(50)?.as_u64(),
+//         Capacity::bytes(50)?.as_u64(),
+//     ];
+
+//     let funding_agreement_ai = test::FundingAgreement::new_with_capacities(
+//         parts_ai.iter().cloned().zip(funding.iter().cloned()).collect(),
+//     );
+
+//     let funding_agreement_bi = test::FundingAgreement::new_with_capacities(
+//         parts_bi.iter().cloned().zip(funding.iter().cloned()).collect(),
+//     );
+
+//     let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
+//         parts_ab.iter().cloned().zip(funding_vc.iter().cloned()).collect(),
+//     );
+
+//     create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
+//         chan_ai.with(alice)
+//             .open(&funding_agreement_ai)
+//             .expect("opening channel");
+
+//         chan_bi.with(bob)
+//             .open(&funding_agreement_bi)
+//             .expect("opening channel");
+
+//         chan_ai.with(ingrid)
+//             .fund(&funding_agreement_ai)
+//             .expect("funding channel");
+
+//         chan_bi.with(ingrid)
+//             .fund(&funding_agreement_bi)
+//             .expect("funding channel");
+        
+//         let mut ctx = context.lock().unwrap();
+//         let parties_vc = funding_agreement_ab.mk_participants(&mut ctx.borrow_mut(), &env, env.min_capacity_no_script);
+//         drop(ctx);
+//         let chan_params = ChannelParametersBuilder::default()
+//                 .party_a(parties_vc[0
+//                 ].clone())
+//                 .party_b(parties_vc[1].clone())
+//                 .nonce(random::nonce().pack())
+//                 .challenge_duration(env.challenge_duration.pack())
+//                 .app(Default::default())
+//                 .is_ledger_channel(cfalse!())
+//                 .is_virtual_channel(ctrue!())
+//                 .build();   
+//             });
+// }
+
+
 fn test_vc_fund_close  (
     context: Rc<Mutex<RefCell<Context>>>,
     env: &perun::harness::Env,
@@ -600,7 +666,15 @@ fn test_vc_fund_close  (
     let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
         parts_ab.iter().cloned().zip(funding_vc.iter().cloned()).collect(),
     );
-
+    //VC_AB has Alice as its proposer
+    struct IndexMap{
+        parent1: [u8;2],
+        parent2: [u8;2],
+    }
+    let idx_map = IndexMap{
+        parent1: [0u8, 1u8],
+        parent2: [1u8, 0u8],
+    };
     create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
         chan_ai.with(alice)
             .open(&funding_agreement_ai)
@@ -635,16 +709,16 @@ fn test_vc_fund_close  (
         let cid = ChannelId::from(cid_raw);
 
         chan_ai.with(alice)
-            .update(update_virtual_channel(&funding_agreement_ab, cid));
+            .update(update_virtual_channel(&funding_agreement_ab, cid, &idx_map.parent1));
 
         chan_bi.with(ingrid)
-            .update(update_virtual_channel(&funding_agreement_ab, cid));
-
+            .update(update_virtual_channel(&funding_agreement_ab, cid,&idx_map.parent2));
+        
         chan_ai.with(alice)
-            .update(resolve_virtual_channel());
+            .update(resolve_virtual_channel(&idx_map.parent1));
         
         chan_bi.with(ingrid)
-            .update(resolve_virtual_channel());
+            .update(resolve_virtual_channel(&idx_map.parent2));
         chan_ai.with(alice)
             .finalize()
             .close()

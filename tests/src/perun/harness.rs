@@ -338,42 +338,43 @@ impl Env {
             .build();
         Ok(channel_status)
     }
-
-    pub fn build_virtual_channel_state(
-        &self,
-        channel_id: ChannelId,
-        funding_agreement: &FundingAgreement,
-        channel_params: ChannelParameters,
-        parents_pcts: [Byte32; 2],
-        parent_status: ChannelStatus,
-    ) -> Result<(VirtualChannelStatus, LockedBalances), perun::Error> {
-        let all_indices = funding_agreement
-            .content()
-            .iter()
-            .map(|FundingAgreementEntry { index, .. }| *index)
-            .collect::<Vec<_>>();
-        let channel_balances = funding_agreement.mk_balances(all_indices)?;
-        let locked = funding_agreement.mk_locked_balances(channel_id)?;
-        let channel_state = ChannelStateBuilder::default()
-            .channel_id(channel_id.to_byte32())
-            .balances(channel_balances)
-            .version(Default::default())
-            .is_final(cfalse!())
-            .build();
-
-        let parents = ParentsVec::new_builder()
-            .push(ParentData::new_builder().pcts_hash(parents_pcts[0].clone()).idx_map(IndexMap::new_builder().nth0(0.into()).nth1(1.into()).build()).build())
-            .push(ParentData::new_builder().pcts_hash(parents_pcts[1].clone()).idx_map(IndexMap::new_builder().nth0(1.into()).nth1(0.into()).build()).build())
-            .build();
-
-        let channel_status = VirtualChannelStatusBuilder::default()
-            .lcstatus(parent_status)
-            .vcstate(channel_state)
-            .funded(cfalse!())
-            .disputed(cfalse!())
-            .params(channel_params)
-            .parents(parents)
-            .build();
-        Ok((channel_status, locked))
-    }
 }
+// //TODO: Implement this function
+//     pub fn build_virtual_channel_state(
+//         &self,
+//         channel_id: ChannelId,
+//         funding_agreement: &FundingAgreement,
+//         channel_params: ChannelParameters,
+//         parents_pcts: [Byte32; 2],
+//         parent_status: ChannelStatus,
+//     ) -> Result<(VirtualChannelStatus, LockedBalances), perun::Error> {
+//         let all_indices = funding_agreement
+//             .content()
+//             .iter()
+//             .map(|FundingAgreementEntry { index, .. }| *index)
+//             .collect::<Vec<_>>();
+//         let channel_balances = funding_agreement.mk_balances(all_indices)?;
+//         let locked = funding_agreement.mk_locked_balances(channel_id)?;
+//         let channel_state = ChannelStateBuilder::default()
+//             .channel_id(channel_id.to_byte32())
+//             .balances(channel_balances)
+//             .version(Default::default())
+//             .is_final(cfalse!())
+//             .build();
+
+//         let parents = ParentsVec::new_builder()
+//             .push(ParentData::new_builder().pcts_hash(parents_pcts[0].clone()).idx_map(IndexMap::new_builder().nth0(0.into()).nth1(1.into()).build()).build())
+//             .push(ParentData::new_builder().pcts_hash(parents_pcts[1].clone()).idx_map(IndexMap::new_builder().nth0(1.into()).nth1(0.into()).build()).build())
+//             .build();
+
+//         let channel_status = VirtualChannelStatusBuilder::default()
+//             .lcstatus(parent_status)
+//             .vcstate(channel_state)
+//             .funded(cfalse!())
+//             .disputed(cfalse!())
+//             .params(channel_params)
+//             .parents(parents)
+//             .build();
+//         Ok((channel_status, locked))
+//     }
+// }
