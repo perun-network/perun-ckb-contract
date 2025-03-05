@@ -8,7 +8,7 @@ use ckb_occupied_capacity::Capacity;
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
-use perun::test;
+use perun::{test, virtual_channel};
 use perun_common::helpers::blake2b256;
 use perun_common::perun_types::IndexMapBuilder;
 use perun_common::perun_types::ParentData;
@@ -33,10 +33,6 @@ use perun_common::sig::verify_signature;
 
 const MAX_CYCLES: u64 = 100 * 10_000_000;
 const CHALLENGE_DURATION_MS: u64 = 10 * 1000;
-struct IndexMap{
-    parent1: [u8;2],
-    parent2: [u8;2],
-}
 // #[test]
 fn test_signature() {
     // This tests the interoperability between the on-chain signature verification
@@ -78,7 +74,7 @@ fn test_signature() {
     verify_signature(&msg_hash, &sig_bytes, pubkey.as_slice()).expect("valid signature");
 }
 
-// #[test]
+#[test]
 // TODO: Add mutator to channel state that can be passed to dispute, and close.
 fn channel_test_bench() -> Result<(), perun::Error> {
     let res = [
@@ -105,28 +101,6 @@ fn channel_test_bench() -> Result<(), perun::Error> {
     .collect::<Vec<_>>();
     res.into_iter().collect()
 }
-
-// #[test]
-// fn channel_vc_test_bench() -> Result<(), perun::Error> {
-//     let res = [
-//         test_fund_close, // happytest: check lockedbalances, unlock balances before closing VC
-//         test_dispute, // 1st dispute: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration -> OK, Close
-//         test_dispute_again, // 2 disputes: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration
-//                             // 2nd dispute. Present: (vcts_1st_disp_alice). Now Bob makes another dispute: (pcts_in, vcts_2nd_disp_bob) -> challenge duration ->
-//                             // Merge 2 disputes: (vcts_1st_disp_alice v2, vcts_2nd_disp_bob v4) -> (vcts_merged: vcts_2nd_disp_bob)
-//                             // -> challenge duration ->  ForceClose in PCTS (VCTS 1st Close) with (vcts_merged, pcts v4) -> (vcts_merged_1st_close, pcts_v4).
-//                             // 2nd VCTS Close is again PCTS ForceClose (vcts_merged_1st_close, pcts_v4) -> (pcts_v4)
-//     ]
-//     .iter()
-//     .map(|test| {
-//         let mut context = Context::default();
-//         let pe = perun::harness::Env::new(&mut context, MAX_CYCLES, CHALLENGE_DURATION_MS)
-//             .expect("preparing environment");
-//         test(&mut context, &pe)
-//     })
-//     .collect::<Vec<_>>();
-//     res.into_iter().collect()
-// }
 
 #[test]
 fn channel_vc_test_bench() -> Result<(), perun::Error> {
@@ -598,6 +572,7 @@ fn test_multi_asset_force_close(
     })
 }
 
+
 fn test_vc_start(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::Env) -> Result<(), perun::Error> {
     let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
     let alice_acc = random::account(alice);
@@ -633,13 +608,12 @@ fn test_vc_start(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::Env
     // Bob is proposer of C_IB
     // Alice is proposer of VC_AB
     // Parent1 is C_AI and Parent2 is C_IB
-    //idx_map maps participant roles from vc to lc 
-    let idx_map = IndexMap{
+    // idx_map maps participant roles from vc to lc 
+    let idx_map = virtual_channel::VCIndexMap{
         parent1: [0u8, 1u8],  
         parent2: [1u8, 0u8],
     };
 
-    //TODO: 
     create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
         println!("TEST_VC_START");
         chan_ai.with(alice)   //use borrow_mut in case of Rc cell
@@ -657,63 +631,27 @@ fn test_vc_start(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::Env
         chan_bi.with(ingrid)
             .fund(&funding_agreement_bi)
             .expect("funding channel");
-        
-
-        //initialize structs for building VirtualChannelStatus (vc state)
-        let mut ctx = context.lock().unwrap();
-        let parties_vc = funding_agreement_ab.mk_participants(&mut ctx.borrow_mut(), &env, env.min_capacity_no_script);
+    
+        let mut ctx = match context.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => panic!("Failed to acquire lock on context"),
+        };
+        let vc_ab = perun::virtual_channel::VirtualChannel::new(
+            &mut ctx.borrow_mut(),
+            env,
+            &parts_ab,
+            &funding_agreement_ab,
+            &chan_ai,
+            &chan_bi,
+            &idx_map,
+            );
         drop(ctx);
-        let vc_chan_params = ChannelParametersBuilder::default()
-                .party_a(parties_vc[0
-                ].clone())
-                .party_b(parties_vc[1].clone())
-                .nonce(random::nonce().pack())
-                .challenge_duration(env.challenge_duration.pack())
-                .app(Default::default())
-                .is_ledger_channel(cfalse!())
-                .is_virtual_channel(ctrue!())
-                .build();   
-        // build VCChannelConstants
-        let vc_channel_constants = VCChannelConstants::new_builder()
-            .params(vc_chan_params.clone())
-            .vcls_code_hash(env.get_vcls_().calc_script_hash())
-            .vcls_hash_type(env.get_vcls_().hash_type().clone())
-            .build();
-        let cid_raw = blake2b256(vc_chan_params.as_slice());
-        let cid = ChannelId::from(cid_raw);
-        
         // Simulate creating virtual channels    
-        chan_ai.with(alice).update(update_virtual_channel(&funding_agreement_ab, cid, &idx_map.parent1));
-        chan_bi.with(ingrid).update(update_virtual_channel(&funding_agreement_ab, cid, &idx_map.parent2));
-
-        let parents_builder = ParentsVecBuilder::default();
-        let parent1 = ParentDataBuilder::default()
-            .pcts_hash(chan_ai.pcts().calc_script_hash())
-            .idx_map(IndexMapBuilder::default().nth0(idx_map.parent1[0].clone().into()).nth1(idx_map.parent1[1].clone().into()).build())
-            .build();
-        let parent2 = ParentDataBuilder::default()
-            .pcts_hash(chan_bi.pcts().calc_script_hash())
-            .idx_map(IndexMapBuilder::default().nth0(idx_map.parent2[0].clone().into()).nth1(idx_map.parent2[1].clone().into()).build())
-            .build();
-        let parents = parents_builder.push(parent1).push(parent2).build(); 
-        let first_force_close = false;
-
-        let vc_status = env.build_virtual_channel_state(&cid, &funding_agreement_ab, &parents, first_force_close)?;   
+        chan_ai.with(alice).update(update_virtual_channel(&funding_agreement_ab,vc_ab.id().clone() , &idx_map.parent1));
+        chan_bi.with(ingrid).update(update_virtual_channel(&funding_agreement_ab, vc_ab.id().clone(), &idx_map.parent2));
         
-        //build vcts
-        // write a function in env to build vcts using VCChannelConstants
-        let mut ctx = context.lock().unwrap();
-        let vcts = env.build_vcts(&mut ctx.borrow_mut(),vc_channel_constants.as_bytes());            
-        drop(ctx);
-        let vc_ab = perun::virtual_channel::VirtualChannel::new(&parts_ab, &vc_status, &vcts);
-        let vc_sigs = vc_ab.sigs_for_vc_status()?;
-        
-        // Create dispute Tx for the virtual channel
         chan_ai.with(alice).vc_start(
-            &vc_status,
-            &vc_sigs,
-            &vcts,
-            &env.get_vcls_(),
+            &vc_ab
         ).expect("vc_start");
         chan_ai.assert();
         chan_bi.assert();
@@ -762,7 +700,7 @@ fn test_vc_fund_close  (
     //     parent1: [u8;2],
     //     parent2: [u8;2],
     // }
-    let idx_map = IndexMap{
+    let idx_map = VCIndexMap{
         parent1: [0u8, 1u8],
         parent2: [1u8, 0u8],
     };
@@ -783,7 +721,10 @@ fn test_vc_fund_close  (
             .fund(&funding_agreement_bi)
             .expect("funding channel");
         
-        let mut ctx = context.lock().unwrap();
+        let mut ctx = match context.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => panic!("Failed to acquire lock on context"),
+        };
         let parties_vc = funding_agreement_ab.mk_participants(&mut ctx.borrow_mut(), &env, env.min_capacity_no_script);
         drop(ctx);
         let chan_params = ChannelParametersBuilder::default()

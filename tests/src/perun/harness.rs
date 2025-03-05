@@ -347,6 +347,7 @@ impl Env {
             .state(channel_state)
             .funded(cfalse!())
             .disputed(cfalse!())
+            .vc_disputed(cfalse!())
             .build();
         Ok(channel_status)
     }
@@ -382,12 +383,12 @@ impl Env {
             .build();
        Ok(vc_status)
     }
-
-    pub fn get_vcts(&self) -> Script {
-        self.vcts_script.clone()
+    
+    pub fn get_vcts(&self) -> &Script {
+        &self.vcts_script
     }
 
-    pub fn get_vcls_(&self) -> Script {
-        self.vcls_script.clone()
+    pub fn get_vcls_(&self) -> &Script {
+        &self.vcls_script
     }
 }

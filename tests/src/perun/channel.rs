@@ -82,7 +82,10 @@ macro_rules! call_action {
     ($self:ident, $action:ident $(, $x:expr)*$(,)*) => (
         {
             println!("calling action {} on {}", stringify!($action), $self.active_part.name());
-            let mut ctx = $self.ctx.lock().unwrap();
+            let mut ctx = match $self.ctx.try_lock() {
+                Ok(lock) => lock,
+                Err(_) => panic!("Failed to acquire lock on context"),
+            };
             let res = match $self.validity {
                 ActionValidity::Valid => $self.active_part.$action(&mut ctx.borrow_mut(), $self.env, $($x),*),
                 ActionValidity::Invalid => {
@@ -168,12 +171,11 @@ where
 
     pub fn vc_start(
         &mut self,
-        vc_state: &VirtualChannelStatus,
-        vc_sigs: &[Vec<u8>; 2],
-        vcts: &Script,
-        vcls: &Script,
+        vc: &VirtualChannel,
     ) -> Result<(), perun::Error> {
-        // use macro call_action!(...)
+        let vcts = vc.vcts();
+        let vc_state = vc.vc_state();
+        let vcls = vc.vcls();
         self.channel_state = self
             .channel_state
             .clone()
@@ -183,7 +185,7 @@ where
             .vcts_hash(vcts.calc_script_hash())
             .build();
         let lc_sigs = self.sigs_for_channel_state()?;
-
+        let vc_sigs = vc.sigs_for_vc_status()?;
         let parent_args = transaction::DisputeArgs{
             party_index: self.active_part.index,
             channel_cell: self.channel_cell.clone().expect("no channel cell"),
@@ -400,6 +402,7 @@ where
         // as for time validation purposes.
         let mut ctx = self.ctx.lock().unwrap();
         ctx.borrow_mut().insert_header(h.clone());
+        drop(ctx);
         match self.channel_cell.clone() {
             Some(channel_cell) => call_action!(
                 self,
