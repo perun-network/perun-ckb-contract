@@ -1,7 +1,7 @@
 use ckb_testtool::ckb_traits::CellDataProvider;
 
 use ckb_testtool::ckb_types::core::ScriptHashType;
-use ckb_testtool::ckb_types::packed::{OutPoint, Script, Byte32};
+use ckb_testtool::ckb_types::packed::{Byte32, OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 
@@ -9,13 +9,15 @@ use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::{ChannelState, ChannelStatus, VirtualChannelStatus, LockedBalances};
+use perun_common::perun_types::{
+    ChannelState, ChannelStatus, LockedBalances, VirtualChannelStatus,
+};
 
 use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
 use crate::perun::test;
-use crate::perun::test::transaction::{AbortArgs, OpenResult};
+use crate::perun::test::transaction::{AbortArgs, OpenResult, VCStartArgs};
 use crate::perun::test::{keys, transaction};
 
 use k256::ecdsa::{Signature, SigningKey};
@@ -29,7 +31,7 @@ use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct Client {
-    index: u8,
+    pub index: u8,
     signing_key: SigningKey,
     name: String,
 }
@@ -60,8 +62,7 @@ impl Client {
         funding_agreement: &test::FundingAgreement,
     ) -> Result<(ChannelId, OpenResult), perun::Error> {
         // Prepare environment so that this party has the required funds.
-        let inputs =
-            env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
+        let inputs = env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         // Create the channel token.
         let (channel_token, channel_token_outpoint) = env.create_channel_token(ctx);
 
@@ -128,8 +129,7 @@ impl Client {
         pcts: Script,
     ) -> Result<transaction::FundResult, perun::Error> {
         // Prepare environment so that this party has the required funds.
-        let inputs =
-            env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
+        let inputs = env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         let fr = transaction::mk_fund(
             ctx,
             env,
@@ -182,6 +182,32 @@ impl Client {
         let cycles = ctx.verify_tx(&dr.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
         Ok(dr)
+    }
+
+    pub fn vc_start(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        lc_dispute_args: transaction::DisputeArgs,
+        vc_state: VirtualChannelStatus,
+        sigs: [Vec<u8>; 2],
+        vcts: Script,
+        vcls: Script,
+        ) -> Result<transaction::VCStartResult, perun::Error> {
+        let vcsr = transaction::mk_vc_start(
+            ctx,
+            env,
+            VCStartArgs{
+                parent_args: lc_dispute_args,
+                vc_state: vc_state,
+                sigs: sigs,
+                vcts_script: vcts,
+                vcls_script: vcls,
+                party_index: self.index,
+            })?;
+        let cycles = ctx.verify_tx(&vcsr.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vcsr)
     }
 
     pub fn abort(
@@ -283,10 +309,9 @@ impl Client {
 
     //     let cid_raw = blake2b256(chan_params.as_slice());
     //     let cid = ChannelId::from(cid_raw);
-        
-        
+
     //     let (vcs, locked ) = env.build_virtual_channel_state(cid, funding_agreement, chan_params, parents_hashes, parents_statuses)?;
-        
+
     //     Ok((cid, vcs, locked))
     // }
 }

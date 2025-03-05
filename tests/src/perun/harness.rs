@@ -6,12 +6,13 @@ use ckb_testtool::{
     ckb_types::{bytes::Bytes, packed::*, prelude::*},
     context::Context,
 };
-use perun_common::cfalse;
+use perun_common::{cfalse, ctrue};
 use perun_common::perun_types::ChannelStateBuilder;
 use perun_common::perun_types::ChannelStatusBuilder;
 use perun_common::perun_types::VirtualChannelStatusBuilder;
 use perun_common::perun_types::{self, LockedBalances, ChannelStatus, VirtualChannelStatus, ChannelToken, ChannelParameters, ParentsVec, ParentData, IndexMap};
 
+use super::channel;
 use super::test::ChannelId;
 use super::test::FundingAgreement;
 use super::test::FundingAgreementEntry;
@@ -243,6 +244,17 @@ impl Env {
         Ok(min_capacity)
     }
 
+    pub fn min_capacity_for_vc_channel(&self, vcs: VirtualChannelStatus) -> Result<Capacity, perun::Error>{
+        let tmp_output = CellOutput::new_builder()
+            .capacity(0u64.pack())
+            .lock(self.vcls_script.clone())
+            .type_(Some(self.vcts_script.clone()).pack())
+            .build();
+        let vcs_capacity = Capacity::bytes(vcs.as_bytes().len())?;
+        let min_capacity = tmp_output.occupied_capacity(vcs_capacity)?;
+        Ok(min_capacity)
+    }
+
     pub fn create_channel_token(&self, context: &mut Context) -> (ChannelToken, OutPoint) {
         let channel_token_outpoint = context.create_cell(
             CellOutput::new_builder()
@@ -338,43 +350,44 @@ impl Env {
             .build();
         Ok(channel_status)
     }
+
+    pub fn build_virtual_channel_state(
+        &self,
+        channel_id: &ChannelId,
+        funding_agreement: &FundingAgreement,
+        parents: &ParentsVec,
+        first_force_close: bool,
+    )-> Result<VirtualChannelStatus, perun::Error>{
+        let all_indices = funding_agreement
+            .content()
+            .iter()
+            .map(|FundingAgreementEntry { index, .. }| *index)
+            .collect::<Vec<_>>();
+        let channel_balances = funding_agreement.mk_balances(all_indices)?;
+        let channel_state = ChannelStateBuilder::default()
+            .channel_id(channel_id.to_byte32())
+            .balances(channel_balances)
+            .version(Default::default())
+            .is_final(cfalse!())
+            .build();
+
+        let flag = match first_force_close {
+            true => ctrue!(),
+            false => cfalse!(),
+        };
+        let vc_status = VirtualChannelStatusBuilder::default()
+            .vcstate(channel_state)
+            .parents(parents.clone())
+            .first_force_close(flag)
+            .build();
+       Ok(vc_status)
+    }
+
+    pub fn get_vcts(&self) -> Script {
+        self.vcts_script.clone()
+    }
+
+    pub fn get_vcls_(&self) -> Script {
+        self.vcls_script.clone()
+    }
 }
-// //TODO: Implement this function
-//     pub fn build_virtual_channel_state(
-//         &self,
-//         channel_id: ChannelId,
-//         funding_agreement: &FundingAgreement,
-//         channel_params: ChannelParameters,
-//         parents_pcts: [Byte32; 2],
-//         parent_status: ChannelStatus,
-//     ) -> Result<(VirtualChannelStatus, LockedBalances), perun::Error> {
-//         let all_indices = funding_agreement
-//             .content()
-//             .iter()
-//             .map(|FundingAgreementEntry { index, .. }| *index)
-//             .collect::<Vec<_>>();
-//         let channel_balances = funding_agreement.mk_balances(all_indices)?;
-//         let locked = funding_agreement.mk_locked_balances(channel_id)?;
-//         let channel_state = ChannelStateBuilder::default()
-//             .channel_id(channel_id.to_byte32())
-//             .balances(channel_balances)
-//             .version(Default::default())
-//             .is_final(cfalse!())
-//             .build();
-
-//         let parents = ParentsVec::new_builder()
-//             .push(ParentData::new_builder().pcts_hash(parents_pcts[0].clone()).idx_map(IndexMap::new_builder().nth0(0.into()).nth1(1.into()).build()).build())
-//             .push(ParentData::new_builder().pcts_hash(parents_pcts[1].clone()).idx_map(IndexMap::new_builder().nth0(1.into()).nth1(0.into()).build()).build())
-//             .build();
-
-//         let channel_status = VirtualChannelStatusBuilder::default()
-//             .lcstatus(parent_status)
-//             .vcstate(channel_state)
-//             .funded(cfalse!())
-//             .disputed(cfalse!())
-//             .params(channel_params)
-//             .parents(parents)
-//             .build();
-//         Ok((channel_status, locked))
-//     }
-// }

@@ -60,6 +60,7 @@ pub enum CloseMode {
 }
 
 pub fn main() -> Result<(), Error> {
+    debug!("VCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
 
@@ -106,7 +107,7 @@ pub fn main() -> Result<(), Error> {
             new_status,
         } => {
             // let channel_witness = load_witness()?;
-            debug!("load_witness passed");
+            // debug!("load_witness passed");
             check_valid_vc_progress(&old_status, &new_status, &channel_constants)
         }
         VChannelAction::Merge {
@@ -349,14 +350,20 @@ pub fn verify_vc_sigs_start(
         Ok(idx) => idx,
         Err(e) => return Err(e),
     };
+    debug!("parent_input_idx: {}", parent_input_idx);
     let witnes_args = load_witness_args(parent_input_idx, Source::Input)?;
+    debug!("witness_args loaded");
     let witness_bytes: Bytes = witnes_args
         .input_type()
         .to_opt()
         .ok_or(Error::NoWitness)?
         .unpack();
-    let vc_witness = VCDispute::from_slice(&witness_bytes)?;
-
+    let witness = ChannelWitness::from_slice(&witness_bytes)?;
+    let vc_witness = match witness.to_enum() {
+        ChannelWitnessUnion::VCDispute(vcd) => vcd,
+        _ => return Err(Error::InvalidVCTxStart),
+    };
+    debug!("VCDispute loaded");
     verify_valid_state_sigs(
         &vc_witness.sig_a().unpack(),
         &vc_witness.sig_b().unpack(),

@@ -16,4 +16,7 @@ pub use force_close::*;
 mod dispute;
 pub use dispute::*;
 
+mod vc_start;
+pub use vc_start::*;
+
 mod common;

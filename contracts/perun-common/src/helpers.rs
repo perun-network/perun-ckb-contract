@@ -109,6 +109,24 @@ macro_rules! dispute {
     };
 }
 
+#[macro_export]
+macro_rules! vc_dispute{
+    ($sig_vc_a:expr, $sig_vc_b:expr, $sig_lc_a:expr, $sig_lc_b:expr) => {
+        $crate::perun_types::ChannelWitnessUnion::VCDispute(
+            $crate::perun_types::VCDispute::new_builder()
+                .sig_a($sig_vc_a)
+                .sig_b($sig_vc_b)
+                .parent_state_sigs(
+                    $crate::perun_types::Dispute::new_builder()
+                        .sig_a($sig_lc_a)
+                        .sig_b($sig_lc_b)
+                        .build()
+                )
+                .build(),
+        )
+    };
+}
+
 impl SUDTDistribution {
     pub fn sum(&self) -> u128 {
         let a: u128 = self.nth0().unpack();

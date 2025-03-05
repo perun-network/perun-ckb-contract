@@ -40,6 +40,7 @@ use perun_common::{
 const SUDT_MIN_LEN: usize = 16;
 
 pub fn main() -> Result<(), Error> {
+    debug!("PCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
 
@@ -269,7 +270,7 @@ pub fn check_vc_dispute(
     //Funds in lc are blocked for vc
     verify_locked_funds(new_status, &vc_status)?;
     debug!("verify_locked_funds passed");
-
+    debug!("check_vc_dispute passed");
     Ok(())
 }
 
@@ -292,6 +293,7 @@ pub fn check_normal_dispute(
     // - version number is increasing (see verify_increasing_version_number)
     // - sum of balances is equal
     // - old state is not final
+    debug!("check_normal_dispute");
     verify_channel_state_progression(old_status, &new_status.state())?;
     debug!("verify_channel_state_progression passed");
 
@@ -313,6 +315,7 @@ pub fn check_normal_dispute(
         &channel_constants.params().party_b().pub_key(),
     )?;
     debug!("verify_valid_state_sigs passed");
+    debug!("check_normal_dispute passed");
     Ok(())
 }
 
