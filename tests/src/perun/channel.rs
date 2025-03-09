@@ -97,6 +97,7 @@ macro_rules! call_action {
                 }
             };
             $self.validity = ActionValidity::Valid;
+            drop(ctx);
             res
         }
 )
@@ -171,7 +172,7 @@ where
 
     pub fn vc_start(
         &mut self,
-        vc: &VirtualChannel,
+        vc: &mut VirtualChannel,
     ) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
         let vc_state = vc.vc_state();
@@ -204,7 +205,8 @@ where
             vcts.clone(),
             vcls.clone(),
         )?;
-        self.push_header_with_cell(result.vc_cell);
+        self.push_header_with_cell(result.vc_cell.clone());
+        vc.set_cell(result.vc_cell.clone());
         Ok(())
     }
 
@@ -217,10 +219,15 @@ where
             )
             .build()
             .into_view();
-        let mut ctx = self.ctx.lock().unwrap();
+        // let mut ctx = self.ctx.lock().unwrap();
+        let mut ctx = match self.ctx.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => panic!("Failed to acquire lock on context"),
+        };
         ctx.borrow_mut().insert_header(header.clone());
         // We will always use 0 as the `tx_index`.
         ctx.borrow_mut().link_cell_with_block(cell, header.hash(), 0);
+        drop(ctx);
     }
 
     /// fund a channel using the currently active participant set by `with(..)`
@@ -284,6 +291,42 @@ where
         }?;
         self.channel_cell = Some(res.channel_cell.clone());
         self.push_header_with_cell(res.channel_cell);
+        Ok(())
+    }
+
+    pub fn vc_progress_no_update(&mut self, vc: &VirtualChannel) -> Result<(), perun::Error> {
+        let vcts = vc.vcts();
+        let vc_state = vc.vc_state();
+        let vcls = vc.vcls();
+        self.channel_state = self
+            .channel_state
+            .clone()
+            .as_builder()
+            .disputed(ctrue!())
+            .vc_disputed(ctrue!())
+            .vcts_hash(vcts.calc_script_hash())
+            .build();
+        let lc_sigs = self.sigs_for_channel_state()?;
+        let vc_sigs = vc.sigs_for_vc_status()?;
+        let parent_args = transaction::DisputeArgs{
+            party_index: self.active_part.index,
+            channel_cell: self.channel_cell.clone().expect("no channel cell"),
+            state: self.channel_state.clone(),
+            sigs: lc_sigs,
+            pcts_script: self.pcts.clone(),
+            };
+        
+        let result = call_action!(
+            self,
+            vc_progress_no_update,
+            parent_args,
+            vc.cell().clone(),
+            vc_state.clone(),
+            vcts.clone(),
+            vcls.clone(),
+        )?;
+        self.channel_cell = Some(result.parent_cell.clone());
+        self.push_header_with_cell(result.parent_cell);
         Ok(())
     }
 

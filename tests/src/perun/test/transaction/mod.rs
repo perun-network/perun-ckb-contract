@@ -19,4 +19,7 @@ pub use dispute::*;
 mod vc_start;
 pub use vc_start::*;
 
+pub mod vc_update_no_progress;
+pub use vc_update_no_progress::*;
+
 mod common;

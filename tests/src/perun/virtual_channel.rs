@@ -37,6 +37,9 @@ pub struct VirtualChannel {
     /// All available parties.
     parts: HashMap<String, test::Client>,
     idx_map: VCIndexMap,
+    
+    /// vc cell
+    cell: OutPoint,
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +114,7 @@ impl VirtualChannel {
             vcls: env.get_vcls_().clone(),
             parts: m_parts,
             idx_map: idx_map.clone(),
+            cell: OutPoint::default(),
         }
     }
 
@@ -128,6 +132,13 @@ impl VirtualChannel {
 
     pub fn id(&self) -> &ChannelId {
         &self.id
+    }
+
+    pub fn cell(&self) -> &OutPoint {
+        &self.cell
+    }
+    pub fn set_cell(&mut self, cell: OutPoint) {
+        self.cell = cell;
     }
 
     pub fn sigs_for_vc_status(&self) -> Result<[Vec<u8>; 2], perun::Error> {

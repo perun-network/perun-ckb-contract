@@ -142,7 +142,7 @@ pub fn find_cell_by_type_hash(
     for i in 0.. {
         let type_hash = match load_cell_type_hash(i, source) {
             Ok(Some(script)) => script,
-            Ok(None) => panic!("type script not found"),
+            Ok(None) => continue,
             Err(SysError::IndexOutOfBound) => break,
             Err(err) => return Err(err.into()),
         };
