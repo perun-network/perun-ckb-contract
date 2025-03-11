@@ -141,6 +141,20 @@ impl VirtualChannel {
         self.cell = cell;
     }
 
+    pub fn update(
+        &mut self,
+        update: impl Fn(&ChannelState) -> Result<ChannelState, perun::Error>,
+    ) -> &mut Self {
+        let new_state = update(&self.vc_state.vcstate()).expect("update failed");
+        self.vc_state = self
+            .vc_state
+            .clone()
+            .as_builder()
+            .vcstate(new_state)
+            .build();
+        self
+    }
+
     pub fn sigs_for_vc_status(&self) -> Result<[Vec<u8>; 2], perun::Error> {
         // We have to unpack the ChannelConstants like this. Otherwise the molecule header is still
         // part of the slice. On-chain we have no problem due to unpacking the arguments, but this

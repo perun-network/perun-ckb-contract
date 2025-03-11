@@ -288,13 +288,18 @@ pub fn check_normal_dispute(
     // the latest state (with higher version number) and the corresponding signatures within the challenge
     // duration.
 
-    // First, we verify the integrity of the channel state. For this, the following must hold:
+    // In normal cases (no vc dispute), we verify the integrity of the channel state. For this, the following must hold:
     // - channel id is equal
     // - version number is increasing (see verify_increasing_version_number)
     // - sum of balances is equal
     // - old state is not final
+    // In case of vc disputes, we allow version number to be non-decreasing
     debug!("check_normal_dispute");
-    verify_channel_state_progression(old_status, &new_status.state())?;
+    if !old_status.vc_disputed().to_bool() {
+        verify_channel_state_progression(old_status, &new_status.state())?;
+    }else{
+        verify_vc_parent_state_progression(old_status, &new_status.state())?;
+    }
     debug!("verify_channel_state_progression passed");
 
     // One cannot dispute if funding is not complete.
@@ -737,6 +742,22 @@ pub fn verify_increasing_version_number(
     Err(Error::VersionNumberNotIncreasing)
 }
 
+pub fn verify_non_decreasing_version_number(
+    old_status: &ChannelStatus,
+    new_state: &ChannelState,
+) -> Result<(), Error> {
+    debug!(
+        "verify_non-decreasing_version_number old: {},  new: {}",
+        old_status.state().version().unpack(),
+        new_state.version().unpack()
+    );
+
+    if old_status.state().version().unpack() > new_state.version().unpack() {
+        return Err(Error::InvalidVersionNumberVCProgressTx);
+    }
+    Ok(())
+}
+
 pub fn verify_valid_state_sigs(
     sig_a: &Bytes,
     sig_b: &Bytes,
@@ -930,6 +951,17 @@ pub fn verify_channel_state_progression(
 ) -> Result<(), Error> {
     verify_equal_channel_id(&old_status.state(), new_state)?;
     verify_increasing_version_number(old_status, new_state)?;
+    verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
+    verify_state_not_finalized(&old_status.state())?;
+    Ok(())
+}
+
+pub fn verify_vc_parent_state_progression(
+    old_status: &ChannelStatus,
+    new_state: &ChannelState,
+) -> Result<(), Error> {
+    verify_equal_channel_id(&old_status.state(), new_state)?;
+    verify_non_decreasing_version_number(old_status, new_state)?;
     verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
     verify_state_not_finalized(&old_status.state())?;
     Ok(())

@@ -17,13 +17,13 @@ use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
 use crate::perun::test;
-use crate::perun::test::transaction::{mk_vc_progress_no_update, AbortArgs, OpenResult, VCStartArgs, VCUpdateNoProgressArgs};
+use crate::perun::test::transaction::{make_vc_update_only, mk_vc_progress_no_update, AbortArgs, OpenResult, VCStartArgs, VCUpdateNoProgressArgs, VCUpdateOnlyArgs};
 use crate::perun::test::{keys, transaction};
 
 use k256::ecdsa::{Signature, SigningKey};
 
 use super::cell::FundingCell;
-use super::transaction::VCProgressNoUpdateResult;
+use super::transaction::{VCProgressNoUpdateResult, VCUpdateOnlyResult};
 use super::ChannelId;
 
 use std::cell::RefCell;
@@ -236,6 +236,36 @@ impl Client {
         let cycles = ctx.verify_tx(&vcp_no_update.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
         Ok(vcp_no_update)
+    }
+
+    pub fn vc_update_only(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        lc_dispute_args: transaction::DisputeArgs,
+        vc_cell: OutPoint,
+        vc_state: VirtualChannelStatus,
+        vc_sigs: [Vec<u8>; 2],
+        vcts_script: Script,
+        vcls_script: Script,
+    ) -> Result<VCUpdateOnlyResult, perun::Error> {
+        //make tx
+        let vc_update_only_result = make_vc_update_only(
+            ctx,
+            env,
+            VCUpdateOnlyArgs{
+                parent_args: lc_dispute_args,
+                vc_cell: vc_cell,
+                vc_state: vc_state,
+                sigs: vc_sigs,
+                vcts_script: vcts_script,
+                vcls_script: vcls_script,
+                party_index: self.index,
+            }
+        )?;
+        let cycles = ctx.verify_tx(&vc_update_only_result.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vc_update_only_result)
     }
 
     pub fn abort(

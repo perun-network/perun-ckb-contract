@@ -22,4 +22,7 @@ pub use vc_start::*;
 pub mod vc_update_no_progress;
 pub use vc_update_no_progress::*;
 
+pub mod vc_update_only;
+pub use vc_update_only::*;
+
 mod common;
