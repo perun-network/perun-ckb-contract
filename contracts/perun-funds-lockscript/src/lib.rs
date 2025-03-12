@@ -1,5 +1,9 @@
+#![no_std]
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
+use core::result::Result::{Ok, Err};
+use core::option::Option::Some;
+
 
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
@@ -13,6 +17,13 @@ use ckb_std::{
     ckb_types::{bytes::Bytes, packed::Byte32, prelude::*},
     high_level::{load_cell_type_hash, load_script, load_transaction},
 };
+
+pub fn program_entry() -> i8 {
+    match main() {
+        Ok(_) => 0,  // Success
+        Err(_) => -1, // Failure
+    }
+}
 
 // The Perun Funds Lock Script can be unlocked by including an input cell with the pcts script hash
 // that is specified in the args of the pfls.

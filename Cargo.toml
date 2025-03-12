@@ -1,15 +1,20 @@
 [workspace]
-members = [ "contracts/perun-channel-lockscript"
-          , "contracts/perun-channel-typescript"
-          , "contracts/perun-funds-lockscript"
-          , "contracts/perun-common"
-          , "contracts/sample-udt"
-          ]
-exclude = ["tests"]
+
+resolver = "2"
+
+members = [
+    # Please don't remove the following line, we use it to automatically
+    # detect insertion point for newly generated crates.
+    # @@INSERTION_POINT@@
+  "contracts/sample-udt",
+  "contracts/perun-funds-lockscript",
+  "contracts/perun-channel-typescript",
+  "contracts/perun-channel-lockscript",
+    "tests",
+]
 
 [profile.release]
 overflow-checks = true
-opt-level = 's'
-lto = false
+strip = false
 codegen-units = 1
-panic = 'abort'
+debug = true

@@ -30,13 +30,17 @@ It ensures that only channel participants are able to consume said funds.
 Build contracts:
 
 ``` sh
-capsule build
+chmod +x ./setup_env.sh
+```
+
+``` sh
+source ./setup_env.sh build && make build
 ```
 
 Run tests:
 
 ``` sh
-capsule test
+source ./setup_env.sh test && make test
 ```
 
 ## perun-common

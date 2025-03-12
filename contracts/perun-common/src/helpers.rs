@@ -1,24 +1,14 @@
 use blake2b_rs::Blake2bBuilder;
+use ckb_gen_types::{packed::*, prelude::*};
+use ckb_std::ckb_types::{packed::*, prelude::*};
+use molecule::prelude::*;
 
-#[cfg(feature = "std")]
-use {
-    crate::perun_types::ChannelState, ckb_types::bytes, ckb_types::packed::*,
-    ckb_types::prelude::*, std::vec::Vec,
-};
-
-#[cfg(not(feature = "std"))]
-use {
-    ckb_standalone_types::packed::*,
-    ckb_standalone_types::prelude::*,
-    molecule::prelude::{vec, Vec},
-};
-
-use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey,
-};
 use crate::{
     error::Error,
     perun_types::{CKByteDistribution, SUDTAllocation, SUDTBalances, SUDTDistribution},
+};
+use crate::perun_types::{
+    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey,
 };
 
 impl Bool {

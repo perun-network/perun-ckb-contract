@@ -1,8 +1,12 @@
+#![no_std]
+
+use alloc::vec;
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
+use core::iter::IntoIterator;
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{self, vec};
+extern crate alloc;
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
@@ -59,6 +63,13 @@ pub enum ChannelAction {
     /// Close, Abort and ForceClose.
     /// The channel type script assures that all funds are payed out to the correct parties upon closing.
     Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
+}
+
+pub fn program_entry() -> i8 {
+    match main() {
+        Ok(_) => 0,  // Success
+        Err(_) => -1, // Failure
+    }
 }
 
 pub fn main() -> Result<(), Error> {
