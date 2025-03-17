@@ -211,7 +211,9 @@ pub fn check_valid_vc_merge(
     debug!("check_valid_vc_merge");
     // 1. We take the vc cell that was created first i.e., lower block number
     let vc_cell1_block_num = load_header(0, Source::GroupInput)?.raw().number().unpack();
+    debug!("vc_cell1_block_num: {:?}", vc_cell1_block_num);
     let vc_cell2_block_num = load_header(1, Source::GroupInput)?.raw().number().unpack();
+    debug!("vc_cell2_block_num: {:?}", vc_cell2_block_num);
 
     let mut selected_vc_cell = None;
 
@@ -219,7 +221,9 @@ pub fn check_valid_vc_merge(
         selected_vc_cell = Some(input_vc_stats1);
     } else if vc_cell1_block_num > vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats2);
-    } else {
+    } else if vc_cell1_block_num == vc_cell2_block_num {
+        selected_vc_cell = Some(input_vc_stats1);
+    }else{
         return Err(Error::InvalidVCMergeTx);
     }
     debug!("selected_vc_cell: {:?}", selected_vc_cell);
@@ -544,6 +548,10 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             output_cell_counter += 1;
         }
     }
+    debug!(
+        "input_cell_counter: {}, output_cell_counter: {}",
+        input_cell_counter, output_cell_counter
+    );
     //MODE: VC Start Tx
     if input_cell_counter == 0 && output_cell_counter == 1 {
         let vc_status = match load_cell_data(0, Source::GroupOutput) {
@@ -571,11 +579,16 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
 
     //MODE: VC Merge Tx
     } else if input_cell_counter == 2 && output_cell_counter == 1 {
+        // debug!("Get Channel Action: Merge Tx detected");
         let mut input_vc_statuses: [Option<VirtualChannelStatus>; 2] = [None, None];
-        for i in 0.. {
+        for i in 0..2 {
             let vc_status = match load_cell_data(i, Source::GroupInput) {
-                Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
-                Err(err) => return Err(err.into()),
+                Ok(data) => {
+                    debug!("VC Status loaded");
+                    VirtualChannelStatus::from_slice(data.as_slice())?},
+                Err(err) => {
+                    debug!("Error loading VC Status");
+                    return Err(err.into())},
             };
 
             if i < max_input_vc_channels {
@@ -587,7 +600,7 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             return Err(Error::VCInputCellMissingInMergeTx);
         }
 
-        let output_vc_status = match load_cell_data(0, Source::GroupInput) {
+        let output_vc_status = match load_cell_data(0, Source::GroupOutput) {
             Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
             Err(err) => return Err(err.into()),
         };

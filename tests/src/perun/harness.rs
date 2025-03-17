@@ -213,9 +213,11 @@ impl Env {
 
     pub fn build_vcts(&self, context: &mut Context, args: Bytes) -> Script {
         let vcts_out_point = &self.vcts_out_point;
-        context
-            .build_script(vcts_out_point, args)
-            .expect("perun-virtual-channel-typescript")
+        let result = context
+            .build_script(vcts_out_point, args);
+        let script_hash = result.clone().unwrap().calc_script_hash();
+        println!("Debug: built vcts_hash = {:?}", script_hash);
+        result.expect("Cannot build vcts")
     }
 
     pub fn build_pfls(&self, context: &mut Context, args: Bytes) -> Script {

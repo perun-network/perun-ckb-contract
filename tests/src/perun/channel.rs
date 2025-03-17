@@ -363,6 +363,27 @@ where
         Ok(())
     }
 
+    pub fn vc_merge(
+        &mut self,
+        vc1: &VirtualChannel,
+        vc2: &VirtualChannel,
+        idx: u8,
+    ) -> Result<OutPoint, perun::Error>{
+        
+        let result = call_action!(
+            self,
+            vc_merge,
+            vc1.cell().clone(),
+            vc2.cell().clone(),
+            vc1.vc_state().clone(),
+            vc2.vc_state().clone(),
+            vc1.vcts().clone(),
+            idx,
+        )?;
+        self.push_header_with_cell(result.final_vc_cell.clone());
+        Ok(result.final_vc_cell)
+    }
+
     /// abort a channel using the currently active participant set by
     /// `with(..)`.
     pub fn abort(&mut self) -> Result<(), perun::Error> {

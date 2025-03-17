@@ -25,4 +25,7 @@ pub use vc_update_no_progress::*;
 pub mod vc_update_only;
 pub use vc_update_only::*;
 
+pub mod vc_merge;
+pub use vc_merge::*;
+
 mod common;

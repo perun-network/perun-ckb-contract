@@ -17,13 +17,13 @@ use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
 use crate::perun::test;
-use crate::perun::test::transaction::{make_vc_update_only, mk_vc_progress_no_update, AbortArgs, OpenResult, VCStartArgs, VCUpdateNoProgressArgs, VCUpdateOnlyArgs};
+use crate::perun::test::transaction::{make_vc_merge, make_vc_update_only, mk_vc_progress_no_update, AbortArgs, OpenResult, VCStartArgs, VCUpdateNoProgressArgs, VCUpdateOnlyArgs, VCMergeArgs};
 use crate::perun::test::{keys, transaction};
 
 use k256::ecdsa::{Signature, SigningKey};
 
 use super::cell::FundingCell;
-use super::transaction::{VCProgressNoUpdateResult, VCUpdateOnlyResult};
+use super::transaction::{VCMergeResult, VCProgressNoUpdateResult, VCUpdateOnlyResult};
 use super::ChannelId;
 
 use std::cell::RefCell;
@@ -266,6 +266,35 @@ impl Client {
         let cycles = ctx.verify_tx(&vc_update_only_result.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
         Ok(vc_update_only_result)
+    }
+
+    pub fn vc_merge(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        vc_cell1: OutPoint,
+        vc_cell2: OutPoint,
+        vc_state1: VirtualChannelStatus,
+        vc_state2: VirtualChannelStatus,
+        vcts_script: Script,
+        index: u8,
+    ) -> Result<VCMergeResult, perun::Error> {
+        //make tx
+        let vc_merge_result = make_vc_merge(
+            ctx,
+            env,
+            VCMergeArgs{
+                vc_cell1: vc_cell1,
+                vc_cell2: vc_cell2,
+                party_index: index,
+                vc_state1: vc_state1,
+                vc_state2: vc_state2,
+                vcts_script: vcts_script,
+            }
+        )?;
+        let cycles = ctx.verify_tx(&vc_merge_result.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vc_merge_result)
     }
 
     pub fn abort(

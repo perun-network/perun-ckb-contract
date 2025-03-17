@@ -1,9 +1,8 @@
 use ckb_testtool::{
-    ckb_types::{
+    ckb_hash, ckb_types::{
         packed::{Header, OutPoint, RawHeader, Script},
         prelude::{Builder, Entity, Pack, Unpack},
-    },
-    context::Context,
+    }, context::Context
 };
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
@@ -28,6 +27,7 @@ use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+#[derive(Debug, Clone)]
 pub struct VirtualChannel {
     // acitve_part: test::Client,
     vc_state: VirtualChannelStatus,
@@ -57,6 +57,7 @@ impl VirtualChannel {
         chan_ai: &Channel<perun::State>,
         chan_bi: &Channel<perun::State>,
         idx_map: &VCIndexMap,
+        nonce: &[u8; 32],
     ) -> Self {
         let m_parts: HashMap<_, _> = parts
             .iter()
@@ -73,7 +74,7 @@ impl VirtualChannel {
             .party_a(parties_vc[0
             ].clone())
             .party_b(parties_vc[1].clone())
-            .nonce(random::nonce().pack())
+            .nonce(nonce.clone().pack())
             .challenge_duration(env.challenge_duration.pack())
             .app(Default::default())
             .is_ledger_channel(cfalse!())
