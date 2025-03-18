@@ -12,6 +12,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 #[cfg(test)]
+mod perun;
+#[cfg(test)]
 mod tests;
 
 // The exact same Loader code from capsule's template, except that

@@ -1,12 +1,12 @@
 #![cfg_attr(not(feature = "library"), no_std)]
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
-#[cfg(feature = "library")]
-mod main;
-#[cfg(feature = "library")]
-pub use main::program_entry;
 
-extern crate alloc;
+#[cfg(not(test))]  // Ensure entry is only for contract, not for tests
+ckb_std::entry!(program_entry);
+
+#[cfg(not(test))]  // Ensure allocation is only for contract, not for tests
+ckb_std::default_alloc!(16384, 1258306, 64);
 use perun_common::error::Error;
 
 // Import CKB syscalls and structures
@@ -16,6 +16,14 @@ use ckb_std::{
     ckb_types::{bytes::Bytes, packed::Byte32, prelude::*},
     high_level::{load_cell_type_hash, load_script, load_transaction},
 };
+
+/// **Main entry point for contract**
+pub fn program_entry() -> i8 {
+    match main() {
+        Ok(_) => 0,  // Success
+        Err(_) => -1, // Failure
+    }
+}
 
 // The Perun Funds Lock Script can be unlocked by including an input cell with the pcts script hash
 // that is specified in the args of the pfls.

@@ -10,7 +10,7 @@ members = [
   "contracts/perun-funds-lockscript",
   "contracts/perun-channel-typescript",
   "contracts/perun-channel-lockscript",
-  "tests", "crates/perun-common",
+  "tests",
 ]
 
 [profile.release]

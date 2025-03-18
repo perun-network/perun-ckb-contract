@@ -9,3 +9,12 @@ native-simulator = [ "ckb-testtool/native-simulator" ]
 [dependencies]
 ckb-testtool = "0.15.0"
 serde_json = "1.0"
+hex = "0.4.3"
+rand = "0.9.0"
+perun-common = { path = "../crates/perun-common", default-features = false, features = ["testing"] }
+molecule = "0.8.0"
+ckb-types = { package = "ckb-gen-types", version = "0.200.0" }
+k256 = { version = "0.13.4", default-features = false, features = ["ecdsa", "arithmetic"]}
+rand_core = { version = "0.6", features = ["getrandom"] }
+ckb-std = "0.16.4"
+ckb-occupied-capacity = "0.200.0"

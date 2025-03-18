@@ -1,12 +1,15 @@
 #![cfg_attr(not(feature = "library"), no_std)]
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
-#[cfg(feature = "library")]
-mod main;
-#[cfg(feature = "library")]
-pub use main::program_entry;
 
+#[cfg(test)]
 extern crate alloc;
+
+#[cfg(not(test))]  // Ensure entry is only for contract, not for tests
+ckb_std::entry!(program_entry);
+
+#[cfg(not(test))]  // Ensure allocation is only for contract, not for tests
+ckb_std::default_alloc!(16384, 1258306, 64);
 use alloc::vec;
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
@@ -69,10 +72,18 @@ pub enum ChannelAction {
     Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
 }
 
+pub fn program_entry() -> i8 {
+    match main() {
+        Ok(_) => 0,  // Success
+        Err(_) => -1, // Failure
+    }
+}
+
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-
+    debug!("Raw args: {:?}", script.args());
+    debug!("Raw args length: {}", args.len());
     // return an error if args is empty
     if args.is_empty() {
         return Err(Error::NoArgs);

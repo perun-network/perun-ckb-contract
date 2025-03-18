@@ -48,11 +48,8 @@ build:
 		for contract in $(wildcard contracts/*); do \
 			$(MAKE) -e -C $$contract build; \
 		done; \
-		for crate in $(wildcard crates/*); do \
-			cargo build -p $$(basename $$crate) $(MODE_ARGS) --features contract $(CARGO_ARGS); \
-		done; \
 		for sim in $(wildcard native-simulators/*); do \
-			cargo build -p $$(basename $$sim) --features contract $(CARGO_ARGS); \
+			cargo build -p $$(basename $$sim) $(CARGO_ARGS); \
 		done; \
 	else \
 		$(MAKE) -e -C contracts/$(CONTRACT) build; \
@@ -69,7 +66,7 @@ run:
 # test, check, clippy and fmt here are provided for completeness,
 # there is nothing wrong invoking cargo directly instead of make.
 test:
-	cargo test --features testing $(CARGO_ARGS)
+	cargo test $(CARGO_ARGS)
 
 check:
 	cargo check $(CARGO_ARGS)
