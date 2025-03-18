@@ -748,7 +748,7 @@ fn test_vc_progress_no_update(context: Rc<Mutex<RefCell<Context>>>, env: &perun:
         ).expect("vc_start");
         println!("opening vc dispute no progress on C_BI using Ingrid");
         chan_bi.with(ingrid).vc_progress_no_update(
-            &vc_ab
+            &mut vc_ab
         ).expect("vc_progress_no_update");
         chan_ai.assert();
         chan_bi.assert();
@@ -841,14 +841,14 @@ fn test_vc_progress_update1(context: Rc<Mutex<RefCell<Context>>>, env: &perun::h
             &mut vc_ab
         ).expect("vc_start");
         chan_bi.with(ingrid).vc_progress_no_update(
-            &vc_ab
+            &mut vc_ab
         ).expect("vc_progress_no_update");
 
         // simulate state update for vc
         vc_ab.update(pay_ckbytes(Direction::AtoB, 30));
         
         // Alice posts higher version of vc state to the chain
-        chan_ai.with(alice).vc_update_only(&vc_ab).expect("only_vc_update");
+        chan_ai.with(alice).vc_update_only(&mut vc_ab).expect("only_vc_update");
         chan_ai.assert();
         chan_bi.assert();
         Ok(())

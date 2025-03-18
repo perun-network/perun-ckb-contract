@@ -209,6 +209,7 @@ where
         vc.set_cell(result.vc_cell.clone());
         self.channel_cell = Some(result.parent_lc_cell.clone());
         self.push_header_with_cell(result.parent_lc_cell);
+        self.push_header_with_cell(result.vc_cell);
         Ok(())
     }
 
@@ -295,8 +296,8 @@ where
         self.push_header_with_cell(res.channel_cell);
         Ok(())
     }
-
-    pub fn vc_progress_no_update(&mut self, vc: &VirtualChannel) -> Result<(), perun::Error> {
+    //register dispute for second lc parent without update on vc
+    pub fn vc_progress_no_update(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
         let vc_state = vc.vc_state();
         let vcls = vc.vcls();
@@ -328,13 +329,15 @@ where
             vcls.clone(),
         )?;
         self.channel_cell = Some(result.parent_cell.clone());
+        vc.set_cell(result.vc_cell.clone());
         self.push_header_with_cell(result.parent_cell);
+        self.push_header_with_cell(result.vc_cell);
         Ok(())
     }
 
     pub fn vc_update_only(
         &mut self,
-        vc: &VirtualChannel
+        vc: &mut VirtualChannel
     ) -> Result<(), perun::Error>{
         let vcts = vc.vcts();
         let vc_state = vc.vc_state();
@@ -359,7 +362,10 @@ where
             vcts.clone(),
             vcls.clone(),
         )?;
-        //return result
+        self.channel_cell = Some(result.parent_cell.clone());
+        vc.set_cell(result.vc_cell.clone());
+        self.push_header_with_cell(result.parent_cell);
+        self.push_header_with_cell(result.vc_cell);
         Ok(())
     }
 

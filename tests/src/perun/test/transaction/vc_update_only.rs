@@ -8,12 +8,6 @@ use perun_common::{dispute, perun_types::{ChannelStatus, ChannelWitness, Dispute
 
 use super::{DisputeArgs, common::create_cells};
 
-pub struct VCUpdateOnlyParentArgs{
-    pub channel_cell: OutPoint,
-    pub state: ChannelStatus,
-    pub pcts_script: Script,
-    pub party_index: u8,
-}
 pub struct VCUpdateOnlyArgs{
     pub parent_args: DisputeArgs, 
     pub vc_cell: OutPoint,
@@ -24,25 +18,11 @@ pub struct VCUpdateOnlyArgs{
     pub party_index: u8,
 }
 
-#[derive(Debug, Clone)]
-pub struct VCProgressOnlyUpdateResult {
-    pub tx: TransactionView,
-    pub parent_cell: OutPoint,
-}
-
-
-impl Default for VCProgressOnlyUpdateResult {
-    fn default() -> Self {
-        VCProgressOnlyUpdateResult {
-            tx: TransactionBuilder::default().build(),
-            parent_cell: OutPoint::default(),
-        }
-    }
-}
 
 pub struct VCUpdateOnlyResult {
     pub tx: TransactionView,
     pub parent_cell: OutPoint,
+    pub vc_cell: OutPoint,
 }
 
 impl Default for VCUpdateOnlyResult {
@@ -50,6 +30,7 @@ impl Default for VCUpdateOnlyResult {
         VCUpdateOnlyResult {
             tx: TransactionBuilder::default().build(),
             parent_cell: OutPoint::default(),
+            vc_cell: OutPoint::default(),
         }
     }
 }
@@ -127,6 +108,7 @@ pub fn make_vc_update_only(
     create_cells(ctx, tx.hash(), outputs);
     Ok(VCUpdateOnlyResult {
         parent_cell: OutPoint::new(tx.hash(), 0),
+        vc_cell: OutPoint::new(tx.hash(), 1),
         tx,
     })
 }

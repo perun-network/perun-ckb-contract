@@ -22,6 +22,7 @@ pub struct VCUpdateNoProgressArgs{
 pub struct VCProgressNoUpdateResult {
     pub tx: TransactionView,
     pub parent_cell: OutPoint,
+    pub vc_cell: OutPoint,
 
 }
 
@@ -30,6 +31,7 @@ impl Default for VCProgressNoUpdateResult {
         VCProgressNoUpdateResult {
             tx: TransactionBuilder::default().build(),
             parent_cell: OutPoint::default(),
+            vc_cell: OutPoint::default(),
         }
     }
 }
@@ -106,6 +108,7 @@ pub fn mk_vc_progress_no_update(
     create_cells(ctx, tx.hash(), outputs);
     Ok(VCProgressNoUpdateResult {
         parent_cell: OutPoint::new(tx.hash(), 0),
+        vc_cell: OutPoint::new(tx.hash(), 1),
         tx,
     })
 }
