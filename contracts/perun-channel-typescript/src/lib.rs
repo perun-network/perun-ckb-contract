@@ -1,13 +1,16 @@
-#![no_std]
+#![cfg_attr(not(feature = "library"), no_std)]
+#![allow(special_module_name)]
+#![allow(unused_attributes)]
+#[cfg(feature = "library")]
+mod main;
+#[cfg(feature = "library")]
+pub use main::program_entry;
 
+extern crate alloc;
 use alloc::vec;
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
 use core::iter::IntoIterator;
-// Import heap related library from `alloc`
-// https://doc.rust-lang.org/alloc/index.html
-extern crate alloc;
-
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
@@ -63,13 +66,6 @@ pub enum ChannelAction {
     /// Close, Abort and ForceClose.
     /// The channel type script assures that all funds are payed out to the correct parties upon closing.
     Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
-}
-
-pub fn program_entry() -> i8 {
-    match main() {
-        Ok(_) => 0,  // Success
-        Err(_) => -1, // Failure
-    }
 }
 
 pub fn main() -> Result<(), Error> {
@@ -904,10 +900,10 @@ pub fn verify_different_payment_addresses(
         .payment_script_hash()
         .unpack()[..]
         == channel_constants
-            .params()
-            .party_b()
-            .payment_script_hash()
-            .unpack()[..]
+        .params()
+        .party_b()
+        .payment_script_hash()
+        .unpack()[..]
     {
         return Err(Error::SamePaymentAddress);
     }

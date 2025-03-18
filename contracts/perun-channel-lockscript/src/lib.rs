@@ -1,8 +1,12 @@
-#![no_std]
-// Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
-extern crate alloc;
+#![cfg_attr(not(feature = "library"), no_std)]
+#![allow(special_module_name)]
+#![allow(unused_attributes)]
+#[cfg(feature = "library")]
+mod main;
+#[cfg(feature = "library")]
+pub use main::program_entry;
 
+extern crate alloc;
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
@@ -24,14 +28,6 @@ use perun_common::{error::Error, perun_types::ChannelConstants};
 //
 // Note: This means, that each participant needs to use a secp256k1_blake160_sighash_all as input to interact with the channel.
 // This should not be a substantial restriction, since a payment input will likely be used anyway (e.g. for funding or fees).
-
-/// **Main entry point for contract**
-pub fn program_entry() -> i8 {
-    match main() {
-        Ok(_) => 0,  // Success
-        Err(_) => -1, // Failure
-    }
-}
 
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;

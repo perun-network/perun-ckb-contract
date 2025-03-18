@@ -1,5 +1,6 @@
-use blake2b_rs::Blake2bBuilder;
+use ckb_hash::blake2b_256;
 use ckb_gen_types::{packed::*, prelude::*};
+use ckb_gen_types::packed::Script as CKBScript;
 use ckb_std::ckb_types::{packed::*, prelude::*};
 use molecule::prelude::*;
 
@@ -223,7 +224,7 @@ impl SUDTAllocation {
         return sum;
     }
 
-    pub fn get_distribution(&self, sudt: &Script) -> Result<(usize, SUDTDistribution), Error> {
+    pub fn get_distribution(&self, sudt: &CKBScript) -> Result<(usize, SUDTDistribution), Error> {
         for (i, sb) in self.clone().into_iter().enumerate() {
             if sb.asset().type_script().as_slice() == sudt.as_slice() {
                 return Ok((i, sb.distribution()));
@@ -296,13 +297,7 @@ pub fn geq_components(fst: &CKByteDistribution, snd: &CKByteDistribution) -> boo
 pub const CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
 
 pub fn blake2b256(data: &[u8]) -> [u8; 32] {
-    let mut result = [0u8; 32];
-    let mut blake2b = Blake2bBuilder::new(32)
-        //.personal(CKB_HASH_PERSONALIZATION)
-        .build();
-    blake2b.update(data);
-    blake2b.finalize(&mut result);
-    result
+    blake2b_256(data)
 }
 
 impl ChannelStatus {
