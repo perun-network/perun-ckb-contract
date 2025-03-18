@@ -27,6 +27,7 @@ use ckb_std::{
     },
     syscalls::{self, SysError},
 };
+use ckb_std::ckb_types::packed::Uint64;
 use perun_common::{
     error::Error,
     helpers::blake2b256,
@@ -404,19 +405,21 @@ pub fn verify_increasing_version_number(
         "verify_increasing_version_number old_state disputed:  {}",
         old_status.disputed().to_bool()
     );
+    let old_version: u64 = <Uint64 as Unpack<u64>>::unpack(&old_status.state().version());
+    let new_version: u64 = <Uint64 as Unpack<u64>>::unpack(&new_state.version());
     debug!(
         "verify_increasing_version_number old: {},  new: {}",
-        old_status.state().version().unpack(),
-        new_state.version().unpack()
+        old_version,
+        new_version
     );
     // Allow registering initial state
     if !old_status.disputed().to_bool()
-        && old_status.state().version().unpack() == 0
-        && new_state.version().unpack() == 0
+        && old_version == 0
+        && new_version == 0
     {
         return Ok(());
     }
-    if old_status.state().version().unpack() < new_state.version().unpack() {
+    if old_version < new_version {
         return Ok(());
     }
     Err(Error::VersionNumberNotIncreasing)
@@ -474,8 +477,8 @@ pub fn verify_no_funds_in_inputs(channel_constants: &ChannelConstants) -> Result
     let num_inputs = load_transaction()?.raw().inputs().len();
     for i in 0..num_inputs {
         let cell_lock_hash = load_cell_lock(i, Source::Input)?;
-        if cell_lock_hash.code_hash().unpack()[..]
-            == channel_constants.pfls_code_hash().unpack()[..]
+        if  <Byte32 as Unpack<[u8; 32]>>::unpack(&cell_lock_hash.code_hash())[..]
+            == <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_constants.pfls_code_hash())[..]
         {
             return Err(Error::FundsInInputs);
         }
@@ -509,17 +512,17 @@ pub fn verify_funding_in_outputs(
 
     let expected_pcts_script_hash = load_script_hash()?;
     let outputs = load_transaction()?.raw().outputs();
-    let expected_pfls_code_hash = channel_constants.pfls_code_hash().unpack();
+    let expected_pfls_code_hash: [u8; 32] = <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_constants.pfls_code_hash());
     let expected_pfls_hash_type = channel_constants.pfls_hash_type();
     let mut capacity_sum: u64 = 0;
     for (i, output) in outputs.into_iter().enumerate() {
-        if output.lock().code_hash().unpack()[..] == expected_pfls_code_hash[..]
+        if <Byte32 as Unpack<[u8; 32]>>::unpack(&output.lock().code_hash())[..] == expected_pfls_code_hash[..]
             && output.lock().hash_type().eq(&expected_pfls_hash_type)
         {
             let output_lock_args: Bytes = output.lock().args().unpack();
-            let script_hash_in_pfls_args = Byte32::from_slice(&output_lock_args)?.unpack();
+            let script_hash_in_pfls_args = <Byte32 as Unpack<[u8; 32]>>::unpack(&Byte32::from_slice(&output_lock_args)?);
             if script_hash_in_pfls_args[..] == expected_pcts_script_hash[..] {
-                capacity_sum += output.capacity().unpack();
+                capacity_sum += <Uint64 as Unpack<u64>>::unpack(&output.capacity());
             } else {
                 return Err(Error::InvalidPFLSInOutputs);
             }
@@ -596,7 +599,7 @@ pub fn verify_equal_channel_id(
     old_state: &ChannelState,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    if old_state.channel_id().unpack()[..] != new_state.channel_id().unpack()[..] {
+    if <Byte32 as Unpack<[u8; 32]>>::unpack(&old_state.channel_id())[..] != <Byte32 as Unpack<[u8; 32]>>::unpack(&new_state.channel_id())[..] {
         return Err(Error::ChannelIdMismatch);
     }
     Ok(())
@@ -628,7 +631,7 @@ pub fn verify_channel_id_integrity(
     params: &ChannelParameters,
 ) -> Result<(), Error> {
     let digest = blake2b256(params.as_slice());
-    if digest[..] != channel_id.unpack()[..] {
+    if digest[..] != <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_id)[..] {
         return Err(Error::InvalidChannelId);
     }
     Ok(())
@@ -638,7 +641,7 @@ pub fn verify_state_valid_as_start(
     state: &ChannelState,
     pfls_min_capacity: u64,
 ) -> Result<(), Error> {
-    if state.version().unpack() != 0 {
+    if <Uint64 as Unpack<u64>>::unpack(&state.version()) != 0 {
         return Err(Error::StartWithNonZeroVersion);
     }
     if state.is_final().to_bool() {
@@ -660,7 +663,7 @@ pub fn verify_state_valid_as_start(
 
 pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let lock_script = load_cell_lock(0, Source::GroupOutput)?;
-    if lock_script.code_hash().unpack()[..] != channel_constants.pcls_code_hash().unpack()[..] {
+    if <Byte32 as Unpack<[u8; 32]>>::unpack(&lock_script.code_hash())[..] != <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_constants.pcls_code_hash())[..] {
         return Err(Error::InvalidPCLSCodeHash);
     }
     if !lock_script
@@ -716,18 +719,16 @@ pub fn verify_all_payed(
     }
 
     let ckbytes_balance_a = final_balance.ckbytes().get(0)? + channel_capacity + reimburse_a;
-    let payment_script_hash_a = channel_constants
+    let payment_script_hash_a: [u8; 32] = <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_constants
         .params()
         .party_a()
-        .payment_script_hash()
-        .unpack();
+        .payment_script_hash());
 
     let ckbytes_balance_b = final_balance.ckbytes().get(1)? + reimburse_b;
-    let payment_script_hash_b = channel_constants
+    let payment_script_hash_b: [u8; 32] = <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_constants
         .params()
         .party_b()
-        .payment_script_hash()
-        .unpack();
+        .payment_script_hash());
 
     debug!("ckbytes_balance_a: {}", ckbytes_balance_a);
     debug!("ckbytes_balance_b: {}", ckbytes_balance_b);
@@ -756,7 +757,7 @@ pub fn verify_all_payed(
                 )?;
                 udt_outputs_a[sudt_idx] += amount;
             }
-            ckbytes_outputs_a += output.capacity().unpack();
+            ckbytes_outputs_a += <Uint64 as Unpack<u64>>::unpack(&output.capacity());
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
             if output.type_().is_some() {
@@ -767,7 +768,7 @@ pub fn verify_all_payed(
                 )?;
                 udt_outputs_b[sudt_idx] += amount;
             }
-            ckbytes_outputs_b += output.capacity().unpack();
+            ckbytes_outputs_b += <Uint64 as Unpack<u64>>::unpack(&output.capacity());
         }
     }
     debug!("ckbytes_outputs_a: {}", ckbytes_outputs_a);
@@ -816,8 +817,8 @@ pub fn get_sudt_amout(
 
 pub fn verify_time_lock_expired(time_lock: u64) -> Result<(), Error> {
     let old_header = load_header(0, Source::GroupInput)?;
-    let old_timestamp = old_header.raw().timestamp().unpack();
-    let current_time = find_closest_current_time();
+    let old_timestamp: u64 = old_header.raw().timestamp().unpack();
+    let current_time: u64 = find_closest_current_time();
     if old_timestamp + time_lock > current_time {
         return Err(Error::TimeLockNotExpired);
     }
@@ -894,16 +895,14 @@ pub fn count_cells(source: Source) -> Result<usize, Error> {
 pub fn verify_different_payment_addresses(
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    if channel_constants
+    if <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_constants
         .params()
         .party_a()
-        .payment_script_hash()
-        .unpack()[..]
-        == channel_constants
+        .payment_script_hash())[..]
+        == <Byte32 as Unpack<[u8; 32]>>::unpack(&channel_constants
         .params()
         .party_b()
-        .payment_script_hash()
-        .unpack()[..]
+        .payment_script_hash())[..]
     {
         return Err(Error::SamePaymentAddress);
     }
