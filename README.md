@@ -42,8 +42,9 @@ Run tests:
 ``` sh
 source ./setup_env.sh test && make test
 ```
+or run them using the IDE
 
 ## perun-common
-Additionally to the available contracts we extracted common functionality into
+Additionally, to the available contracts we extracted common functionality into
 its own `perun-common` crate which gives some additional helpers and
 convenience functions when interacting with types used in Perun contracts.

@@ -6,6 +6,7 @@ use ckb_testtool::{
     ckb_types::{bytes::Bytes, packed::*, prelude::*},
     context::Context,
 };
+use ckb_types::core::ScriptHashType;
 use perun_common::cfalse;
 use perun_common::perun_types::ChannelStateBuilder;
 use perun_common::perun_types::ChannelStatusBuilder;
@@ -59,6 +60,7 @@ impl Env {
         let pcts: Bytes = Loader::default().load_binary("perun-channel-typescript");
         let pfls: Bytes = Loader::default().load_binary("perun-funds-lockscript");
         let sample_udt: Bytes = Loader::default().load_binary("sample-udt");
+        println!("the same? {:?}", pfls == sample_udt);
         // Deploying the contracts returns the cell they are deployed in.
         let pcls_out_point = context.deploy_cell(pcls);
         let pcts_out_point = context.deploy_cell(pcts);
@@ -70,20 +72,41 @@ impl Env {
         // Prepare scripts.
         // Perun scripts.
         let pcls_script = context
-            .build_script(&pcls_out_point, Default::default())
+            .build_script_with_hash_type(&pcls_out_point, ScriptHashType::Data1, Default::default())
             .ok_or("perun-channel-lockscript")?;
+        println!(
+            "Built pcls_script: code_hash = {:?}, hash_type = {:?}",
+            pcls_script.code_hash(),
+            pcls_script.hash_type()
+        );
         let pcts_script = context
-            .build_script(
+            .build_script_with_hash_type(
                 &pcts_out_point,
+                ScriptHashType::Data1,
                 perun_types::ChannelConstants::default().as_bytes(),
             )
             .ok_or("perun-channel-typescript")?;
+        println!(
+            "Built pcts_script: code_hash = {:?}, hash_type = {:?}",
+            pcts_script.code_hash(),
+            pcts_script.hash_type()
+        );
         let pfls_script = context
-            .build_script(&pfls_out_point, Default::default())
+            .build_script_with_hash_type(&pfls_out_point, ScriptHashType::Data1, Default::default())
             .ok_or("perun-funds-lockscript")?;
+        println!(
+            "Built pfls_script: code_hash = {:?}, hash_type = {:?}",
+            pfls_script.code_hash(),
+            pfls_script.hash_type()
+        );
         let sample_udt_script = context
-            .build_script(&sample_udt_out_point, Default::default())
+            .build_script_with_hash_type(&sample_udt_out_point, ScriptHashType::Data1, Default::default())
             .ok_or("sample-udt")?;
+        println!(
+            "Built sample_udt_script: code_hash = {:?}, hash_type = {:?}",
+            sample_udt_script.code_hash(),
+            sample_udt_script.hash_type()
+        );
         let pcls_script_dep = CellDep::new_builder()
             .out_point(pcls_out_point.clone())
             .build();

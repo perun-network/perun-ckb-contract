@@ -2,14 +2,12 @@
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
 
-#[cfg(test)]
-extern crate alloc;
+use ckb_std::default_alloc;
+use core::arch::asm;
 
-#[cfg(not(test))]  // Ensure entry is only for contract, not for tests
 ckb_std::entry!(program_entry);
+default_alloc!();
 
-#[cfg(not(test))]  // Ensure allocation is only for contract, not for tests
-ckb_std::default_alloc!(16384, 1258306, 64);
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{

@@ -84,11 +84,7 @@ impl Loader {
     pub fn load_binary(&self, name: &str) -> Bytes {
         let mut path = self.0.clone();
         path.push(name);
-        let result = fs::read(&path);
-        if result.is_err() {
-            panic!("Binary {:?} is missing!", path);
-        }
-        result.unwrap().into()
+        fs::read(path).expect("binary").into()
     }
 }
 

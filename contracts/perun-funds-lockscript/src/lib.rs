@@ -2,13 +2,10 @@
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
 
-#[cfg(not(test))]  // Ensure entry is only for contract, not for tests
-ckb_std::entry!(program_entry);
+use ckb_std::default_alloc;
 
-#[cfg(not(test))]  // Ensure allocation is only for contract, not for tests
-ckb_std::default_alloc!(16384, 1258306, 64);
-// Import heap related library from `alloc`
-// https://doc.rust-lang.org/alloc/index.html
+ckb_std::entry!(program_entry);
+default_alloc!();
 
 use perun_common::error::Error;
 

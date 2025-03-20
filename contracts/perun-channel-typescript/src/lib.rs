@@ -2,17 +2,15 @@
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
 
-#[cfg(test)]
-extern crate alloc;
+use ckb_std::default_alloc;
 
-#[cfg(not(test))]  // Ensure entry is only for contract, not for tests
 ckb_std::entry!(program_entry);
-
-#[cfg(not(test))]  // Ensure allocation is only for contract, not for tests
-ckb_std::default_alloc!(16384, 1258306, 64);
-use alloc::vec;
+default_alloc!();
 // Import from `core` instead of from `std` since we are in no-std mode
 use core::result::Result;
+// Import heap related library from `alloc`
+// https://doc.rust-lang.org/alloc/index.html
+use alloc::vec;
 use core::iter::IntoIterator;
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/

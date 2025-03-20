@@ -2,20 +2,20 @@
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
 
-#[cfg(not(test))]  // Ensure entry is only for contract, not for tests
-ckb_std::entry!(program_entry);
+use ckb_std::default_alloc;
 
-#[cfg(not(test))]  // Ensure allocation is only for contract, not for tests
-ckb_std::default_alloc!(16384, 1258306, 64);
-use perun_common::error::Error;
+ckb_std::entry!(program_entry);
+default_alloc!();
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{bytes::Bytes, packed::Byte32, prelude::*},
-    high_level::{load_cell_type_hash, load_script, load_transaction},
+    ckb_types::{bytes::Bytes, prelude::*},
+    high_level::{load_cell_lock_hash, load_script, load_cell_data},
+    syscalls::SysError,
 };
+use perun_common::error::Error;
 
 /// **Main entry point for contract**
 pub fn program_entry() -> i8 {
@@ -31,28 +31,86 @@ pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
 
-    if args.is_empty() {
-        return Err(Error::NoArgs);
+    // return success if owner mode is true
+    if check_owner_mode(&args)? {
+        return Ok(());
     }
 
-    let pcts_script_hash = Byte32::from_slice(&args)?;
+    let inputs_amount = collect_inputs_amount()?;
+    let outputs_amount = collect_outputs_amount()?;
 
-    return verify_pcts_in_inputs(&pcts_script_hash.unpack());
+    if inputs_amount < outputs_amount {
+        return Err(Error::DecreasingAmount);
+    }
+
+    Ok(())
 }
 
-pub fn verify_pcts_in_inputs(pcts_script_hash: &[u8; 32]) -> Result<(), Error> {
-    let num_inputs = load_transaction()?.raw().inputs().len();
-    for i in 0..num_inputs {
-        match load_cell_type_hash(i, Source::Input)? {
-            Some(cell_type_script_hash) => {
-                if cell_type_script_hash[..] == pcts_script_hash[..] {
-                    return Ok(());
-                } else {
-                    continue;
-                }
-            }
-            None => continue,
+pub fn check_owner_mode(args: &Bytes) -> Result<bool, Error> {
+    // With owner lock script extracted, we will look through each input in the
+    // current transaction to see if any unlocked cell uses owner lock.
+    for i in 0.. {
+        // check input's lock_hash with script args
+        let lock_hash = match load_cell_lock_hash(
+            i,
+            Source::Input,
+        ) {
+            Ok(lock_hash) => lock_hash,
+            Err(SysError::IndexOutOfBound) => return Ok(false),
+            Err(err) => return Err(err.into()),
         };
+        // invalid length of loaded data
+        if args[..] == lock_hash[..] {
+            return Ok(true);
+        }
     }
-    Err(Error::PCTSNotFound)
+    Ok(false)
+}
+
+const UDT_LEN: usize = 16;
+
+pub fn collect_inputs_amount() -> Result<u128, Error> {
+    // let's loop through all input cells containing current UDTs,
+    // and gather the sum of all input tokens.
+    let mut inputs_amount: u128 = 0;
+    let mut buf = [0u8; UDT_LEN];
+
+    // u128 is 16 bytes
+    for i in 0.. {
+        let data = match load_cell_data(i, Source::GroupInput) {
+            Ok(data) => data,
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+
+        if data.len() != UDT_LEN {
+            return Err(Error::Encoding);
+        }
+        buf.copy_from_slice(&data);
+        inputs_amount += u128::from_le_bytes(buf);
+    }
+    Ok(inputs_amount)
+}
+
+fn collect_outputs_amount() -> Result<u128, Error> {
+    // With the sum of all input UDT tokens gathered, let's now iterate through
+    // output cells to grab the sum of all output UDT tokens.
+    let mut outputs_amount: u128 = 0;
+
+    // u128 is 16 bytes
+    let mut buf = [0u8; UDT_LEN];
+    for i in 0.. {
+        let data = match load_cell_data(i, Source::GroupOutput) {
+            Ok(data) => data,
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+
+        if data.len() != UDT_LEN {
+            return Err(Error::Encoding);
+        }
+        buf.copy_from_slice(&data);
+        outputs_amount += u128::from_le_bytes(buf);
+    }
+    Ok(outputs_amount)
 }
