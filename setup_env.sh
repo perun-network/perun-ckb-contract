@@ -15,7 +15,7 @@ if [ "$1" = "build" ]; then
 
 elif [ "$1" = "test" ]; then
     echo "🧪 Setting environment for TEST (x86_64)..."
-    unset RUSTFLAGS
+    export RUSTFLAGS=""
     unset CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER
     unset TARGET_CC
     unset TARGET_AR
@@ -23,4 +23,6 @@ elif [ "$1" = "test" ]; then
     unset CFLAGS
     unset TARGET_CFLAGS
     unset CC
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="gcc"
+
 fi
