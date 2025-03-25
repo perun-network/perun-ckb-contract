@@ -30,7 +30,7 @@ use std::fmt::Debug;
 
 use super::{
     test::{cell::FundingCell, ChannelId},
-    virtual_channel::{self, VirtualChannel},
+    virtual_channel::{self, VCIndexMap, VirtualChannel},
     Account,
 };
 
@@ -185,6 +185,7 @@ where
             .vc_disputed(ctrue!())
             .vcts_hash(vcts.calc_script_hash())
             .build();
+        println!("lc disputed flag {:?}", self.channel_state.disputed().to_bool());
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
         let parent_args = transaction::DisputeArgs{
@@ -517,6 +518,52 @@ where
             ),
             None => panic!("no channel cell, invalid test setup"),
         }?;
+        Ok(())
+    }
+
+    pub fn vc_close1(
+        &mut self,
+        vc: &mut VirtualChannel,
+        idx_map: &[u8; 2],
+    ) -> Result<(), perun::Error>{
+        let h = Header::new_builder()
+            .raw(
+                RawHeader::new_builder()
+                    .timestamp(self.current_time.pack())
+                    .build(),
+            )
+            .build()
+            .into_view();
+        let vc_state = vc.vc_state()
+                .clone()
+                .as_builder()
+                .first_force_close(ctrue!())
+                .build();
+        // Push a header with the current time which can be used in force_close
+        // as for time validation purposes.
+        let mut ctx = match self.ctx.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => panic!("Failed to acquire lock on context"),
+        };
+        ctx.borrow_mut().insert_header(h.clone());
+        drop(ctx);
+        let result = match &self.channel_cell {
+            Some(channel_cell) => call_action!(
+                self,
+                vc_close1,
+                self.id,
+                channel_cell.clone(),
+                self.funding_cells.clone(),
+                self.channel_state.clone(),
+                vc.cell().clone(),
+                vc_state,
+                idx_map.clone(),
+                vc.vcts().clone(),
+            ),
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        self.push_header_with_cell(result.output_vc_cell.clone());
+        vc.set_cell(result.output_vc_cell.clone());
         Ok(())
     }
 

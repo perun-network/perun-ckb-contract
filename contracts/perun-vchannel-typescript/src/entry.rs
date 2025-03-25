@@ -2,7 +2,7 @@
 use core::result::Result;
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{self, vec, vec::Vec};
+use alloc::{self, string::ToString, vec::{self, Vec}};
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
@@ -63,7 +63,6 @@ pub fn main() -> Result<(), Error> {
     debug!("VCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-
     // return an error if args is empty
     if args.is_empty() {
         return Err(Error::NoArgs);
@@ -74,8 +73,6 @@ pub fn main() -> Result<(), Error> {
     let channel_constants =
         VCChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParams");
     debug!("parsing channel parameters passed");
-
-    debug!("channel_params: {:?}", channel_constants);
 
     // Verify that the channel parameters are compatible with the currently supported
     // features of perun channels.
@@ -179,7 +176,6 @@ pub fn check_valid_vc_progress(
     vc_constants: &VCChannelConstants,
 ) -> Result<(), Error> {
     debug!("check_valid_vc_progress");
-
     verify_equal_channel_id_vc(old_vc_status, new_vc_status)?;
     debug!("verify_equal_channel_id_vc passed");
 
@@ -191,6 +187,7 @@ pub fn check_valid_vc_progress(
 
     if old_vc_status.vcstate().version().unpack() < new_vc_status.vcstate().version().unpack() {
         verify_vc_sigs_progress(new_vc_status, &vc_constants.params())?;
+        debug!("verify_vc_sigs_progress passed");
     }
 
     verify_equal_sum_of_balances(
@@ -243,7 +240,6 @@ pub fn check_valid_close1(
     vc_constants: &VCChannelConstants,
 ) -> Result<(), Error> {
     debug!("check_valid_close1");
-
     // a parent pcts must appear as input
     let parent_input_idx = match get_parent_of_vc(input_vc_status, Source::Input) {
         Ok(idx) => idx,
@@ -303,6 +299,7 @@ pub fn verify_first_forced_closed_flag_not_set(
 
 pub fn verify_first_forced_closed_flag_set(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
     if !vc_status.first_force_close().to_bool() {
+        debug!("FirstForceCloseFlagNotSet");
         return Err(Error::FirstForceCloseFlagNotSet);
     }
     Ok(())
@@ -394,7 +391,6 @@ pub fn verify_vc_sigs_progress(
         ChannelWitnessUnion::Dispute(d) => d,
         _ => return Err(Error::InvalidVCTx),
     };
-
     verify_valid_state_sigs(
         &vc_sigs.sig_a().unpack(),
         &vc_sigs.sig_b().unpack(),

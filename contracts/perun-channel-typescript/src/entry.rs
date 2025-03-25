@@ -252,14 +252,13 @@ pub fn check_vc_dispute(
 
     //A vc cell having the same vcts hash should exist in the outputs
     let vcts_hash = new_status.vcts_hash().unpack();
+    debug!("vcts script hash: {:?}", vcts_hash.pack());
     let output_vc_idx = match find_cell_by_type_hash(&vcts_hash, Source::Output) {
         Ok(Some(idx)) => idx,
         Ok(None) => return Err(Error::VCOutputCellMissingIngStartTx),
         Err(err) => return Err(err.into()),
     };
     debug!("Verified that vc cell having the same vcts hash exists in the outputs");
-
-    //One of the vc cell's parents should be this lc cell
     let vc_status = match load_cell_data(output_vc_idx, Source::Output) {
         Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
         Err(err) => return Err(err.into()),
@@ -361,25 +360,34 @@ pub fn check_valid_close(
             Ok(())
         }
         ChannelWitnessUnion::ForceClose(_) => {
+            debug!("ChannelWitnessUnion::ForceClose");
             if old_status.vc_disputed().to_bool() {
+                debug!("old vc status set to vc disputed");
                 let vc_pcts_hash = old_status.vcts_hash().unpack();
+                debug!("vcts hash unpacked");
                 let input_vc_idx = match find_cell_by_type_hash(&vc_pcts_hash, Source::Input) {
                     Ok(Some(idx)) => idx,
                     Ok(None) => return Err(Error::VCInputCellMissingInClose1Tx),
                     Err(err) => return Err(err.into()),
                 };
+                debug!("input vc idx found: {:?}", input_vc_idx);
                 let vc_status = match load_cell_data(input_vc_idx, Source::Input) {
                     Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
                     Err(err) => return Err(err.into()),
                 };
-
                 let vcts = match load_cell_type(input_vc_idx, Source::Input) {
                     Ok(Some(script)) => script,
                     Ok(None) => return Err(Error::VCInputCellMissingInClose1Tx),
                     Err(err) => return Err(err.into()),
                 };
-                let vcts_args = VCChannelConstants::from_slice(vcts.args().as_slice())?;
-                check_vc_force_close(old_status, channel_constants, &vc_status, &vcts_args)
+                debug!("vcts loaded");
+                let vcts_args: Bytes = vcts.args().unpack();
+                let vchannel_constants =  match VCChannelConstants::from_slice(&vcts_args){
+                    Ok(args) => args,
+                    Err(err) => {debug!("Error encountered while reading VCChannelConstants");return Err(err.into())},
+                };
+                debug!("vcts args loaded");
+                check_vc_force_close(old_status, channel_constants, &vc_status, &vchannel_constants)
             } else {
                 check_normal_force_close(old_status, channel_constants, channel_capacity)
             }
@@ -425,6 +433,7 @@ pub fn check_vc_force_close(
     vc_status: &VirtualChannelStatus,
     vcts_args: &VCChannelConstants,
 ) -> Result<(), Error> {
+    debug!("check_vc_force_close");
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
 
     //perform closing checks for ledger channel

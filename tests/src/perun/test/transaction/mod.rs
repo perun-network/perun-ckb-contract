@@ -28,4 +28,7 @@ pub use vc_update_only::*;
 pub mod vc_merge;
 pub use vc_merge::*;
 
+pub mod vc_close1;
+pub use vc_close1::*;
+
 mod common;

@@ -10,7 +10,7 @@ use perun_common::{
     cfalse,
     perun_types::{
         Balances, ChannelConstants, ChannelState, LockedBalances, SUDTAllocation, SubAlloc,
-        SubBalances, VCChannelConstants, VirtualChannelStatus,ChannelParametersBuilder, ParentsVecBuilder, ParentsVec,ParentDataBuilder, IndexMapBuilder, IndexMap,
+        SubBalances, VCChannelConstants, VCChannelConstantsBuilder,VirtualChannelStatus,ChannelParametersBuilder, ParentsVecBuilder, ParentsVec,ParentDataBuilder, IndexMapBuilder, IndexMap,
     },
     helpers::blake2b256,
 };
@@ -46,6 +46,24 @@ pub struct VirtualChannel {
 pub struct VCIndexMap {
     pub parent1: [u8;2],
     pub parent2: [u8;2],
+}
+
+impl VCIndexMap {
+    pub fn invert_map(&self, parent: usize) -> [u8; 2] {
+        let parent_map = self.get(parent).expect("no parent").clone();
+        let mut inverted = [0u8; 2];
+        inverted[parent_map[0 as usize] as usize] = 0;
+        inverted[parent_map[1 as usize] as usize] = 1;
+        inverted
+    }
+
+    pub fn get(&self, parent: usize) -> Option<&[u8; 2]> {
+        match parent {
+            0 => Some(&self.parent1),
+            1 => Some(&self.parent2),
+            _ => None,
+        }
+    }
 }
 
 impl VirtualChannel {
@@ -100,14 +118,14 @@ impl VirtualChannel {
             Err(e) => panic!("Error building virtual channel state: {}", e),
         };
 
-        let vc_channel_constants = VCChannelConstants::new_builder()
+        let vc_channel_constants = VCChannelConstantsBuilder::default()
             .params(vc_chan_params.clone())
             .vcls_code_hash(env.get_vcls_().calc_script_hash())
             .vcls_hash_type(env.get_vcls_().hash_type().clone())
             .build();
+        println!("Debug vc_channel_constants: {:?}", vc_channel_constants.as_bytes().pack());
         let vcts = env.build_vcts(context,vc_channel_constants.as_bytes());
-
-        // let active = m_parts.get(&parts[0].name()).expect("part not found");
+        
         VirtualChannel {
             vc_state: vc_status,
             vcts: vcts,

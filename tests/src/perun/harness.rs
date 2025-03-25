@@ -199,9 +199,10 @@ impl Env {
 
     pub fn build_pcts(&self, context: &mut Context, args: Bytes) -> Script {
         let pcts_out_point = &self.pcts_out_point;
-        context
-            .build_script(pcts_out_point, args)
-            .expect("perun-channel-typescript")
+        let result = context
+                .build_script(pcts_out_point, args);
+        let script_hash = result.clone().unwrap().calc_script_hash();
+        result.expect("Cannot build pcts")
     }
 
     pub fn build_vcls(&self, context: &mut Context, args: Bytes) -> Script {
@@ -216,7 +217,7 @@ impl Env {
         let result = context
             .build_script(vcts_out_point, args);
         let script_hash = result.clone().unwrap().calc_script_hash();
-        println!("Debug: built vcts_hash = {:?}", script_hash);
+        println!("Debug: vcts script hash = {:?}", script_hash);
         result.expect("Cannot build vcts")
     }
 
@@ -231,7 +232,6 @@ impl Env {
         let always_success_out_point = &self.always_success_out_point;
         let result = context
             .build_script(always_success_out_point, args);
-        println!("Debug: result = {:?}", result);
         result.expect("This is failing!")
     }
 

@@ -482,6 +482,33 @@ impl Balances {
         ckbytes.append(&mut sudts);
         return ckbytes;
     }
+
+    pub fn mk_unlocked_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>,
+        lc_to_vc_idx_map: &[u8;2],
+        vc_balances: &Balances,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        let mut ckbytes = self
+            .ckbytes()
+            .mk_unlocked_outputs(
+                &mut mk_lock_script,
+                indices.clone(),
+                lc_to_vc_idx_map,
+                &vc_balances.ckbytes().clone());
+        
+        let mut sudts = self
+            .sudts()
+            .mk_unlocked_outputs(
+                mk_lock_script,
+                indices,
+                lc_to_vc_idx_map,
+                vc_balances.sudts()
+            );
+        ckbytes.append(&mut sudts);
+        return ckbytes;
+    }
 }
 
 #[cfg(feature = "std")]
@@ -499,6 +526,30 @@ impl CKByteDistribution {
                 acc.push((
                     CellOutput::new_builder()
                         .capacity(cap.pack())
+                        .lock(mk_lock_script(*index))
+                        .build(),
+                    bytes::Bytes::new(),
+                ));
+                acc
+            })
+    }
+
+    pub fn mk_unlocked_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>,
+        lc_to_vc_idx_map: &[u8;2],
+        vc_balances: &CKByteDistribution,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        indices
+            .iter()
+            .fold(vec![], |mut acc: Vec<(CellOutput, bytes::Bytes)>, index| {
+                let cap = self.get(index.clone() as usize).expect("invalid index");
+                let locked = vc_balances.get(lc_to_vc_idx_map[*index as usize] as usize).expect("invalid index");
+                let total_cap = cap + locked;
+                acc.push((
+                    CellOutput::new_builder()
+                        .capacity(total_cap.pack())
                         .lock(mk_lock_script(*index))
                         .build(),
                     bytes::Bytes::new(),
@@ -546,6 +597,69 @@ impl SUDTAllocation {
                                 .distribution()
                                 .get(*f as usize)
                                 .expect("invalid index")
+                                .to_le_bytes()
+                                .to_vec(),
+                        ),
+                    ));
+                }
+            }
+        }
+        return outputs;
+    }
+
+    pub fn mk_unlocked_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>,
+        lc_to_vc_idx_map: &[u8;2],
+        vc_balances: SUDTAllocation,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        let mut outputs: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
+        for (i, balance) in self.into_iter().enumerate() {
+            let udt_type = balance.asset().type_script();
+            let udt_type_opt = ScriptOpt::new_builder().set(Some(udt_type)).build();
+            let cap: u64 = balance.asset().max_capacity().unpack();
+            for f in indices.iter() {
+                if balance
+                    .distribution()
+                    .get(*f as usize)
+                    .expect("invalid index")
+                    == 0u128
+                {   
+                    let bal = balance.distribution().get(*f as usize).expect("invalid index");
+                    let vc_bal = vc_balances
+                        .get(i as usize)
+                        .expect("invalid index")
+                        .distribution()
+                        .get(lc_to_vc_idx_map[*f as usize] as usize).expect("invalid index");
+                    let total_bal = bal + vc_bal;
+                    outputs.push((
+                        CellOutput::new_builder()
+                            .capacity(cap.pack())
+                            .lock(mk_lock_script(*f))
+                            .build(),
+                        bytes::Bytes::from(
+                            total_bal
+                                .to_le_bytes()
+                                .to_vec(),
+                        ),
+                    ));
+                } else {
+                    let bal = balance.distribution().get(*f as usize).expect("invalid index");
+                    let vc_bal = vc_balances
+                        .get(i as usize)
+                        .expect("invalid index")
+                        .distribution()
+                        .get(lc_to_vc_idx_map[*f as usize] as usize).expect("invalid index");
+                    let total_bal = bal + vc_bal;
+                    outputs.push((
+                        CellOutput::new_builder()
+                            .capacity(cap.pack())
+                            .lock(mk_lock_script(*f))
+                            .type_(udt_type_opt.clone())
+                            .build(),
+                        bytes::Bytes::from(
+                            total_bal
                                 .to_le_bytes()
                                 .to_vec(),
                         ),

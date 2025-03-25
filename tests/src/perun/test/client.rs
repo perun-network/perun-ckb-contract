@@ -373,4 +373,40 @@ impl Client {
         println!("consumed cycles: {}", cycles);
         Ok(fcr)
     }
+
+    pub fn vc_close1(
+        &self, 
+        ctx: &mut Context,
+        env: &harness::Env,
+        _cid: test::ChannelId,
+        parent_cell: OutPoint,
+        fund_cells: Vec<FundingCell>,
+        parent_state: ChannelStatus,
+        vc_cell: OutPoint,
+        vc_status: VirtualChannelStatus,
+        vc_to_lc_idx_map: [u8; 2],
+        vcts: Script,
+    ) -> Result<transaction::VCClose1Result, perun::Error>{
+        let hs = ctx.headers.keys().cloned().collect();
+        let vcc1r = transaction::make_vc_close1(
+            ctx,
+            env,
+            transaction::VCClose1Args{
+                parent_args: transaction::ForceCloseArgs{
+                    channel_cell: parent_cell,
+                    headers: hs,
+                    funds_cells: fund_cells,
+                    state: parent_state,
+                    party_index: self.index,
+                },
+                vc_cell: vc_cell,
+                vc_status: vc_status,
+                vc_to_lc_idx_map: vc_to_lc_idx_map,
+                vcts_script: vcts,
+            }
+        )?;
+        let cycles = ctx.verify_tx(&vcc1r.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vcc1r)
+    }
 }
