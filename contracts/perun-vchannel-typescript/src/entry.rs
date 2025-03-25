@@ -388,11 +388,16 @@ pub fn verify_vc_sigs_progress(
         .to_opt()
         .ok_or(Error::NoWitness)?
         .unpack();
-    let vc_witness = VCDispute::from_slice(&witness_bytes)?;
+    
+    let vc_witness = ChannelWitness::from_slice(&witness_bytes)?;
+    let vc_sigs = match vc_witness.to_enum() {
+        ChannelWitnessUnion::Dispute(d) => d,
+        _ => return Err(Error::InvalidVCTx),
+    };
 
     verify_valid_state_sigs(
-        &vc_witness.sig_a().unpack(),
-        &vc_witness.sig_b().unpack(),
+        &vc_sigs.sig_a().unpack(),
+        &vc_sigs.sig_b().unpack(),
         &new_vc_status.vcstate(),
         &vc_params.party_a().pub_key(),
         &vc_params.party_b().pub_key(),
@@ -618,7 +623,7 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),
             Err(err) => return Err(err.into()),
         };
-        let output_vc_status = match load_cell_data(0, Source::GroupInput) {
+        let output_vc_status = match load_cell_data(0, Source::GroupOutput) {
             Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
             Err(err) => return Err(err.into()),
         };

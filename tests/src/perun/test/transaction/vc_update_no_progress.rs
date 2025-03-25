@@ -68,9 +68,7 @@ pub fn mk_vc_progress_no_update(
     let pcls_script = env.build_pcls(ctx, Default::default());
     let vcls_script = env.build_vcls(ctx, Default::default());
     let capacity_for_cs = env.min_capacity_for_channel(args.parent_args.state.clone())?;
-    println!("used ctx to build pcls and vcls");
     // create cells for outputs
-    println!("parent lc cell typ hash {:?}", args.parent_args.pcts_script.clone().calc_script_hash().as_slice());
     let parent_channel_cell = CellOutput::new_builder()
         .capacity(capacity_for_cs.pack())
         .lock(pcls_script.clone())
