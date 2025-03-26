@@ -5,6 +5,7 @@ use ckb_testtool::ckb_types::packed::{Byte32, OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 
+use k256::ecdsa::recoverable::Id;
 use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
@@ -384,7 +385,7 @@ impl Client {
         parent_state: ChannelStatus,
         vc_cell: OutPoint,
         vc_status: VirtualChannelStatus,
-        vc_to_lc_idx_map: [u8; 2],
+        idx_map: perun::virtual_channel::IdxMapWithDirection,
         vcts: Script,
     ) -> Result<transaction::VCClose1Result, perun::Error>{
         let hs = ctx.headers.keys().cloned().collect();
@@ -401,7 +402,7 @@ impl Client {
                 },
                 vc_cell: vc_cell,
                 vc_status: vc_status,
-                vc_to_lc_idx_map: vc_to_lc_idx_map,
+                idx_map_with_direction: idx_map,
                 vcts_script: vcts,
             }
         )?;

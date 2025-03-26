@@ -43,6 +43,17 @@ pub struct VirtualChannel {
 }
 
 #[derive(Debug, Clone)]
+pub enum IdxMapDirection {
+    LedgerChannelToVirtualChannel,
+    VirtualChannelToLedgerChannel,
+}
+
+#[derive(Debug, Clone)]
+pub struct IdxMapWithDirection {
+    pub idx_map: [u8;2],
+    pub direction: IdxMapDirection,
+}
+#[derive(Debug, Clone)]
 pub struct VCIndexMap {
     pub parent1: [u8;2],
     pub parent2: [u8;2],

@@ -1068,7 +1068,11 @@ fn test_vc_close1(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::En
 
         chan_ai.delay(env.challenge_duration);
         chan_ai.delay(env.challenge_duration);
-        chan_ai.with(alice).vc_close1(&mut vc_ab, &idx_map.invert_map(0 as usize)).expect("vc_close1");
+        let idx_map_with_dir = virtual_channel::IdxMapWithDirection{
+            idx_map: idx_map.clone().invert_map(0 as usize),
+            direction: IdxMapDirection::LedgerChannelToVirtualChannel
+        };
+        chan_ai.with(alice).vc_close1(&mut vc_ab, &idx_map_with_dir).expect("vc_close1");
         chan_ai.assert();
         chan_bi.assert();
         Ok(())

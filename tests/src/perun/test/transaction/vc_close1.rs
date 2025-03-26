@@ -12,7 +12,7 @@ use perun_common::{perun_types::{ChannelStatus, ForceClose, VirtualChannelStatus
 
 use crate::perun::{
     self, harness,
-    test::{cell::FundingCell, transaction::common::channel_witness}
+    test::{cell::FundingCell, transaction::common::channel_witness}, virtual_channel::{IdxMapDirection, IdxMapWithDirection}
 };
 
 use super::{ForceCloseArgs, common::{add_cap_to_a, create_cells}};
@@ -22,7 +22,7 @@ pub struct VCClose1Args {
     pub parent_args: ForceCloseArgs,
     pub vc_cell: OutPoint,
     pub vc_status: VirtualChannelStatus,
-    pub vc_to_lc_idx_map: [u8; 2],
+    pub idx_map_with_direction : IdxMapWithDirection,
     pub vcts_script: Script,
 }
 
@@ -75,7 +75,11 @@ pub fn make_vc_close1(
     let channel_cap = env.min_capacity_for_channel(args.parent_args.state.clone())?;
     let balances = add_cap_to_a(&args.parent_args.state.state().balances(), channel_cap); // give ckbytes locked for channel cell to first party
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
-    let mut outputs = balances.mk_unlocked_outputs(f, vec![0, 1], &args.vc_to_lc_idx_map, &args.vc_status.vcstate().balances());
+    match args.idx_map_with_direction.direction {
+        IdxMapDirection::LedgerChannelToVirtualChannel =>{}
+        _ => panic!("Invalid direction for idx_map"),
+    }
+    let mut outputs = balances.mk_unlocked_outputs(f, vec![0, 1], &args.idx_map_with_direction.idx_map, &args.vc_status.vcstate().balances());
     let mut outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
     
     let vcls_script = env.build_vcls(ctx, Default::default());

@@ -30,7 +30,7 @@ use std::fmt::Debug;
 
 use super::{
     test::{cell::FundingCell, ChannelId},
-    virtual_channel::{self, VCIndexMap, VirtualChannel},
+    virtual_channel::{self, IdxMapWithDirection, VCIndexMap, VirtualChannel},
     Account,
 };
 
@@ -524,7 +524,7 @@ where
     pub fn vc_close1(
         &mut self,
         vc: &mut VirtualChannel,
-        idx_map: &[u8; 2],
+        idx_map: &IdxMapWithDirection,
     ) -> Result<(), perun::Error>{
         let h = Header::new_builder()
             .raw(
