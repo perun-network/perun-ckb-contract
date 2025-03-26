@@ -31,4 +31,7 @@ pub use vc_merge::*;
 pub mod vc_close1;
 pub use vc_close1::*;
 
+pub mod vc_close2;
+pub use vc_close2::*;
+
 mod common;

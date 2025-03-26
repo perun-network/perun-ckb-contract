@@ -364,10 +364,10 @@ pub fn check_valid_close(
             if old_status.vc_disputed().to_bool() {
                 debug!("old vc status set to vc disputed");
                 let vc_pcts_hash = old_status.vcts_hash().unpack();
-                debug!("vcts hash unpacked");
+                debug!("vcts hash unpacked : {:?}", vc_pcts_hash.pack());
                 let input_vc_idx = match find_cell_by_type_hash(&vc_pcts_hash, Source::Input) {
                     Ok(Some(idx)) => idx,
-                    Ok(None) => return Err(Error::VCInputCellMissingInClose1Tx),
+                    Ok(None) => return {debug!("DEBUG: Cannot Find VC Cell in Input");Err(Error::VCInputCellMissingInClose1Tx)},
                     Err(err) => return Err(err.into()),
                 };
                 debug!("input vc idx found: {:?}", input_vc_idx);

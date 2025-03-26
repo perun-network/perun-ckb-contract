@@ -170,10 +170,7 @@ where
         Ok(())
     }
 
-    pub fn vc_start(
-        &mut self,
-        vc: &mut VirtualChannel,
-    ) -> Result<(), perun::Error> {
+    pub fn vc_start(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
         let vc_state = vc.vc_state();
         let vcls = vc.vcls();
@@ -185,18 +182,20 @@ where
             .vc_disputed(ctrue!())
             .vcts_hash(vcts.calc_script_hash())
             .build();
-        println!("lc disputed flag {:?}", self.channel_state.disputed().to_bool());
+        println!(
+            "lc disputed flag {:?}",
+            self.channel_state.disputed().to_bool()
+        );
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
-        let parent_args = transaction::DisputeArgs{
+        let parent_args = transaction::DisputeArgs {
             party_index: self.active_part.index,
             channel_cell: self.channel_cell.clone().expect("no channel cell"),
             state: self.channel_state.clone(),
             sigs: lc_sigs,
             pcts_script: self.pcts.clone(),
-            };
-        
-        
+        };
+
         let result = call_action!(
             self,
             vc_start,
@@ -230,7 +229,8 @@ where
         };
         ctx.borrow_mut().insert_header(header.clone());
         // We will always use 0 as the `tx_index`.
-        ctx.borrow_mut().link_cell_with_block(cell, header.hash(), 0);
+        ctx.borrow_mut()
+            .link_cell_with_block(cell, header.hash(), 0);
         drop(ctx);
     }
 
@@ -312,14 +312,14 @@ where
             .build();
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
-        let parent_args = transaction::DisputeArgs{
+        let parent_args = transaction::DisputeArgs {
             party_index: self.active_part.index,
             channel_cell: self.channel_cell.clone().expect("no channel cell"),
             state: self.channel_state.clone(),
             sigs: lc_sigs,
             pcts_script: self.pcts.clone(),
-            };
-        
+        };
+
         let result = call_action!(
             self,
             vc_progress_no_update,
@@ -336,23 +336,20 @@ where
         Ok(())
     }
 
-    pub fn vc_update_only(
-        &mut self,
-        vc: &mut VirtualChannel
-    ) -> Result<(), perun::Error>{
+    pub fn vc_update_only(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
         let vc_state = vc.vc_state();
         let vcls = vc.vcls();
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
 
-        let parent_args = transaction::DisputeArgs{
+        let parent_args = transaction::DisputeArgs {
             party_index: self.active_part.index,
             channel_cell: self.channel_cell.clone().expect("no channel cell"),
             state: self.channel_state.clone(),
             sigs: lc_sigs,
             pcts_script: self.pcts.clone(),
-            };
+        };
         let result = call_action!(
             self,
             vc_update_only,
@@ -375,8 +372,7 @@ where
         vc1: &VirtualChannel,
         vc2: &VirtualChannel,
         idx: u8,
-    ) -> Result<OutPoint, perun::Error>{
-        
+    ) -> Result<OutPoint, perun::Error> {
         let result = call_action!(
             self,
             vc_merge,
@@ -525,7 +521,7 @@ where
         &mut self,
         vc: &mut VirtualChannel,
         idx_map: &IdxMapWithDirection,
-    ) -> Result<(), perun::Error>{
+    ) -> Result<(), perun::Error> {
         let h = Header::new_builder()
             .raw(
                 RawHeader::new_builder()
@@ -534,11 +530,12 @@ where
             )
             .build()
             .into_view();
-        let vc_state = vc.vc_state()
-                .clone()
-                .as_builder()
-                .first_force_close(ctrue!())
-                .build();
+        let vc_state = vc
+            .vc_state()
+            .clone()
+            .as_builder()
+            .first_force_close(ctrue!())
+            .build();
         // Push a header with the current time which can be used in force_close
         // as for time validation purposes.
         let mut ctx = match self.ctx.try_lock() {
@@ -564,6 +561,45 @@ where
         }?;
         self.push_header_with_cell(result.output_vc_cell.clone());
         vc.set_cell(result.output_vc_cell.clone());
+        Ok(())
+    }
+
+    pub fn vc_close2(
+        &mut self,
+        vc: &mut VirtualChannel,
+        idx_map: &IdxMapWithDirection,
+    ) -> Result<(), perun::Error> {
+        let h = Header::new_builder()
+            .raw(
+                RawHeader::new_builder()
+                    .timestamp(self.current_time.pack())
+                    .build(),
+            )
+            .build()
+            .into_view();
+        // Push a header with the current time which can be used in force_close
+        // as for time validation purposes.
+        let ctx = match self.ctx.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => panic!("Failed to acquire lock on context"),
+        };
+        ctx.borrow_mut().insert_header(h.clone());
+        drop(ctx);
+        match &self.channel_cell {
+            Some(channel_cell) => call_action!(
+                self,
+                vc_close2,
+                self.id,
+                channel_cell.clone(),
+                self.funding_cells.clone(),
+                self.channel_state.clone(),
+                vc.cell().clone(),
+                vc.vc_state().clone(),
+                idx_map.clone(),
+                vc.vcts().clone(),
+            ),
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
         Ok(())
     }
 

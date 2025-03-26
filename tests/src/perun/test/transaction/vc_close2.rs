@@ -8,44 +8,48 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use perun_common::{perun_types::{ChannelStatus, ForceClose, VirtualChannelStatus}, redeemer};
+use perun_common::{
+    perun_types::{ChannelStatus, ForceClose, VirtualChannelStatus},
+    redeemer,
+};
 
 use crate::perun::{
     self, harness,
-    test::{cell::FundingCell, transaction::common::channel_witness}, virtual_channel::{IdxMapDirection, IdxMapWithDirection}
+    test::{cell::FundingCell, transaction::common::channel_witness},
+    virtual_channel::{IdxMapDirection, IdxMapWithDirection},
 };
 
-use super::{ForceCloseArgs, common::{add_cap_to_a, create_cells}};
+use super::{
+    common::{add_cap_to_a, create_cells},
+    ForceCloseArgs,
+};
 
-
-pub struct VCClose1Args {
+pub struct VCClose2Args {
     pub parent_args: ForceCloseArgs,
     pub vc_cell: OutPoint,
     pub vc_status: VirtualChannelStatus,
-    pub idx_map_with_direction : IdxMapWithDirection,
+    pub idx_map_with_direction: IdxMapWithDirection,
     pub vcts_script: Script,
 }
 
 #[derive(Debug, Clone)]
-pub struct VCClose1Result {
+pub struct VCClose2Result {
     pub tx: TransactionView,
-    pub output_vc_cell: OutPoint,
 }
 
-impl Default for VCClose1Result {
+impl Default for VCClose2Result {
     fn default() -> Self {
-        VCClose1Result {
+        VCClose2Result {
             tx: TransactionBuilder::default().build(),
-            output_vc_cell: OutPoint::default(),
         }
     }
 }
 
-pub fn make_vc_close1(
+pub fn make_vc_close2(
     ctx: &mut Context,
     env: &harness::Env,
-    args: VCClose1Args,
-) -> Result<VCClose1Result, perun::Error> {
+    args: VCClose2Args,
+) -> Result<VCClose2Result, perun::Error> {
     let payment_input = env.create_min_cell_for_index(ctx, args.parent_args.party_index);
     let mut inputs = vec![
         CellInput::new_builder()
@@ -76,23 +80,17 @@ pub fn make_vc_close1(
     let balances = add_cap_to_a(&args.parent_args.state.state().balances(), channel_cap); // give ckbytes locked for channel cell to first party
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
     match args.idx_map_with_direction.direction {
-        IdxMapDirection::LedgerChannelToVirtualChannel =>{}
+        IdxMapDirection::LedgerChannelToVirtualChannel => {}
         _ => panic!("Invalid direction for idx_map"),
     }
-    let mut outputs = balances.mk_unlocked_outputs(f, vec![0, 1], &args.idx_map_with_direction.idx_map, &args.vc_status.vcstate().balances());
-    let mut outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
-    
-    let vcls_script = env.build_vcls(ctx, Default::default());
-    let vc_status = args.vc_status.clone();
-    let capacity_for_vc = env.min_capacity_for_vc_channel(vc_status.clone())?;
-    let vc_cell = CellOutput::new_builder()
-        .capacity(capacity_for_vc.pack())
-        .lock(vcls_script.clone())
-        .type_(Some(args.vcts_script.clone()).pack())
-        .build();
-    outputs.push((vc_cell.clone(), vc_status.as_bytes()));
-    outputs_data.push(vc_status.as_bytes());
-    let _output_vc_status = VirtualChannelStatus::from_slice(&outputs_data[outputs.len() - 1]).unwrap();
+    let outputs = balances.mk_unlocked_outputs(
+        f,
+        vec![0, 1],
+        &args.idx_map_with_direction.idx_map,
+        &args.vc_status.vcstate().balances(),
+    );
+    let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
+
     let force_close_action = redeemer!(ForceClose);
     let witness_args = channel_witness!(force_close_action);
 
@@ -105,9 +103,6 @@ pub fn make_vc_close1(
         .cell_deps(cell_deps)
         .build();
     let tx = ctx.complete_tx(rtx);
-    create_cells(ctx, tx.hash(), outputs.clone());
-    Ok(VCClose1Result{
-        output_vc_cell: OutPoint::new(tx.hash(), (outputs.len() - 1) as u32),  //vc cell is the last cell in the outputs
-        tx,
-    })
+    create_cells(ctx, tx.hash(), outputs);
+    Ok(VCClose2Result { tx })
 }
