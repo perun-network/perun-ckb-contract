@@ -367,6 +367,39 @@ where
         Ok(())
     }
 
+    pub fn vc_lc_update(
+        &mut self,
+        vc: &mut VirtualChannel,
+    ) -> Result<(), perun::Error>{
+        let vcts = vc.vcts();
+        let vc_status = vc.vc_state();
+        let vcls = vc.vcls();
+        let lc_sigs = self.sigs_for_channel_state()?;
+        let vc_sigs = vc.sigs_for_vc_status()?;
+        let parent_args = transaction::DisputeArgs {
+            party_index: self.active_part.index,
+            channel_cell: self.channel_cell.clone().expect("no channel cell"),
+            state: self.channel_state.clone(),
+            sigs: lc_sigs,
+            pcts_script: self.pcts.clone(),
+        };
+        let result = call_action!(
+            self,
+            vc_lc_update,
+            parent_args,
+            vc.cell().clone(),
+            vc_status.clone(),
+            vc_sigs.clone(),
+            vcts.clone(),
+            vcls.clone(),
+        )?;
+        self.channel_cell = Some(result.parent_cell.clone());
+        vc.set_cell(result.vc_cell.clone());
+        self.push_header_with_cell(result.parent_cell);
+        self.push_header_with_cell(result.vc_cell);
+        Ok(())
+    }
+
     pub fn vc_merge(
         &mut self,
         vc1: &VirtualChannel,

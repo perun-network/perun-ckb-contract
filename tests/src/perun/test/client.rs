@@ -18,13 +18,13 @@ use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
 use crate::perun::test;
-use crate::perun::test::transaction::{make_vc_merge, make_vc_update_only, mk_vc_progress_no_update, AbortArgs, OpenResult, VCStartArgs, VCUpdateNoProgressArgs, VCUpdateOnlyArgs, VCMergeArgs};
+use crate::perun::test::transaction::{make_vc_merge, make_vc_update_only, mk_vc_progress_no_update, mk_vc_lc_update, vc_lc_update, AbortArgs, OpenResult, VCMergeArgs, VCStartArgs, VCUpdateNoProgressArgs, VCUpdateOnlyArgs,VCLCUpdateArgs};
 use crate::perun::test::{keys, transaction};
 
 use k256::ecdsa::{Signature, SigningKey};
 
 use super::cell::FundingCell;
-use super::transaction::{VCMergeResult, VCProgressNoUpdateResult, VCUpdateOnlyResult};
+use super::transaction::{VCLCUpdateResult, VCMergeResult, VCProgressNoUpdateResult, VCUpdateOnlyResult};
 use super::ChannelId;
 
 use std::cell::RefCell;
@@ -267,6 +267,36 @@ impl Client {
         let cycles = ctx.verify_tx(&vc_update_only_result.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
         Ok(vc_update_only_result)
+    }
+
+    pub fn vc_lc_update(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        lc_dispute_args: transaction::DisputeArgs,
+        vc_cell: OutPoint,
+        vc_status: VirtualChannelStatus,
+        vc_sigs: [Vec<u8>; 2],
+        vcts_script: Script,
+        vcls_script: Script,
+    ) -> Result<VCLCUpdateResult, perun::Error>{
+        //make tx
+        let vc_lc_result = mk_vc_lc_update(
+            ctx,
+            env,
+            VCLCUpdateArgs{
+                parent_args: lc_dispute_args,
+                vc_cell: vc_cell,
+                vc_status: vc_status,
+                sigs: vc_sigs,
+                vcts_script: vcts_script,
+                vcls_script: vcls_script,
+                party_index: self.index,
+            }
+        )?;
+        let cycles = ctx.verify_tx(&vc_lc_result.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vc_lc_result)
     }
 
     pub fn vc_merge(

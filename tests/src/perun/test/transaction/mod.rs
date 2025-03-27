@@ -34,4 +34,7 @@ pub use vc_close1::*;
 pub mod vc_close2;
 pub use vc_close2::*;
 
+pub mod vc_lc_update;
+pub use vc_lc_update::*;
+
 mod common;

@@ -115,9 +115,14 @@ fn channel_vc_test_bench() -> Result<(), perun::Error> {
         test_vc_start,
         test_vc_progress_no_update,
         test_vc_progress_update1,
+        test_vc_progress_update2,
         test_vc_merge,
         test_vc_close1,
         test_vc_close2,
+        test_vc_happy,
+        test_vc_happy_multi_asset,
+        test_vc_happy_with_merge,
+        test_vc_happy_multi_asset_with_merge,
     ]
     .iter()
     .map(|test| {
@@ -709,7 +714,7 @@ fn test_vc_progress_no_update(context: Rc<Mutex<RefCell<Context>>>, env: &perun:
     };
 
     create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
-        println!("TEST_VC_START");
+        println!("TEST_VC_PROGRESS_NO_UPDATE");
         chan_ai.with(alice)   //use borrow_mut in case of Rc cell
             .open(&funding_agreement_ai)
             .expect("opening channel");
@@ -803,7 +808,7 @@ fn test_vc_progress_update1(context: Rc<Mutex<RefCell<Context>>>, env: &perun::h
     };
 
     create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
-        println!("test_vc_progress_update1");
+        println!("TEST_VC_PROGRESS_UPDATE1");
         chan_ai.with(alice)   //use borrow_mut in case of Rc cell
             .open(&funding_agreement_ai)
             .expect("opening channel");
@@ -859,7 +864,102 @@ fn test_vc_progress_update1(context: Rc<Mutex<RefCell<Context>>>, env: &perun::h
 
 // state updates for both lc and vc
 fn test_vc_progress_update2(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::Env) -> Result<(), perun::Error>{
-    unimplemented!("test_vc_progress_update2")
+    let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
+    let alice_acc = random::account(alice);
+    let bob_acc = random::account(bob);
+    let ingrid_acc = random::account(ingrid);
+
+    let parts_ai = [alice_acc.clone(), ingrid_acc.clone()]; 
+    let parts_bi = [bob_acc.clone(), ingrid_acc.clone()]; 
+    let parts_ab = [alice_acc.clone(), bob_acc.clone()];    
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+
+    let funding_vc = [
+        Capacity::bytes(50)?.as_u64(),
+        Capacity::bytes(50)?.as_u64(),
+    ];
+
+    let funding_agreement_ai = test::FundingAgreement::new_with_capacities(
+        parts_ai.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+
+    let funding_agreement_bi = test::FundingAgreement::new_with_capacities(
+        parts_bi.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+
+    let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
+        parts_ab.iter().cloned().zip(funding_vc.iter().cloned()).collect(),
+    );
+
+    // Alice is proposer of C_AI
+    // Bob is proposer of C_IB
+    // Alice is proposer of VC_AB
+    // Parent1 is C_AI and Parent2 is C_IB
+    // idx_map maps participant roles from vc to lc 
+    let idx_map = virtual_channel::VCIndexMap{
+        parent1: [0u8, 1u8],  
+        parent2: [1u8, 0u8],
+    };
+
+    create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
+        println!("TEST_VC_PROGRESS_UPDATE2");
+        chan_ai.with(alice)   //use borrow_mut in case of Rc cell
+            .open(&funding_agreement_ai)
+            .expect("opening channel");
+        
+        chan_bi.with(bob)
+            .open(&funding_agreement_bi)
+            .expect("opening channel");
+
+        chan_ai.with(ingrid)
+            .fund(&funding_agreement_ai)
+            .expect("funding channel");
+
+        chan_bi.with(ingrid)
+            .fund(&funding_agreement_bi)
+            .expect("funding channel");
+    
+        let mut ctx = match context.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => panic!("Failed to acquire lock on context"),
+        };
+        let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
+            &mut ctx.borrow_mut(),
+            env,
+            &parts_ab,
+            &funding_agreement_ab,
+            &chan_ai,
+            &chan_bi,
+            &idx_map,
+            &random::nonce(),
+            );
+        drop(ctx);
+        // Simulate creating virtual channels    
+        chan_ai.with(alice).update(update_virtual_channel(&funding_agreement_ab,vc_ab.id().clone() , &idx_map.parent1));
+        chan_bi.with(ingrid).update(update_virtual_channel(&funding_agreement_ab, vc_ab.id().clone(), &idx_map.parent2));
+        
+        chan_ai.with(alice).vc_start(
+            &mut vc_ab
+        ).expect("vc_start");
+        chan_bi.with(ingrid).vc_progress_no_update(
+            &mut vc_ab
+        ).expect("vc_progress_no_update");
+
+        // simulate state update for vc
+        vc_ab.update(pay_ckbytes(Direction::AtoB, 30));
+        //simulate state update for lc
+        chan_ai.with(alice).update(pay_ckbytes(Direction::AtoB, 30));
+        
+        // Alice posts higher version of vc state to the chain
+        // chan_ai.with(alice).vc_update_only(&mut vc_ab).expect("only_vc_update");     
+        chan_ai.with(alice).vc_lc_update(&mut vc_ab).expect("vc_lc_update");  
+        chan_ai.assert();
+        chan_bi.assert();
+        Ok(())
+    }) 
 }
 
 
@@ -1018,7 +1118,7 @@ fn test_vc_close1(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::En
     };
 
     create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
-        println!("test_vc_progress_update1");
+        println!("TEST_VC_CLOSE1");
         chan_ai.with(alice)   //use borrow_mut in case of Rc cell
             .open(&funding_agreement_ai)
             .expect("opening channel");
@@ -1122,7 +1222,7 @@ fn test_vc_close2(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::En
     };
 
     create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
-        println!("test_vc_progress_update1");
+        println!("TEST_VC_CLOSE2");
         chan_ai.with(alice)   //use borrow_mut in case of Rc cell
             .open(&funding_agreement_ai)
             .expect("opening channel");
@@ -1293,4 +1393,681 @@ fn test_vc_fund_close  (
         chan_bi.assert();
         Ok(())
     })
+}
+
+fn test_vc_happy(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
+    let alice_acc = random::account(alice);
+    let bob_acc = random::account(bob);
+    let ingrid_acc = random::account(ingrid);
+
+    let parts_ai = [alice_acc.clone(), ingrid_acc.clone()];
+    let parts_bi = [bob_acc.clone(), ingrid_acc.clone()];
+    let parts_ab = [alice_acc.clone(), bob_acc.clone()];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+
+    let funding_vc = [Capacity::bytes(50)?.as_u64(), Capacity::bytes(50)?.as_u64()];
+
+    let funding_agreement_ai = test::FundingAgreement::new_with_capacities(
+        parts_ai
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_bi = test::FundingAgreement::new_with_capacities(
+        parts_bi
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
+        parts_ab
+            .iter()
+            .cloned()
+            .zip(funding_vc.iter().cloned())
+            .collect(),
+    );
+
+    // Alice is proposer of C_AI
+    // Bob is proposer of C_IB
+    // Alice is proposer of VC_AB
+    // Parent1 is C_AI and Parent2 is C_IB
+    // idx_map maps participant roles from vc to lc
+    let idx_map = virtual_channel::VCIndexMap {
+        parent1: [0u8, 1u8],
+        parent2: [1u8, 0u8],
+    };
+
+    create_vc_channel_test(
+        context.clone(),
+        env,
+        &parts_ai,
+        &parts_bi,
+        |chan_ai, chan_bi| {
+            println!("TEST_VC_HAPPY");
+            chan_ai
+                .with(alice) //use borrow_mut in case of Rc cell
+                .open(&funding_agreement_ai)
+                .expect("opening channel");
+
+            chan_bi
+                .with(bob)
+                .open(&funding_agreement_bi)
+                .expect("opening channel");
+
+            chan_ai
+                .with(ingrid)
+                .fund(&funding_agreement_ai)
+                .expect("funding channel");
+
+            chan_bi
+                .with(ingrid)
+                .fund(&funding_agreement_bi)
+                .expect("funding channel");
+
+            let mut ctx = match context.try_lock() {
+                Ok(lock) => lock,
+                Err(_) => panic!("Failed to acquire lock on context"),
+            };
+            let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
+                &mut ctx.borrow_mut(),
+                env,
+                &parts_ab,
+                &funding_agreement_ab,
+                &chan_ai,
+                &chan_bi,
+                &idx_map,
+                &random::nonce(),
+            );
+            drop(ctx);
+            // Simulate creating virtual channels
+            chan_ai.with(alice).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab.id().clone(),
+                &idx_map.parent1,
+            ));
+            chan_bi.with(ingrid).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab.id().clone(),
+                &idx_map.parent2,
+            ));
+
+            chan_ai.with(alice).vc_start(&mut vc_ab).expect("vc_start");
+            chan_bi
+                .with(ingrid)
+                .vc_progress_no_update(&mut vc_ab)
+                .expect("vc_progress_no_update");
+
+            chan_ai.delay(env.challenge_duration);
+            chan_ai.delay(env.challenge_duration);
+            let idx_map_parent1 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(0 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_ai
+                .with(alice)
+                .vc_close1(&mut vc_ab, &idx_map_parent1)
+                .expect("vc_close1");
+
+            let idx_map_parent2 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(1 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_bi
+                .with(ingrid)
+                .vc_close2(&mut vc_ab, &idx_map_parent2)
+                .expect("vc_close2");
+            chan_ai.assert();
+            chan_bi.assert();
+            Ok(())
+        },
+    )
+}
+
+fn test_vc_happy_multi_asset(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
+    let alice_acc = random::account(alice);
+    let bob_acc = random::account(bob);
+    let ingrid_acc = random::account(ingrid);
+
+    let parts_ai = [alice_acc.clone(), ingrid_acc.clone()];
+    let parts_bi = [bob_acc.clone(), ingrid_acc.clone()];
+    let parts_ab = [alice_acc.clone(), bob_acc.clone()];
+    
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let asset_funding = [50u128, 50u128];
+
+    let funding_vc = [
+        Capacity::bytes(50)?.as_u64(),
+        Capacity::bytes(50)?.as_u64(),
+    ];
+
+    let asset_funding_vc = [20u128, 20u128];
+    
+    let funding_agreement_ai = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts_ai
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts_ai
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_bi = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts_bi
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts_bi
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_ab = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts_ab
+            .iter()
+            .cloned()
+            .zip(funding_vc.iter().cloned())
+            .collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts_ab
+            .iter()
+            .cloned()
+            .zip(asset_funding_vc.iter().cloned())
+            .collect(),
+    );
+    // Alice is proposer of C_AI
+    // Bob is proposer of C_IB
+    // Alice is proposer of VC_AB
+    // Parent1 is C_AI and Parent2 is C_IB
+    // idx_map maps participant roles from vc to lc
+    let idx_map = virtual_channel::VCIndexMap{
+        parent1: [0u8, 1u8],  
+        parent2: [1u8, 0u8],
+    };
+
+    create_vc_channel_test(
+        context.clone(),
+        env,
+        &parts_ai,
+        &parts_bi,
+        |chan_ai, chan_bi| {
+            println!("TEST_VC_HAPPY_MULTI_ASSET");
+            chan_ai
+                .with(alice) //use borrow_mut in case of Rc cell
+                .open(&funding_agreement_ai)
+                .expect("opening channel");
+
+            chan_bi
+                .with(bob)
+                .open(&funding_agreement_bi)
+                .expect("opening channel");
+
+            chan_ai
+                .with(ingrid)
+                .fund(&funding_agreement_ai)
+                .expect("funding channel");
+
+            chan_bi
+                .with(ingrid)
+                .fund(&funding_agreement_bi)
+                .expect("funding channel");
+
+            let ctx = match context.try_lock() {
+                Ok(lock) => lock,
+                Err(_) => panic!("Failed to acquire lock on context"),
+            };
+            let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
+                &mut ctx.borrow_mut(),
+                env,
+                &parts_ab,
+                &funding_agreement_ab,
+                &chan_ai,
+                &chan_bi,
+                &idx_map,
+                &random::nonce(),
+            );
+            drop(ctx);
+            // Simulate creating virtual channels
+            chan_ai.with(alice).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab.id().clone(),
+                &idx_map.parent1,
+            ));
+            chan_bi.with(ingrid).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab.id().clone(),
+                &idx_map.parent2,
+            ));
+
+            chan_ai.with(alice).vc_start(&mut vc_ab).expect("vc_start");
+            chan_bi
+                .with(ingrid)
+                .vc_progress_no_update(&mut vc_ab)
+                .expect("vc_progress_no_update");
+             // simulate state update for vc
+            vc_ab.update(pay_ckbytes(Direction::AtoB, 30));
+            vc_ab.update(pay_sudt(Direction::AtoB, 10, 0));
+
+            // Alice posts higher version of vc state to the chain
+            chan_ai.with(alice).vc_update_only(&mut vc_ab).expect("only_vc_update");
+
+            chan_ai.delay(env.challenge_duration);
+            chan_ai.delay(env.challenge_duration);
+            let idx_map_parent1 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(0 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_ai
+                .with(alice)
+                .vc_close1(&mut vc_ab, &idx_map_parent1)
+                .expect("vc_close1");
+
+            let idx_map_parent2 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(1 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_bi
+                .with(ingrid)
+                .vc_close2(&mut vc_ab, &idx_map_parent2)
+                .expect("vc_close2");
+            chan_ai.assert();
+            chan_bi.assert();
+            Ok(())
+        },
+    )
+}
+
+fn test_vc_happy_with_merge(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
+    let alice_acc = random::account(alice);
+    let bob_acc = random::account(bob);
+    let ingrid_acc = random::account(ingrid);
+
+    let parts_ai = [alice_acc.clone(), ingrid_acc.clone()];
+    let parts_bi = [bob_acc.clone(), ingrid_acc.clone()];
+    let parts_ab = [alice_acc.clone(), bob_acc.clone()];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+
+    let funding_vc = [Capacity::bytes(50)?.as_u64(), Capacity::bytes(50)?.as_u64()];
+
+    let funding_agreement_ai = test::FundingAgreement::new_with_capacities(
+        parts_ai
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_bi = test::FundingAgreement::new_with_capacities(
+        parts_bi
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
+        parts_ab
+            .iter()
+            .cloned()
+            .zip(funding_vc.iter().cloned())
+            .collect(),
+    );
+
+    // Alice is proposer of C_AI
+    // Bob is proposer of C_IB
+    // Alice is proposer of VC_AB
+    // Parent1 is C_AI and Parent2 is C_IB
+    // idx_map maps participant roles from vc to lc
+    let idx_map = virtual_channel::VCIndexMap {
+        parent1: [0u8, 1u8],
+        parent2: [1u8, 0u8],
+    };
+    let delay = 10u64;
+    create_vc_channel_test(
+        context.clone(),
+        env,
+        &parts_ai,
+        &parts_bi,
+        |chan_ai, chan_bi| {
+            println!("TEST_VC_HAPPY_WITH_MERGE");
+            chan_ai
+                .with(alice) //use borrow_mut in case of Rc cell
+                .open(&funding_agreement_ai)
+                .expect("opening channel");
+
+            chan_bi
+                .with(bob)
+                .open(&funding_agreement_bi)
+                .expect("opening channel");
+
+            chan_ai
+                .with(ingrid)
+                .fund(&funding_agreement_ai)
+                .expect("funding channel");
+
+            chan_bi
+                .with(ingrid)
+                .fund(&funding_agreement_bi)
+                .expect("funding channel");
+
+            let mut ctx = match context.try_lock() {
+                Ok(lock) => lock,
+                Err(_) => panic!("Failed to acquire lock on context"),
+            };
+            let nonce = random::nonce();
+            let mut vc_ab_1 = perun::virtual_channel::VirtualChannel::new(
+                &mut ctx.borrow_mut(),
+                env,
+                &parts_ab,
+                &funding_agreement_ab,
+                &chan_ai,
+                &chan_bi,
+                &idx_map,
+                &nonce,
+            );
+            let mut vc_ab_2 = perun::virtual_channel::VirtualChannel::new(
+                &mut ctx.borrow_mut(),
+                env,
+                &parts_ab,
+                &funding_agreement_ab,
+                &chan_ai,
+                &chan_bi,
+                &idx_map,
+                &nonce,
+            );
+            drop(ctx);
+            // Simulate creating virtual channels
+            chan_ai.with(alice).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab_1.id().clone(),
+                &idx_map.parent1,
+            ));
+            chan_bi.with(ingrid).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab_2.id().clone(),
+                &idx_map.parent2,
+            ));
+
+            chan_ai
+                .with(alice)
+                .vc_start(&mut vc_ab_1)
+                .expect("vc_start");
+            chan_bi.delay(delay);
+
+            chan_bi.with(bob).vc_start(&mut vc_ab_2).expect("vc_start");
+
+            let result = chan_bi
+                .with(ingrid)
+                .vc_merge(&vc_ab_1, &vc_ab_2, 0u8)
+                .expect("vc_merge");
+
+            vc_ab_1.set_cell(result);
+
+            chan_bi
+                .with(ingrid)
+                .vc_progress_no_update(&mut vc_ab_1)
+                .expect("vc_progress_no_update");
+
+            // simulate state update for vc
+            vc_ab_1.update(pay_ckbytes(Direction::AtoB, 30));
+
+            // Alice posts higher version of vc state to the chain
+            chan_ai
+                .with(alice)
+                .vc_update_only(&mut vc_ab_1)
+                .expect("only_vc_update");
+
+            chan_ai.delay(env.challenge_duration);
+            chan_ai.delay(env.challenge_duration);
+            let idx_map_parent1 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(0 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_ai
+                .with(alice)
+                .vc_close1(&mut vc_ab_1, &idx_map_parent1)
+                .expect("vc_close1");
+
+            let idx_map_parent2 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(1 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_bi
+                .with(ingrid)
+                .vc_close2(&mut vc_ab_1, &idx_map_parent2)
+                .expect("vc_close2");
+            chan_ai.assert();
+            chan_bi.assert();
+            Ok(())
+        },
+    )
+}
+
+fn test_vc_happy_multi_asset_with_merge(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
+    let alice_acc = random::account(alice);
+    let bob_acc = random::account(bob);
+    let ingrid_acc = random::account(ingrid);
+
+    let parts_ai = [alice_acc.clone(), ingrid_acc.clone()];
+    let parts_bi = [bob_acc.clone(), ingrid_acc.clone()];
+    let parts_ab = [alice_acc.clone(), bob_acc.clone()];
+    
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let asset_funding = [50u128, 50u128];
+
+    let funding_vc = [
+        Capacity::bytes(50)?.as_u64(),
+        Capacity::bytes(50)?.as_u64(),
+    ];
+
+    let asset_funding_vc = [20u128, 20u128];
+    
+    let funding_agreement_ai = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts_ai
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts_ai
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_bi = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts_bi
+            .iter()
+            .cloned()
+            .zip(funding.iter().cloned())
+            .collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts_bi
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
+    );
+
+    let funding_agreement_ab = test::FundingAgreement::new_with_capacities_and_sudt(
+        parts_ab
+            .iter()
+            .cloned()
+            .zip(funding_vc.iter().cloned())
+            .collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts_ab
+            .iter()
+            .cloned()
+            .zip(asset_funding_vc.iter().cloned())
+            .collect(),
+    );
+    // Alice is proposer of C_AI
+    // Bob is proposer of C_IB
+    // Alice is proposer of VC_AB
+    // Parent1 is C_AI and Parent2 is C_IB
+    // idx_map maps participant roles from vc to lc
+    let idx_map = virtual_channel::VCIndexMap{
+        parent1: [0u8, 1u8],  
+        parent2: [1u8, 0u8],
+    };
+
+    create_vc_channel_test(
+        context.clone(),
+        env,
+        &parts_ai,
+        &parts_bi,
+        |chan_ai, chan_bi| {
+            println!("TEST_VC_HAPPY_MULTI_ASSET_WITH_MERGE");
+            chan_ai
+                .with(alice) //use borrow_mut in case of Rc cell
+                .open(&funding_agreement_ai)
+                .expect("opening channel");
+
+            chan_bi
+                .with(bob)
+                .open(&funding_agreement_bi)
+                .expect("opening channel");
+
+            chan_ai
+                .with(ingrid)
+                .fund(&funding_agreement_ai)
+                .expect("funding channel");
+
+            chan_bi
+                .with(ingrid)
+                .fund(&funding_agreement_bi)
+                .expect("funding channel");
+
+            let ctx = match context.try_lock() {
+                Ok(lock) => lock,
+                Err(_) => panic!("Failed to acquire lock on context"),
+            };
+            let nonce = random::nonce();
+            let mut vc_ab_1 = perun::virtual_channel::VirtualChannel::new(
+                &mut ctx.borrow_mut(),
+                env,
+                &parts_ab,
+                &funding_agreement_ab,
+                &chan_ai,
+                &chan_bi,
+                &idx_map,
+                &nonce,
+            );
+            let mut vc_ab_2 = perun::virtual_channel::VirtualChannel::new(
+                &mut ctx.borrow_mut(),
+                env,
+                &parts_ab,
+                &funding_agreement_ab,
+                &chan_ai,
+                &chan_bi,
+                &idx_map,
+                &nonce,
+            );
+
+            drop(ctx);
+            // Simulate creating virtual channels
+            chan_ai.with(alice).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab_1.id().clone(),
+                &idx_map.parent1,
+            ));
+            chan_bi.with(ingrid).update(update_virtual_channel(
+                &funding_agreement_ab,
+                vc_ab_2.id().clone(),
+                &idx_map.parent2,
+            ));
+
+            chan_ai.with(alice).vc_start(&mut vc_ab_1).expect("vc_start");
+            chan_bi.delay(10u64);
+            chan_bi.with(bob).vc_start(&mut vc_ab_2).expect("vc_start");
+
+            let result = chan_bi
+                .with(ingrid)
+                .vc_merge(&vc_ab_1, &vc_ab_2, 0u8)
+                .expect("vc_merge");
+            vc_ab_1.set_cell(result);
+
+            chan_bi
+                .with(ingrid)
+                .vc_progress_no_update(&mut vc_ab_1)
+                .expect("vc_progress_no_update");
+            // simulate state update for vc
+            vc_ab_1.update(pay_ckbytes(Direction::AtoB, 30));
+            vc_ab_1.update(pay_sudt(Direction::AtoB, 10, 0));
+
+            // Alice posts higher version of vc state to the chain
+            chan_ai.with(alice).vc_update_only(&mut vc_ab_1).expect("only_vc_update");
+
+            chan_ai.delay(env.challenge_duration);
+            chan_ai.delay(env.challenge_duration);
+            let idx_map_parent1 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(0 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_ai
+                .with(alice)
+                .vc_close1(&mut vc_ab_1, &idx_map_parent1)
+                .expect("vc_close1");
+
+            let idx_map_parent2 = virtual_channel::IdxMapWithDirection {
+                idx_map: idx_map.clone().invert_map(1 as usize),
+                direction: IdxMapDirection::LedgerChannelToVirtualChannel,
+            };
+            chan_bi
+                .with(ingrid)
+                .vc_close2(&mut vc_ab_1, &idx_map_parent2)
+                .expect("vc_close2");
+            chan_ai.assert();
+            chan_bi.assert();
+            Ok(())
+        },
+    )
 }

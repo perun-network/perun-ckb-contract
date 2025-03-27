@@ -585,8 +585,12 @@ pub fn verify_all_paid_vc(
         .payment_script_hash()
         .unpack();
 
-    debug!("ckbytes_balance_a: {}", ckbytes_balance_a);
-    debug!("ckbytes_balance_b: {}", ckbytes_balance_b);
+    debug!("lc balance_a: {:?}", lc_final_balances.ckbytes().get(0)?);
+    debug!("lc balance_b: {:?}", lc_final_balances.ckbytes().get(1)?);
+    debug!("vc balance_a: {:?}", ckbytes_balance_vc_a);
+    debug!("vc balance_b: {:?}", ckbytes_balance_vc_b);
+    debug!("total_ckbytes_balance_a: {}", total_ckbytes_balance_a);
+    debug!("total_ckbytes_balance_b: {}", total_ckbytes_balance_b);
 
     let mut ckbytes_outputs_a = 0;
     let mut ckbytes_outputs_b = 0;
