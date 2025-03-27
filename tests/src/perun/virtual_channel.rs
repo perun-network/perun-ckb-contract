@@ -29,8 +29,8 @@ use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 pub struct VirtualChannel {
-    // acitve_part: test::Client,
-    vc_state: VirtualChannelStatus,
+    // acitve_part: test::Client
+    vc_status: VirtualChannelStatus,
     id: ChannelId,
     vcts: Script,
     vcls: Script,
@@ -138,7 +138,7 @@ impl VirtualChannel {
         let vcts = env.build_vcts(context,vc_channel_constants.as_bytes());
         
         VirtualChannel {
-            vc_state: vc_status,
+            vc_status: vc_status,
             vcts: vcts,
             id: cid,
             vcls: env.get_vcls_().clone(),
@@ -148,8 +148,8 @@ impl VirtualChannel {
         }
     }
 
-    pub fn vc_state(&self) -> &VirtualChannelStatus {
-        &self.vc_state
+    pub fn vc_status(&self) -> &VirtualChannelStatus {
+        &self.vc_status
     }
 
     pub fn vcts(&self) -> &Script {
@@ -175,9 +175,9 @@ impl VirtualChannel {
         &mut self,
         update: impl Fn(&ChannelState) -> Result<ChannelState, perun::Error>,
     ) -> &mut Self {
-        let new_state = update(&self.vc_state.vcstate()).expect("update failed");
-        self.vc_state = self
-            .vc_state
+        let new_state = update(&self.vc_status.vcstate()).expect("update failed");
+        self.vc_status = self
+            .vc_status
             .clone()
             .as_builder()
             .vcstate(new_state)
@@ -212,7 +212,7 @@ impl VirtualChannel {
             .collect();
         let sigs: Result<Vec<_>, _> = clients?
             .iter()
-            .map(|p| p.sign(self.vc_state.vcstate()))
+            .map(|p| p.sign(self.vc_status.vcstate()))
             .collect();
         let sig_arr: [Vec<u8>; 2] = sigs?.try_into()?;
         Ok(sig_arr)
@@ -309,93 +309,6 @@ pub fn update_virtual_channel<'a>(
                     .locked(locked)
                     .build(),
             )
-            .build())
-    }
-}
-
-// Need to pass the final state of the virtual channel
-pub fn resolve_virtual_channel(
-    vc_to_lc_idx_map: &[u8; 2],
-) -> impl Fn(&ChannelState) -> Result<ChannelState, perun::Error> + use<'_> {
-    |s| {
-        let locked = &s.balances().locked().get(0).expect("no funds locked");
-        let old_ckbytes = &s.balances().ckbytes();
-        // I need to return a state (ChannelState) with a balance that has nothing in the locked funds.
-        // The locked funds should be distributed according to the final balance in the virtual channel.
-
-        let locked_balance_a = locked
-            .balances()
-            .ckbytes()
-            .get(0)
-            .expect("no ckbytes locked");
-        let locked_balance_b = locked
-            .balances()
-            .ckbytes()
-            .get(1)
-            .expect("no ckbytes locked");
-        // let diff = locked_balance_b - locked_balance_a;
-
-        let new_ckbytes = &old_ckbytes
-            .clone()
-            .as_builder()
-            .nth0((old_ckbytes.get(0).expect("no 0th") + locked_balance_a).pack())
-            .nth1((old_ckbytes.get(1).expect("no 1st") + locked_balance_b).pack())
-            .build();
-
-        let mut sudt_allocation_builder = SUDTAllocation::new_builder();
-
-        for (_, locked_sudt) in locked.balances().sudts().clone().into_iter().enumerate() {
-            for (_, lc_sudt) in s.balances().sudts().clone().into_iter().enumerate() {
-                if locked_sudt.asset().type_script().as_slice()
-                    == lc_sudt.asset().type_script().as_slice()
-                {
-                    let locked_sudt_bals1 = locked_sudt.distribution().get(0).expect("no 0th");
-                    let locked_sudt_bals2 = locked_sudt.distribution().get(1).expect("no 1st");
-
-                    let old_sudt_bals1 = lc_sudt
-                        .distribution()
-                        .get(vc_to_lc_idx_map[0].into())
-                        .expect("no 0th");
-                    let old_sudt_bals2 = lc_sudt
-                        .distribution()
-                        .get(vc_to_lc_idx_map[1].into())
-                        .expect("no 1st");
-
-                    let updated_sudt_bals1 = old_sudt_bals1 + locked_sudt_bals1;
-                    let updated_sudt_bals2 = old_sudt_bals2 + locked_sudt_bals2;
-
-                    let updated_sudt_dist = lc_sudt
-                        .distribution()
-                        .clone()
-                        .as_builder()
-                        .nth0(updated_sudt_bals1.pack())
-                        .nth1(updated_sudt_bals2.pack())
-                        .build();
-                    let updated_sudt_bals = lc_sudt
-                        .clone()
-                        .as_builder()
-                        .distribution(updated_sudt_dist)
-                        .build();
-                    sudt_allocation_builder = sudt_allocation_builder.push(updated_sudt_bals);
-                }
-            }
-        }
-
-        let sudt_alloc = sudt_allocation_builder.build();
-
-        let new_balances = s
-            .balances()
-            .clone()
-            .as_builder()
-            .ckbytes(new_ckbytes.clone())
-            .sudts(sudt_alloc)
-            .locked(LockedBalances::new_builder().build())
-            .build();
-
-        Ok(s.clone()
-            .as_builder()
-            .version((Unpack::<u64>::unpack(&s.version()) + 1u64).pack())
-            .balances(new_balances)
             .build())
     }
 }

@@ -15,7 +15,6 @@ pub struct VCLCUpdateArgs{
     pub vc_status: VirtualChannelStatus,
     pub sigs : [Vec<u8>; 2],
     pub vcts_script: Script,
-    pub vcls_script: Script,
     pub party_index: u8,
 }
 

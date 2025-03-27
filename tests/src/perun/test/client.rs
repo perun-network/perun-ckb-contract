@@ -18,7 +18,7 @@ use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
 use crate::perun::test;
-use crate::perun::test::transaction::{make_vc_merge, make_vc_update_only, mk_vc_progress_no_update, mk_vc_lc_update, vc_lc_update, AbortArgs, OpenResult, VCMergeArgs, VCStartArgs, VCUpdateNoProgressArgs, VCUpdateOnlyArgs,VCLCUpdateArgs};
+use crate::perun::test::transaction::{mk_vc_merge, mk_vc_update_only, mk_vc_progress_no_update, mk_vc_lc_update, vc_lc_update, AbortArgs, OpenResult, VCMergeArgs, VCStartArgs, VCProgressNoUpdateArgs, VCUpdateOnlyArgs, VCLCUpdateArgs};
 use crate::perun::test::{keys, transaction};
 
 use k256::ecdsa::{Signature, SigningKey};
@@ -194,17 +194,15 @@ impl Client {
         vc_state: VirtualChannelStatus,
         sigs: [Vec<u8>; 2],
         vcts: Script,
-        vcls: Script,
         ) -> Result<transaction::VCStartResult, perun::Error> {
         let vcsr = transaction::mk_vc_start(
             ctx,
             env,
             VCStartArgs{
                 parent_args: lc_dispute_args,
-                vc_state: vc_state,
+                vc_status: vc_state,
                 sigs: sigs,
                 vcts_script: vcts,
-                vcls_script: vcls,
                 party_index: self.index,
             })?;
         let cycles = ctx.verify_tx(&vcsr.tx, env.max_cycles)?;
@@ -218,19 +216,17 @@ impl Client {
         env: &harness::Env,
         lc_dispute_args: transaction::DisputeArgs,
         vc_cell: OutPoint,
-        vc_state: VirtualChannelStatus,
+        vc_status: VirtualChannelStatus,
         vcts_script: Script,
-        vcls_script: Script,
     ) ->Result<VCProgressNoUpdateResult, perun::Error> {
         let vcp_no_update = mk_vc_progress_no_update(
             ctx,
             env,
-            VCUpdateNoProgressArgs{
+            VCProgressNoUpdateArgs{
                 parent_args: lc_dispute_args,
                 vc_cell: vc_cell,
-                vc_state: vc_state,
+                vc_status: vc_status,
                 vcts_script: vcts_script,
-                vcls_script: vcls_script,
                 party_index: self.index,
             }
         )?;
@@ -248,19 +244,17 @@ impl Client {
         vc_state: VirtualChannelStatus,
         vc_sigs: [Vec<u8>; 2],
         vcts_script: Script,
-        vcls_script: Script,
     ) -> Result<VCUpdateOnlyResult, perun::Error> {
         //make tx
-        let vc_update_only_result = make_vc_update_only(
+        let vc_update_only_result = mk_vc_update_only(
             ctx,
             env,
             VCUpdateOnlyArgs{
                 parent_args: lc_dispute_args,
                 vc_cell: vc_cell,
-                vc_state: vc_state,
+                vc_status: vc_state,
                 sigs: vc_sigs,
                 vcts_script: vcts_script,
-                vcls_script: vcls_script,
                 party_index: self.index,
             }
         )?;
@@ -278,7 +272,6 @@ impl Client {
         vc_status: VirtualChannelStatus,
         vc_sigs: [Vec<u8>; 2],
         vcts_script: Script,
-        vcls_script: Script,
     ) -> Result<VCLCUpdateResult, perun::Error>{
         //make tx
         let vc_lc_result = mk_vc_lc_update(
@@ -290,7 +283,6 @@ impl Client {
                 vc_status: vc_status,
                 sigs: vc_sigs,
                 vcts_script: vcts_script,
-                vcls_script: vcls_script,
                 party_index: self.index,
             }
         )?;
@@ -311,15 +303,15 @@ impl Client {
         index: u8,
     ) -> Result<VCMergeResult, perun::Error> {
         //make tx
-        let vc_merge_result = make_vc_merge(
+        let vc_merge_result = mk_vc_merge(
             ctx,
             env,
             VCMergeArgs{
                 vc_cell1: vc_cell1,
                 vc_cell2: vc_cell2,
                 party_index: index,
-                vc_state1: vc_state1,
-                vc_state2: vc_state2,
+                vc_status1: vc_state1,
+                vc_status2: vc_state2,
                 vcts_script: vcts_script,
             }
         )?;
@@ -419,7 +411,7 @@ impl Client {
         vcts: Script,
     ) -> Result<transaction::VCClose1Result, perun::Error>{
         let hs = ctx.headers.keys().cloned().collect();
-        let vcc1r = transaction::make_vc_close1(
+        let vcc1r = transaction::mk_vc_close1(
             ctx,
             env,
             transaction::VCClose1Args{
@@ -455,7 +447,7 @@ impl Client {
         vcts: Script,
     ) -> Result<transaction::VCClose2Result, perun::Error>{
         let hs = ctx.headers.keys().cloned().collect();
-        let vcc2r = transaction::make_vc_close2(
+        let vcc2r = transaction::mk_vc_close2(
             ctx,
             env,
             transaction::VCClose2Args{

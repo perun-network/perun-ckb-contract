@@ -11,10 +11,9 @@ use super::{DisputeArgs, common::create_cells};
 pub struct VCUpdateOnlyArgs{
     pub parent_args: DisputeArgs, 
     pub vc_cell: OutPoint,
-    pub vc_state: VirtualChannelStatus,
+    pub vc_status: VirtualChannelStatus,
     pub sigs : [Vec<u8>; 2],
     pub vcts_script: Script,
-    pub vcls_script: Script,
     pub party_index: u8,
 }
 
@@ -35,7 +34,7 @@ impl Default for VCUpdateOnlyResult {
     }
 }
 
-pub fn make_vc_update_only(
+pub fn mk_vc_update_only(
     ctx: &mut Context,
     env: &harness::Env,
     args: VCUpdateOnlyArgs,
@@ -74,7 +73,7 @@ pub fn make_vc_update_only(
         .lock(pcls_script.clone())
         .type_(Some(args.parent_args.pcts_script.clone()).pack())
         .build();
-    let vc_status = args.vc_state.clone();
+    let vc_status = args.vc_status.clone();
     let capacity_for_vc = env.min_capacity_for_vc_channel(vc_status.clone())?;
     let vc_cell = CellOutput::new_builder()
         .capacity(capacity_for_vc.pack())
@@ -85,7 +84,7 @@ pub fn make_vc_update_only(
 
     // add cells to outputs
     // 1. parent lc cell 2. vc cell
-    let outputs = vec![(parent_channel_cell.clone(), args.parent_args.state.as_bytes()), (vc_cell.clone(), args.vc_state.as_bytes())];
+    let outputs = vec![(parent_channel_cell.clone(), args.parent_args.state.as_bytes()), (vc_cell.clone(), args.vc_status.as_bytes())];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();
 
     // add witness args

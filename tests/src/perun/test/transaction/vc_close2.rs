@@ -45,7 +45,7 @@ impl Default for VCClose2Result {
     }
 }
 
-pub fn make_vc_close2(
+pub fn mk_vc_close2(
     ctx: &mut Context,
     env: &harness::Env,
     args: VCClose2Args,

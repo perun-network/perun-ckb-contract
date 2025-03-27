@@ -172,8 +172,7 @@ where
 
     pub fn vc_start(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
-        let vc_state = vc.vc_state();
-        let vcls = vc.vcls();
+        let vc_state = vc.vc_status();
         self.channel_state = self
             .channel_state
             .clone()
@@ -182,10 +181,6 @@ where
             .vc_disputed(ctrue!())
             .vcts_hash(vcts.calc_script_hash())
             .build();
-        println!(
-            "lc disputed flag {:?}",
-            self.channel_state.disputed().to_bool()
-        );
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
         let parent_args = transaction::DisputeArgs {
@@ -203,7 +198,6 @@ where
             vc_state.clone(),
             vc_sigs.clone(),
             vcts.clone(),
-            vcls.clone(),
         )?;
         self.push_header_with_cell(result.vc_cell.clone());
         vc.set_cell(result.vc_cell.clone());
@@ -222,7 +216,6 @@ where
             )
             .build()
             .into_view();
-        // let mut ctx = self.ctx.lock().unwrap();
         let mut ctx = match self.ctx.try_lock() {
             Ok(lock) => lock,
             Err(_) => panic!("Failed to acquire lock on context"),
@@ -300,8 +293,7 @@ where
     //register dispute for second lc parent without update on vc
     pub fn vc_progress_no_update(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
-        let vc_state = vc.vc_state();
-        let vcls = vc.vcls();
+        let vc_state = vc.vc_status();
         self.channel_state = self
             .channel_state
             .clone()
@@ -311,7 +303,6 @@ where
             .vcts_hash(vcts.calc_script_hash())
             .build();
         let lc_sigs = self.sigs_for_channel_state()?;
-        let vc_sigs = vc.sigs_for_vc_status()?;
         let parent_args = transaction::DisputeArgs {
             party_index: self.active_part.index,
             channel_cell: self.channel_cell.clone().expect("no channel cell"),
@@ -327,7 +318,6 @@ where
             vc.cell().clone(),
             vc_state.clone(),
             vcts.clone(),
-            vcls.clone(),
         )?;
         self.channel_cell = Some(result.parent_cell.clone());
         vc.set_cell(result.vc_cell.clone());
@@ -338,8 +328,7 @@ where
 
     pub fn vc_update_only(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
-        let vc_state = vc.vc_state();
-        let vcls = vc.vcls();
+        let vc_state = vc.vc_status();
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
 
@@ -358,7 +347,6 @@ where
             vc_state.clone(),
             vc_sigs.clone(),
             vcts.clone(),
-            vcls.clone(),
         )?;
         self.channel_cell = Some(result.parent_cell.clone());
         vc.set_cell(result.vc_cell.clone());
@@ -372,8 +360,7 @@ where
         vc: &mut VirtualChannel,
     ) -> Result<(), perun::Error>{
         let vcts = vc.vcts();
-        let vc_status = vc.vc_state();
-        let vcls = vc.vcls();
+        let vc_status = vc.vc_status();
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
         let parent_args = transaction::DisputeArgs {
@@ -391,7 +378,6 @@ where
             vc_status.clone(),
             vc_sigs.clone(),
             vcts.clone(),
-            vcls.clone(),
         )?;
         self.channel_cell = Some(result.parent_cell.clone());
         vc.set_cell(result.vc_cell.clone());
@@ -411,8 +397,8 @@ where
             vc_merge,
             vc1.cell().clone(),
             vc2.cell().clone(),
-            vc1.vc_state().clone(),
-            vc2.vc_state().clone(),
+            vc1.vc_status().clone(),
+            vc2.vc_status().clone(),
             vc1.vcts().clone(),
             idx,
         )?;
@@ -564,7 +550,7 @@ where
             .build()
             .into_view();
         let vc_state = vc
-            .vc_state()
+            .vc_status()
             .clone()
             .as_builder()
             .first_force_close(ctrue!())
@@ -627,7 +613,7 @@ where
                 self.funding_cells.clone(),
                 self.channel_state.clone(),
                 vc.cell().clone(),
-                vc.vc_state().clone(),
+                vc.vc_status().clone(),
                 idx_map.clone(),
                 vc.vcts().clone(),
             ),

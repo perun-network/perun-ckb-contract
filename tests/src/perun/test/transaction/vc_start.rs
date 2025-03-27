@@ -13,12 +13,11 @@ pub struct VCStartArgs {
     /// Parent Cell dispute args
     pub parent_args: DisputeArgs,
     
-    pub vc_state: VirtualChannelStatus,
+    pub vc_status: VirtualChannelStatus,
     /// The DER encoded signatures for the virtual channel state in proper order of parties.
     pub sigs: [Vec<u8>; 2],
     /// The Perun virtual channel type script used for the current channel.
     pub vcts_script: Script,
-    pub vcls_script: Script,
     pub party_index: u8,
 }
 
@@ -78,7 +77,7 @@ pub fn mk_vc_start(
         .build();
 
     // create vc cell for outputs
-    let initial_vc = args.vc_state.clone();
+    let initial_vc = args.vc_status.clone();
     let capacity_for_vc = env.min_capacity_for_vc_channel(initial_vc.clone())?;
     let vc_cell = CellOutput::new_builder()
         .capacity(capacity_for_vc.pack())
@@ -88,7 +87,7 @@ pub fn mk_vc_start(
 
     // add cells to outputs
     //first lc cell and then vc cell
-    let outputs = vec![(parent_channel_cell.clone(), args.parent_args.state.as_bytes()), (vc_cell.clone(), args.vc_state.as_bytes())];
+    let outputs = vec![(parent_channel_cell.clone(), args.parent_args.state.as_bytes()), (vc_cell.clone(), args.vc_status.as_bytes())];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();
         
     // add witness args

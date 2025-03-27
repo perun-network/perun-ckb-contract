@@ -63,13 +63,9 @@ pub fn main() -> Result<(), Error> {
     debug!("VCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-    // return an error if args is empty
     if args.is_empty() {
         return Err(Error::NoArgs);
     }
-
-    //VC channels neither require funding nor they have lock scirpts, hence information for this is not needed
-    // therefore, we only need channelParams in the args for vcts script
     let channel_constants =
         VCChannelConstants::from_slice(&args).expect("unable to parse args as ChannelParams");
     debug!("parsing channel parameters passed");
@@ -81,7 +77,6 @@ pub fn main() -> Result<(), Error> {
 
     // Next, we determine whether the transaction starts, progresses or closes the channel and fetch
     // the respective old and/or new channel status.
-
     let channel_action = get_vchannel_action()?;
     debug!("get_channel_action passed");
 
@@ -103,8 +98,6 @@ pub fn main() -> Result<(), Error> {
             old_status,
             new_status,
         } => {
-            // let channel_witness = load_witness()?;
-            // debug!("load_witness passed");
             check_valid_vc_progress(&old_status, &new_status, &channel_constants)
         }
         VChannelAction::Merge {
@@ -130,12 +123,7 @@ pub fn main() -> Result<(), Error> {
         } => {
             debug!("Close2 Tx detected");
             check_valid_close2(&input_lc_status, &input_vc_status)
-        } // VChannelAction::Close { old_status } => {
-          //     debug!("Close action detected");
-          //     let channel_witness = load_witness()?;
-          //     debug!("load_witness passed");
-          //     check_valid_vc_close(&old_status, &channel_witness, &channel_constants)
-          // }
+        }
     }
 }
 
@@ -305,16 +293,6 @@ pub fn verify_first_forced_closed_flag_set(vc_status: &VirtualChannelStatus) -> 
     Ok(())
 }
 
-// pub fn verify_equal_version_number(
-//     old_vc_status: &VirtualChannelStatus,
-//     new_vc_status: &VirtualChannelStatus,
-// ) -> Result<(), Error> {
-//     if old_vc_status.vcstate().version().unpack() != new_vc_status.vcstate().version().unpack() {
-//         return Err(Error::InvalidVCMergeTx);
-//     }
-//     Ok(())
-// }
-
 pub fn verify_non_decreasing_version_number_vc(
     old_vc_status: &VirtualChannelStatus,
     new_vc_status: &VirtualChannelStatus,
@@ -417,7 +395,7 @@ pub fn verify_parent_in_force_close(parent_input_idx: usize) -> Result<(), Error
     }
 }
 
-//checks that only one (and the sam) parent ledger channel cell exists in inputs and outputs
+//checks that only one (and the same) parent ledger channel cell exists in inputs and outputs
 pub fn verify_max_one_parent(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
     let parent1_hash = match vc_status.parents().get(0) {
         Some(parent) => parent.pcts_hash().unpack(),
@@ -516,12 +494,6 @@ pub fn verify_vchannel_id_integrity(
 }
 
 pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
-    //vcts start
-    //load this vcts script hash
-    // iterate through all input cells and count the number of cells have the same type hash as this one
-    // pass if and only if there are none.
-    // iterate through all output cells.
-    //pass iff there is exactly one cell with the same type hash as this
     let mut input_cell_counter = 0;
     let mut output_cell_counter = 0;
     let max_input_vc_channels = 2;
@@ -580,7 +552,6 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
 
     //MODE: VC Merge Tx
     } else if input_cell_counter == 2 && output_cell_counter == 1 {
-        // debug!("Get Channel Action: Merge Tx detected");
         let mut input_vc_statuses: [Option<VirtualChannelStatus>; 2] = [None, None];
         for i in 0..2 {
             let vc_status = match load_cell_data(i, Source::GroupInput) {
@@ -616,7 +587,6 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
     } else if input_cell_counter == 1 && output_cell_counter == 1 {
         let input_vc_status = match load_cell_data(0, Source::GroupInput) {
             Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
-            // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),
             Err(err) => return Err(err.into()),
         };
         let output_vc_status = match load_cell_data(0, Source::GroupOutput) {
@@ -642,7 +612,6 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             }
             //MODE: VC Close 1
             ChannelWitnessUnion::ForceClose(_) => {
-                // find the input parent lc status
                 return Ok(VChannelAction::Close1 {
                     input_vc_status: input_vc_status,
                     output_vc_status: output_vc_status,
@@ -656,7 +625,6 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
         // 0 output lc + 0 output vc
         let input_vc_status = match load_cell_data(0, Source::GroupInput) {
             Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
-            // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),
             Err(err) => return Err(err.into()),
         };
 

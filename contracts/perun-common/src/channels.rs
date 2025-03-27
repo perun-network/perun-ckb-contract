@@ -24,35 +24,30 @@ use ckb_std::{
 const SUDT_MIN_LEN: usize = 16;
 
 pub enum VChannelAction {
-    /// Progress indicates that a channel is being progressed. This means that a channel cell is consumed
-    /// in the inputs and the same channel with updated state is progressed in the outputs.
-    /// The possible redeemers associated with the Progress action are Fund and Dispute.
+    /// Progress indicates that a higher version of virtual channel may be registered
     Progress {
         old_status: VirtualChannelStatus,
         new_status: VirtualChannelStatus,
     }, // one PCTS input, one PCTS output
 
-    /// Start indicates that a channel is being started. This means that a **new channel** lives in the
-    /// output cells of this transaction. No channel cell is consumed as an input.
-    /// As Start does not consume a channel cell, there is no Witness associated with the Start action.
+    /// Start indicates that a lc channel is being disputed and a vc cell is created for the first time in the outputs
     Start {
         new_vc_status: VirtualChannelStatus,
         old_lc_status: ChannelStatus,
         new_lc_status: ChannelStatus,
     }, // no VCTS input, one VCTS output
-    
-    // Merge indicates that two virtual channels are being merged into a single one
+    /// Merge indicates that two virtual channels are being merged into a single one
     Merge {
         input_vc_status1: VirtualChannelStatus,
         input_vc_status2: VirtualChannelStatus,
         merged_vc_status: VirtualChannelStatus, 
     },
-
+    /// Close1 indicates that one of the parents of the virtual channel is being closed
     Close1{
         input_vc_status: VirtualChannelStatus,
         output_vc_status: VirtualChannelStatus,
     },
-
+    /// Close2 indicates that 2nd parent of the virtual channel and the virtual channel itself is being closed
     Close2{
         input_lc_status: ChannelStatus,
         input_vc_status: VirtualChannelStatus,

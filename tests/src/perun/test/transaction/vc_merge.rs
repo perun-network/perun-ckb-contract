@@ -11,8 +11,8 @@ pub struct VCMergeArgs{
     pub vc_cell1: OutPoint,
     pub vc_cell2: OutPoint,
     pub party_index: u8,
-    pub vc_state1: VirtualChannelStatus,
-    pub vc_state2: VirtualChannelStatus,
+    pub vc_status1: VirtualChannelStatus,
+    pub vc_status2: VirtualChannelStatus,
     pub vcts_script: Script,
 }
 
@@ -31,7 +31,7 @@ impl Default for VCMergeResult {
     }
 }
 
-pub fn make_vc_merge(
+pub fn mk_vc_merge(
     ctx: &mut Context,
     env: &harness::Env,
     args: VCMergeArgs,
@@ -66,7 +66,7 @@ pub fn make_vc_merge(
     //     .lock(vcls_script.clone())
     //     .type_(Some(args.vcts_script.clone()).pack())
     //     .build();
-    let vc_status2 = args.vc_state2.clone();
+    let vc_status2 = args.vc_status2.clone();
     let capacity_for_vc2 = env.min_capacity_for_vc_channel(vc_status2.clone())?;
     let vc_cell2 = CellOutput::new_builder()
         .capacity(capacity_for_vc2.pack())

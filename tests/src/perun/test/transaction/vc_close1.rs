@@ -41,7 +41,7 @@ impl Default for VCClose1Result {
     }
 }
 
-pub fn make_vc_close1(
+pub fn mk_vc_close1(
     ctx: &mut Context,
     env: &harness::Env,
     args: VCClose1Args,

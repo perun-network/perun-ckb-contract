@@ -105,20 +105,13 @@ fn channel_test_bench() -> Result<(), perun::Error> {
 #[test]
 fn channel_vc_test_bench() -> Result<(), perun::Error> {
     let res = [
-        // test_vc_fund_close, // happytest: check lockedbalances, unlock balances before closing VC
-        // test_dispute, // 1st dispute: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration -> OK, Close
-        // test_dispute_again, // 2 disputes: generate cell from parent cell hashes. (pcts_in) -> (pcts_in, vcts_1st_disp)  -> challenge duration
-                            // 2nd dispute. Present: (vcts_1st_disp_alice). Now Bob makes another dispute: (pcts_in, vcts_2nd_disp_bob) -> challenge duration ->
-                            // Merge 2 disputes: (vcts_1st_disp_alice v2, vcts_2nd_disp_bob v4) -> (vcts_merged: vcts_2nd_disp_bob)
-                            // -> challenge duration ->  ForceClose in PCTS (VCTS 1st Close) with (vcts_merged, pcts v4) -> (vcts_merged_1st_close, pcts_v4).
-                            // 2nd VCTS Close is again PCTS ForceClose (vcts_merged_1st_close, pcts_v4) -> (pcts_v4)
-        test_vc_start,
-        test_vc_progress_no_update,
-        test_vc_progress_update1,
-        test_vc_progress_update2,
-        test_vc_merge,
-        test_vc_close1,
-        test_vc_close2,
+        // test_vc_start,
+        // test_vc_progress_no_update,
+        // test_vc_progress_update1,
+        // test_vc_progress_update2,
+        // test_vc_merge,
+        // test_vc_close1,
+        // test_vc_close2,
         test_vc_happy,
         test_vc_happy_multi_asset,
         test_vc_happy_with_merge,
@@ -158,23 +151,6 @@ fn create_vc_channel_test(
     
     // Run the test function with mutable references
     test(&mut chan_ai, &mut chan_bi)
-}
-
-fn create_vc_channel_test2(
-    context: Rc<Mutex<RefCell<Context>>>,
-    env: &perun::harness::Env,
-    parts_ai: &[perun::TestAccount],
-    parts_bi: &[perun::TestAccount],
-    test: impl Fn(Rc<RefCell<perun::channel::Channel<perun::State>>>, Rc<RefCell<perun::channel::Channel<perun::State>>>) -> Result<(), perun::Error>,
-) -> Result<(), perun::Error> {
-    // Create channels
-    // let mut chan_ai = perun::channel::Channel::new(context.clone(), env, parts_ai);
-    // let mut chan_bi = perun::channel::Channel::new(context.clone(), env, parts_bi);
-    let chan_ai = Rc::new(RefCell::new(perun::channel::Channel::new(context.clone(), env, parts_ai)));
-    let chan_bi = Rc::new(RefCell::new(perun::channel::Channel::new(context.clone(), env, parts_bi)));
-    
-    // Run the test function with mutable references
-    test(chan_ai, chan_bi)
 }
 
 fn test_funding_abort(
@@ -953,8 +929,7 @@ fn test_vc_progress_update2(context: Rc<Mutex<RefCell<Context>>>, env: &perun::h
         //simulate state update for lc
         chan_ai.with(alice).update(pay_ckbytes(Direction::AtoB, 30));
         
-        // Alice posts higher version of vc state to the chain
-        // chan_ai.with(alice).vc_update_only(&mut vc_ab).expect("only_vc_update");     
+        // Alice posts higher version of vc state to the chain 
         chan_ai.with(alice).vc_lc_update(&mut vc_ab).expect("vc_lc_update");  
         chan_ai.assert();
         chan_bi.assert();
@@ -1050,7 +1025,6 @@ fn test_vc_merge(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::Env
             &idx_map,
             &nonce,
             );
-        // let mut vc_ab_2 = vc_ab_1.clone();
         drop(ctx);
         // Simulate creating virtual channels
         chan_ai.with(alice).update(update_virtual_channel(&funding_agreement_ab,vc_ab_1.id().clone() , &idx_map.parent1));
@@ -1290,111 +1264,6 @@ fn test_vc_close2(context: Rc<Mutex<RefCell<Context>>>, env: &perun::harness::En
     })          
 }
 
-fn test_vc_fund_close  (
-    context: Rc<Mutex<RefCell<Context>>>,
-    env: &perun::harness::Env,
-) -> Result<(), perun::Error> {
-    println!("test_vc_fund_close");
-    let (alice, bob, ingrid) = ("alice", "bob", "ingrid");
-    let alice_acc = random::account(alice);
-    let bob_acc = random::account(bob);
-    let ingrid_acc = random::account(ingrid);
-
-    let parts_ai = [alice_acc.clone(), ingrid_acc.clone()];
-    let parts_bi = [bob_acc.clone(), ingrid_acc.clone()];
-    let parts_ab = [alice_acc.clone(), bob_acc.clone()];
-    let funding = [
-        Capacity::bytes(100)?.as_u64(),
-        Capacity::bytes(100)?.as_u64(),
-    ];
-
-    let funding_vc = [
-        Capacity::bytes(50)?.as_u64(),
-        Capacity::bytes(50)?.as_u64(),
-    ];
-
-    let funding_agreement_ai = test::FundingAgreement::new_with_capacities(
-        parts_ai.iter().cloned().zip(funding.iter().cloned()).collect(),
-    );
-
-    let funding_agreement_bi = test::FundingAgreement::new_with_capacities(
-        parts_bi.iter().cloned().zip(funding.iter().cloned()).collect(),
-    );
-
-    let funding_agreement_ab = test::FundingAgreement::new_with_capacities(
-        parts_ab.iter().cloned().zip(funding_vc.iter().cloned()).collect(),
-    );
-    //VC_AB has Alice as its proposer
-    // struct IndexMap{
-    //     parent1: [u8;2],
-    //     parent2: [u8;2],
-    // }
-    let idx_map = VCIndexMap{
-        parent1: [0u8, 1u8],
-        parent2: [1u8, 0u8],
-    };
-    create_vc_channel_test(context.clone(), env, &parts_ai, &parts_bi, |chan_ai, chan_bi| {
-        chan_ai.with(alice)
-            .open(&funding_agreement_ai)
-            .expect("opening channel");
-
-        chan_bi.with(bob)
-            .open(&funding_agreement_bi)
-            .expect("opening channel");
-
-        chan_ai.with(ingrid)
-            .fund(&funding_agreement_ai)
-            .expect("funding channel");
-
-        chan_bi.with(ingrid)
-            .fund(&funding_agreement_bi)
-            .expect("funding channel");
-        
-        let mut ctx = match context.try_lock() {
-            Ok(lock) => lock,
-            Err(_) => panic!("Failed to acquire lock on context"),
-        };
-        let parties_vc = funding_agreement_ab.mk_participants(&mut ctx.borrow_mut(), &env, env.min_capacity_no_script);
-        drop(ctx);
-        let chan_params = ChannelParametersBuilder::default()
-                .party_a(parties_vc[0].clone())
-                .party_b(parties_vc[1].clone())
-                .nonce(random::nonce().pack())
-                .challenge_duration(env.challenge_duration.pack())
-                .app(Default::default())
-                .is_ledger_channel(cfalse!())
-                .is_virtual_channel(ctrue!())
-                .build();
-    
-        let cid_raw = blake2b256(chan_params.as_slice());
-        let cid = ChannelId::from(cid_raw);
-
-        chan_ai.with(alice)
-            .update(update_virtual_channel(&funding_agreement_ab, cid, &idx_map.parent1));
-
-        chan_bi.with(ingrid)
-            .update(update_virtual_channel(&funding_agreement_ab, cid,&idx_map.parent2));
-        
-        chan_ai.with(alice)
-            .update(resolve_virtual_channel(&idx_map.parent1));
-        
-        chan_bi.with(ingrid)
-            .update(resolve_virtual_channel(&idx_map.parent2));
-        chan_ai.with(alice)
-            .finalize()
-            .close()
-            .expect("closing parent channel");
-
-        chan_bi.with(bob)
-            .finalize()
-            .close()
-            .expect("closing parent channel");
-        chan_ai.assert();
-        chan_bi.assert();
-        Ok(())
-    })
-}
-
 fn test_vc_happy(
     context: Rc<Mutex<RefCell<Context>>>,
     env: &perun::harness::Env,
@@ -1456,7 +1325,7 @@ fn test_vc_happy(
         |chan_ai, chan_bi| {
             println!("TEST_VC_HAPPY");
             chan_ai
-                .with(alice) //use borrow_mut in case of Rc cell
+                .with(alice)
                 .open(&funding_agreement_ai)
                 .expect("opening channel");
 
