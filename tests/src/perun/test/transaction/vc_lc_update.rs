@@ -1,19 +1,23 @@
 // use std::cell::Cell;
 
+use crate::perun::{self, harness, test::transaction::common::channel_witness};
 use ckb_testtool::{
-    ckb_types::{core::{TransactionBuilder, TransactionView}, packed::{CellInput, CellOutput, OutPoint, Script}, prelude::{Builder, Entity, Pack}},
+    ckb_types::{
+        core::{TransactionBuilder, TransactionView},
+        packed::{CellInput, CellOutput, OutPoint, Script},
+        prelude::{Builder, Entity, Pack},
+    },
     context::Context,
 };
-use crate::perun::{self, harness, test::transaction::common::channel_witness};
-use perun_common::{dispute, perun_types::VirtualChannelStatus,redeemer};
+use perun_common::{dispute, perun_types::VirtualChannelStatus, redeemer};
 
-use super::{DisputeArgs, common::create_cells};
+use super::{common::create_cells, DisputeArgs};
 
-pub struct VCLCUpdateArgs{
+pub struct VCLCUpdateArgs {
     pub parent_args: DisputeArgs,
     pub vc_cell: OutPoint,
     pub vc_status: VirtualChannelStatus,
-    pub sigs : [Vec<u8>; 2],
+    pub sigs: [Vec<u8>; 2],
     pub vcts_script: Script,
     pub party_index: u8,
 }
@@ -23,7 +27,6 @@ pub struct VCLCUpdateResult {
     pub tx: TransactionView,
     pub parent_cell: OutPoint,
     pub vc_cell: OutPoint,
-
 }
 
 impl Default for VCLCUpdateResult {
@@ -41,7 +44,7 @@ pub fn mk_vc_lc_update(
     env: &harness::Env,
     args: VCLCUpdateArgs,
 ) -> Result<VCLCUpdateResult, perun::Error> {
-    let payment_input = env.create_min_cell_for_index(ctx,  args.parent_args.party_index);
+    let payment_input = env.create_min_cell_for_index(ctx, args.parent_args.party_index);
     //add inputs to tx
     //1. parent lc cell, 2. vc cell, 3. payment input
     let inputs = vec![
@@ -82,18 +85,31 @@ pub fn mk_vc_lc_update(
         .type_(Some(args.vcts_script.clone()).pack())
         .build();
 
-
     // add cells to outputs
     // 1. parent lc cell 2. vc cell
-    let outputs = vec![(parent_channel_cell.clone(), args.parent_args.state.as_bytes()), (vc_cell.clone(), args.vc_status.as_bytes())];
+    let outputs = vec![
+        (
+            parent_channel_cell.clone(),
+            args.parent_args.state.as_bytes(),
+        ),
+        (vc_cell.clone(), args.vc_status.as_bytes()),
+    ];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();
 
     // add witness args
-    let lc_dispute_action = channel_witness!(redeemer!(dispute!(args.parent_args.sigs[0].pack(), args.parent_args.sigs[1].pack())));
-    let vc_dispute_action = channel_witness!(redeemer!(dispute!(args.sigs[0].pack(), args.sigs[1].pack())));
-    let witness_vec = vec![(lc_dispute_action.clone(), lc_dispute_action.as_bytes()), (vc_dispute_action.clone(), vc_dispute_action.as_bytes())];
+    let lc_dispute_action = channel_witness!(redeemer!(dispute!(
+        args.parent_args.sigs[0].pack(),
+        args.parent_args.sigs[1].pack()
+    )));
+    let vc_dispute_action = channel_witness!(redeemer!(dispute!(
+        args.sigs[0].pack(),
+        args.sigs[1].pack()
+    )));
+    let witness_vec = vec![
+        (lc_dispute_action.clone(), lc_dispute_action.as_bytes()),
+        (vc_dispute_action.clone(), vc_dispute_action.as_bytes()),
+    ];
     let witness_args: Vec<_> = witness_vec.iter().map(|e| e.1.clone()).collect();
-
 
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     let rtx = TransactionBuilder::default()
@@ -104,7 +120,7 @@ pub fn mk_vc_lc_update(
         .witnesses(witness_args.pack())
         .cell_deps(cell_deps)
         .build();
-    
+
     let tx = ctx.complete_tx(rtx);
     create_cells(ctx, tx.hash(), outputs);
     Ok(VCLCUpdateResult {

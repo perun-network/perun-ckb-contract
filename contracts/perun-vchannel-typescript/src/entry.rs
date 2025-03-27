@@ -2,7 +2,11 @@
 use core::result::Result;
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{self, string::ToString, vec::{self, Vec}};
+use alloc::{
+    self,
+    string::ToString,
+    vec::{self, Vec},
+};
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
@@ -97,9 +101,7 @@ pub fn main() -> Result<(), Error> {
         VChannelAction::Progress {
             old_status,
             new_status,
-        } => {
-            check_valid_vc_progress(&old_status, &new_status, &channel_constants)
-        }
+        } => check_valid_vc_progress(&old_status, &new_status, &channel_constants),
         VChannelAction::Merge {
             input_vc_status1,
             input_vc_status2,
@@ -208,7 +210,7 @@ pub fn check_valid_vc_merge(
         selected_vc_cell = Some(input_vc_stats2);
     } else if vc_cell1_block_num == vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats1);
-    }else{
+    } else {
         return Err(Error::InvalidVCMergeTx);
     }
     debug!("selected_vc_cell: {:?}", selected_vc_cell);
@@ -363,7 +365,7 @@ pub fn verify_vc_sigs_progress(
         .to_opt()
         .ok_or(Error::NoWitness)?
         .unpack();
-    
+
     let vc_witness = ChannelWitness::from_slice(&witness_bytes)?;
     let vc_sigs = match vc_witness.to_enum() {
         ChannelWitnessUnion::Dispute(d) => d,
@@ -378,7 +380,6 @@ pub fn verify_vc_sigs_progress(
     )?;
     Ok(())
 }
-
 
 pub fn verify_parent_in_force_close(parent_input_idx: usize) -> Result<(), Error> {
     let witnes_args = load_witness_args(parent_input_idx, Source::Input)?;
@@ -467,7 +468,6 @@ pub fn verify_equal_channel_state(
     Err(Error::ChannelStateNotEqual)
 }
 
-
 pub fn verify_vchannel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
         return Err(Error::AppChannelsNotSupported);
@@ -480,7 +480,6 @@ pub fn verify_vchannel_params_compatibility(params: &ChannelParameters) -> Resul
     }
     Ok(())
 }
-
 
 pub fn verify_vchannel_id_integrity(
     channel_id: &Byte32,
@@ -557,10 +556,12 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             let vc_status = match load_cell_data(i, Source::GroupInput) {
                 Ok(data) => {
                     debug!("VC Status loaded");
-                    VirtualChannelStatus::from_slice(data.as_slice())?},
+                    VirtualChannelStatus::from_slice(data.as_slice())?
+                }
                 Err(err) => {
                     debug!("Error loading VC Status");
-                    return Err(err.into())},
+                    return Err(err.into());
+                }
             };
 
             if i < max_input_vc_channels {
@@ -669,7 +670,6 @@ pub fn get_parent_of_vc(vc_status: &VirtualChannelStatus, source: Source) -> Res
     };
     Ok(parent_idx)
 }
-
 
 pub fn verify_increasing_version_number_for_vc(
     old_vc_state: &ChannelState,

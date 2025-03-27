@@ -1,8 +1,16 @@
 use ckb_testtool::{
-    ckb_types::{core::{TransactionBuilder, TransactionView}, packed::{self, CellInput, CellOutput, OutPoint, Script, WitnessArgs}, prelude::{Builder, Entity, Pack}},
+    ckb_types::{
+        core::{TransactionBuilder, TransactionView},
+        packed::{self, CellInput, CellOutput, OutPoint, Script, WitnessArgs},
+        prelude::{Builder, Entity, Pack},
+    },
     context::Context,
 };
-use perun_common::{dispute, perun_types::{ChannelStatus, VirtualChannelStatus}, redeemer, vc_dispute};
+use perun_common::{
+    dispute,
+    perun_types::{ChannelStatus, VirtualChannelStatus},
+    redeemer, vc_dispute,
+};
 
 use crate::perun::{self, harness, test::transaction::common::channel_witness};
 
@@ -12,7 +20,7 @@ use super::{common::create_cells, DisputeArgs};
 pub struct VCStartArgs {
     /// Parent Cell dispute args
     pub parent_args: DisputeArgs,
-    
+
     pub vc_status: VirtualChannelStatus,
     /// The DER encoded signatures for the virtual channel state in proper order of parties.
     pub sigs: [Vec<u8>; 2],
@@ -26,7 +34,6 @@ pub struct VCStartResult {
     pub tx: TransactionView,
     pub vc_cell: OutPoint,
     pub parent_lc_cell: OutPoint,
-
 }
 
 impl Default for VCStartResult {
@@ -46,7 +53,7 @@ pub fn mk_vc_start(
 ) -> Result<VCStartResult, perun::Error> {
     //input cell for gas fees
     let payment_input = env.create_min_cell_for_index(ctx, args.parent_args.party_index);
-    
+
     // add inputs to tx
     // first parent lc cell and then payment input
     let inputs = vec![
@@ -87,11 +94,22 @@ pub fn mk_vc_start(
 
     // add cells to outputs
     //first lc cell and then vc cell
-    let outputs = vec![(parent_channel_cell.clone(), args.parent_args.state.as_bytes()), (vc_cell.clone(), args.vc_status.as_bytes())];
+    let outputs = vec![
+        (
+            parent_channel_cell.clone(),
+            args.parent_args.state.as_bytes(),
+        ),
+        (vc_cell.clone(), args.vc_status.as_bytes()),
+    ];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();
-        
+
     // add witness args
-    let dispute_action = redeemer!(vc_dispute!(args.sigs[0].pack(), args.sigs[1].pack(), args.parent_args.sigs[0].pack(), args.parent_args.sigs[1].pack()));
+    let dispute_action = redeemer!(vc_dispute!(
+        args.sigs[0].pack(),
+        args.sigs[1].pack(),
+        args.parent_args.sigs[0].pack(),
+        args.parent_args.sigs[1].pack()
+    ));
     let witness_args = channel_witness!(dispute_action);
 
     // witnesses.push(witness_args.as_bytes());

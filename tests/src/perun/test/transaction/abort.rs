@@ -9,7 +9,10 @@ use ckb_testtool::{
 };
 use perun_common::{perun_types::ChannelStatus, redeemer};
 
-use crate::perun::{self, harness, test::{cell::FundingCell, transaction::common::add_cap_to_a}};
+use crate::perun::{
+    self, harness,
+    test::{cell::FundingCell, transaction::common::add_cap_to_a},
+};
 
 use super::common::{channel_witness, create_cells};
 

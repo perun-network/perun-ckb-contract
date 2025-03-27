@@ -1,28 +1,30 @@
 use ckb_testtool::{
-    ckb_hash, ckb_types::{
+    ckb_hash,
+    ckb_types::{
         packed::{Header, OutPoint, RawHeader, Script},
         prelude::{Builder, Entity, Pack, Unpack},
-    }, context::Context
+    },
+    context::Context,
 };
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
-    ctrue,
-    cfalse,
-    perun_types::{
-        Balances, ChannelConstants, ChannelState, LockedBalances, SUDTAllocation, SubAlloc,
-        SubBalances, VCChannelConstants, VCChannelConstantsBuilder,VirtualChannelStatus,ChannelParametersBuilder, ParentsVecBuilder, ParentsVec,ParentDataBuilder, IndexMapBuilder, IndexMap,
-    },
+    cfalse, ctrue,
     helpers::blake2b256,
+    perun_types::{
+        Balances, ChannelConstants, ChannelParametersBuilder, ChannelState, IndexMap,
+        IndexMapBuilder, LockedBalances, ParentDataBuilder, ParentsVec, ParentsVecBuilder,
+        SUDTAllocation, SubAlloc, SubBalances, VCChannelConstants, VCChannelConstantsBuilder,
+        VirtualChannelStatus,
+    },
 };
 
 use super::test::FundingAgreement;
 use super::{test::cell::FundingCell, Account};
 use crate::perun::{
-    self,
+    self, random,
     test::{keys, ChannelId, Client},
-    random,
 };
-use crate::perun::{harness, test, channel::Channel};
+use crate::perun::{channel::Channel, harness, test};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -37,7 +39,7 @@ pub struct VirtualChannel {
     /// All available parties.
     parts: HashMap<String, test::Client>,
     idx_map: VCIndexMap,
-    
+
     /// vc cell
     cell: OutPoint,
 }
@@ -50,13 +52,13 @@ pub enum IdxMapDirection {
 
 #[derive(Debug, Clone)]
 pub struct IdxMapWithDirection {
-    pub idx_map: [u8;2],
+    pub idx_map: [u8; 2],
     pub direction: IdxMapDirection,
 }
 #[derive(Debug, Clone)]
 pub struct VCIndexMap {
-    pub parent1: [u8;2],
-    pub parent2: [u8;2],
+    pub parent1: [u8; 2],
+    pub parent2: [u8; 2],
 }
 
 impl VCIndexMap {
@@ -98,33 +100,48 @@ impl VirtualChannel {
                 )
             })
             .collect();
-        let parties_vc = funding_agreement.mk_participants(context, &env, env.min_capacity_no_script);
+        let parties_vc =
+            funding_agreement.mk_participants(context, &env, env.min_capacity_no_script);
         let vc_chan_params = ChannelParametersBuilder::default()
-            .party_a(parties_vc[0
-            ].clone())
+            .party_a(parties_vc[0].clone())
             .party_b(parties_vc[1].clone())
             .nonce(nonce.clone().pack())
             .challenge_duration(env.challenge_duration.pack())
             .app(Default::default())
             .is_ledger_channel(cfalse!())
             .is_virtual_channel(ctrue!())
-            .build(); 
+            .build();
         let cid_raw = blake2b256(vc_chan_params.as_slice());
         let cid = ChannelId::from(cid_raw);
-        
+
         let parents_builder = ParentsVecBuilder::default();
         let parent1 = ParentDataBuilder::default()
             .pcts_hash(chan_ai.pcts().calc_script_hash())
-            .idx_map(IndexMapBuilder::default().nth0(idx_map.parent1[0].clone().into()).nth1(idx_map.parent1[1].clone().into()).build())
+            .idx_map(
+                IndexMapBuilder::default()
+                    .nth0(idx_map.parent1[0].clone().into())
+                    .nth1(idx_map.parent1[1].clone().into())
+                    .build(),
+            )
             .build();
         let parent2 = ParentDataBuilder::default()
             .pcts_hash(chan_bi.pcts().calc_script_hash())
-            .idx_map(IndexMapBuilder::default().nth0(idx_map.parent2[0].clone().into()).nth1(idx_map.parent2[1].clone().into()).build())
+            .idx_map(
+                IndexMapBuilder::default()
+                    .nth0(idx_map.parent2[0].clone().into())
+                    .nth1(idx_map.parent2[1].clone().into())
+                    .build(),
+            )
             .build();
-        let parents = parents_builder.push(parent1).push(parent2).build(); 
+        let parents = parents_builder.push(parent1).push(parent2).build();
         let first_force_close = false;
         // Build VirtualChannelStatus
-        let vc_status = match env.build_virtual_channel_state(&cid, &funding_agreement, &parents, first_force_close) {
+        let vc_status = match env.build_virtual_channel_state(
+            &cid,
+            &funding_agreement,
+            &parents,
+            first_force_close,
+        ) {
             Ok(vc_status) => vc_status,
             Err(e) => panic!("Error building virtual channel state: {}", e),
         };
@@ -134,9 +151,12 @@ impl VirtualChannel {
             .vcls_code_hash(env.get_vcls_().calc_script_hash())
             .vcls_hash_type(env.get_vcls_().hash_type().clone())
             .build();
-        println!("Debug vc_channel_constants: {:?}", vc_channel_constants.as_bytes().pack());
-        let vcts = env.build_vcts(context,vc_channel_constants.as_bytes());
-        
+        println!(
+            "Debug vc_channel_constants: {:?}",
+            vc_channel_constants.as_bytes().pack()
+        );
+        let vcts = env.build_vcts(context, vc_channel_constants.as_bytes());
+
         VirtualChannel {
             vc_status: vc_status,
             vcts: vcts,

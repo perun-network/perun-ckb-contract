@@ -1,13 +1,17 @@
+use crate::perun::{self, harness};
 use ckb_testtool::{
-    ckb_types::{core::{TransactionBuilder, TransactionView}, packed::{CellInput, CellOutput, OutPoint, Script, WitnessArgs}, prelude::{Builder, Entity, Pack}},
+    ckb_types::{
+        core::{TransactionBuilder, TransactionView},
+        packed::{CellInput, CellOutput, OutPoint, Script, WitnessArgs},
+        prelude::{Builder, Entity, Pack},
+    },
     context::Context,
 };
-use crate::perun::{self, harness};
-use perun_common::{perun_types::{VirtualChannelStatus}};
+use perun_common::perun_types::VirtualChannelStatus;
 
-use super::{common::create_cells};
+use super::common::create_cells;
 
-pub struct VCMergeArgs{
+pub struct VCMergeArgs {
     pub vc_cell1: OutPoint,
     pub vc_cell2: OutPoint,
     pub party_index: u8,
@@ -36,7 +40,7 @@ pub fn mk_vc_merge(
     env: &harness::Env,
     args: VCMergeArgs,
 ) -> Result<VCMergeResult, perun::Error> {
-    let payment_input = env.create_min_cell_for_index(ctx,  args.party_index);
+    let payment_input = env.create_min_cell_for_index(ctx, args.party_index);
 
     let inputs = vec![
         CellInput::new_builder()
@@ -75,7 +79,7 @@ pub fn mk_vc_merge(
         .build();
     let outputs = vec![(vc_cell2.clone(), vc_status2.as_bytes())];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();
-    
+
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();
     let rtx = TransactionBuilder::default()
         .inputs(inputs)

@@ -1,15 +1,19 @@
 // use std::cell::Cell;
 
+use crate::perun::{self, harness, test::transaction::common::channel_witness};
 use ckb_testtool::{
-    ckb_types::{core::{TransactionBuilder, TransactionView}, packed::{CellInput, CellOutput, OutPoint, Script}, prelude::{Builder, Entity, Pack}},
+    ckb_types::{
+        core::{TransactionBuilder, TransactionView},
+        packed::{CellInput, CellOutput, OutPoint, Script},
+        prelude::{Builder, Entity, Pack},
+    },
     context::Context,
 };
-use crate::perun::{self, harness, test::transaction::common::channel_witness};
-use perun_common::{dispute, perun_types::VirtualChannelStatus,redeemer};
+use perun_common::{dispute, perun_types::VirtualChannelStatus, redeemer};
 
-use super::{DisputeArgs, common::create_cells};
+use super::{common::create_cells, DisputeArgs};
 
-pub struct VCProgressNoUpdateArgs{
+pub struct VCProgressNoUpdateArgs {
     pub parent_args: DisputeArgs,
     pub vc_cell: OutPoint,
     pub vc_status: VirtualChannelStatus,
@@ -22,7 +26,6 @@ pub struct VCProgressNoUpdateResult {
     pub tx: TransactionView,
     pub parent_cell: OutPoint,
     pub vc_cell: OutPoint,
-
 }
 
 impl Default for VCProgressNoUpdateResult {
@@ -40,7 +43,7 @@ pub fn mk_vc_progress_no_update(
     env: &harness::Env,
     args: VCProgressNoUpdateArgs,
 ) -> Result<VCProgressNoUpdateResult, perun::Error> {
-    let payment_input = env.create_min_cell_for_index(ctx,  args.parent_args.party_index);
+    let payment_input = env.create_min_cell_for_index(ctx, args.parent_args.party_index);
     //add inputs to tx
     //1. parent lc cell, 2. vc cell, 3. payment input
     let inputs = vec![
@@ -81,14 +84,22 @@ pub fn mk_vc_progress_no_update(
         .type_(Some(args.vcts_script.clone()).pack())
         .build();
 
-
     // add cells to outputs
     // 1. parent lc cell 2. vc cell
-    let outputs = vec![(parent_channel_cell.clone(), args.parent_args.state.as_bytes()), (vc_cell.clone(), args.vc_status.as_bytes())];
+    let outputs = vec![
+        (
+            parent_channel_cell.clone(),
+            args.parent_args.state.as_bytes(),
+        ),
+        (vc_cell.clone(), args.vc_status.as_bytes()),
+    ];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();
 
     // add witness args
-    let dispute_action = redeemer!(dispute!(args.parent_args.sigs[0].pack(), args.parent_args.sigs[1].pack()));
+    let dispute_action = redeemer!(dispute!(
+        args.parent_args.sigs[0].pack(),
+        args.parent_args.sigs[1].pack()
+    ));
     let witness_args = channel_witness!(dispute_action);
 
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();
@@ -100,7 +111,7 @@ pub fn mk_vc_progress_no_update(
         .witness(witness_args.as_bytes().pack())
         .cell_deps(cell_deps)
         .build();
-    
+
     let tx = ctx.complete_tx(rtx);
     create_cells(ctx, tx.hash(), outputs);
     Ok(VCProgressNoUpdateResult {

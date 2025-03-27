@@ -12,7 +12,10 @@ use perun_common::{fund, perun_types::ChannelStatus, redeemer};
 
 use crate::perun::{
     self, harness,
-    test::{cell::{FundingCell, mk_funding_cell}, FundingAgreement},
+    test::{
+        cell::{mk_funding_cell, FundingCell},
+        FundingAgreement,
+    },
 };
 
 use super::common::{channel_witness, create_cells, create_funding_from};
@@ -66,14 +69,19 @@ pub fn mk_fund(
     let num_fund_ouputs = outputs.len();
 
     let my_available_funds = Capacity::shannons(args.inputs.iter().map(|(_, c)| c.as_u64()).sum());
-    let exchange_cell = create_funding_from(my_available_funds, (wanted + args.funding_agreement.sudt_max_cap_sum()).into_capacity())?;
-    let mut inputs = vec![
-        CellInput::new_builder()
-            .previous_output(args.channel_cell)
-            .build(),
-    ];
+    let exchange_cell = create_funding_from(
+        my_available_funds,
+        (wanted + args.funding_agreement.sudt_max_cap_sum()).into_capacity(),
+    )?;
+    let mut inputs = vec![CellInput::new_builder()
+        .previous_output(args.channel_cell)
+        .build()];
     for (outpoint, _) in args.inputs.iter() {
-        inputs.push(CellInput::new_builder().previous_output(outpoint.clone()).build());
+        inputs.push(
+            CellInput::new_builder()
+                .previous_output(outpoint.clone())
+                .build(),
+        );
     }
     // NOTE: mk_fund currently expects the be called for the last party funding the channel.
     // Otherwise the call to `mk_funded` returns a wrong channel state.
@@ -111,12 +119,23 @@ pub fn mk_fund(
         .cell_deps(cell_deps)
         .header_deps(headers)
         .build();
-    let tx = ctx.complete_tx(rtx); 
+    let tx = ctx.complete_tx(rtx);
     create_cells(ctx, tx.hash(), outputs.clone());
     Ok(FundResult {
         channel_cell: OutPoint::new(tx.hash(), num_fund_ouputs as u32),
-        funds_cells: outputs[..num_fund_ouputs].iter().enumerate().map(|(i, (co, bytes))| 
-            mk_funding_cell(args.party_index, OutPoint::new(tx.hash(), i as u32), co, bytes.clone(), args.funding_agreement.register())).collect(),
+        funds_cells: outputs[..num_fund_ouputs]
+            .iter()
+            .enumerate()
+            .map(|(i, (co, bytes))| {
+                mk_funding_cell(
+                    args.party_index,
+                    OutPoint::new(tx.hash(), i as u32),
+                    co,
+                    bytes.clone(),
+                    args.funding_agreement.register(),
+                )
+            })
+            .collect(),
         state: updated_cs,
         tx,
     })

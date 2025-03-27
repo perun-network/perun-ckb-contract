@@ -1,7 +1,8 @@
 use crate::error::Error;
 use crate::helpers::blake2b256;
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken, LockedBalances, SEC1EncodedPubKey, SubBalances, VCChannelConstants, VirtualChannelStatus
+    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken,
+    LockedBalances, SEC1EncodedPubKey, SubBalances, VCChannelConstants, VirtualChannelStatus,
 };
 
 extern crate alloc;
@@ -16,8 +17,9 @@ use ckb_std::{
     },
     debug,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_header,
-        load_script, load_script_hash, load_transaction, load_witness_args,load_cell_type_hash,
+        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash,
+        load_cell_type_hash, load_header, load_script, load_script_hash, load_transaction,
+        load_witness_args,
     },
     syscalls::{self, SysError},
 };
@@ -40,19 +42,18 @@ pub enum VChannelAction {
     Merge {
         input_vc_status1: VirtualChannelStatus,
         input_vc_status2: VirtualChannelStatus,
-        merged_vc_status: VirtualChannelStatus, 
+        merged_vc_status: VirtualChannelStatus,
     },
     /// Close1 indicates that one of the parents of the virtual channel is being closed
-    Close1{
+    Close1 {
         input_vc_status: VirtualChannelStatus,
         output_vc_status: VirtualChannelStatus,
     },
     /// Close2 indicates that 2nd parent of the virtual channel and the virtual channel itself is being closed
-    Close2{
+    Close2 {
         input_lc_status: ChannelStatus,
         input_vc_status: VirtualChannelStatus,
     },
-
     // Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
     // recreated in the outputs with updated state. The possible redeemers associated with the Close action are
     // Close, Abort and ForceClose.

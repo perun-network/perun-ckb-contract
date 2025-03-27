@@ -226,10 +226,15 @@ pub fn check_valid_progress(
             check_normal_dispute(old_status, new_status, channel_constants, &d)
         }
 
-        ChannelWitnessUnion::VCDispute(vcd) =>{
+        ChannelWitnessUnion::VCDispute(vcd) => {
             debug!("ChannelWitnessUnion::VCDispute");
-                check_normal_dispute(old_status, new_status, channel_constants, &vcd.parent_state_sigs())?;
-                check_vc_dispute(old_status, new_status)
+            check_normal_dispute(
+                old_status,
+                new_status,
+                channel_constants,
+                &vcd.parent_state_sigs(),
+            )?;
+            check_vc_dispute(old_status, new_status)
         }
         // Close, ForceClose and Abort may not happen as channel progression (if there is a continuing channel output).
         ChannelWitnessUnion::Close(_) => Err(Error::ChannelCloseWithChannelOutput),
@@ -296,7 +301,7 @@ pub fn check_normal_dispute(
     debug!("check_normal_dispute");
     if !old_status.vc_disputed().to_bool() {
         verify_channel_state_progression(old_status, &new_status.state())?;
-    }else{
+    } else {
         verify_vc_parent_state_progression(old_status, &new_status.state())?;
     }
     debug!("verify_channel_state_progression passed");
@@ -366,7 +371,12 @@ pub fn check_valid_close(
                 debug!("vcts hash unpacked : {:?}", vc_pcts_hash.pack());
                 let input_vc_idx = match find_cell_by_type_hash(&vc_pcts_hash, Source::Input) {
                     Ok(Some(idx)) => idx,
-                    Ok(None) => return {debug!("DEBUG: Cannot Find VC Cell in Input");Err(Error::VCInputCellMissingInClose1Tx)},
+                    Ok(None) => {
+                        return {
+                            debug!("DEBUG: Cannot Find VC Cell in Input");
+                            Err(Error::VCInputCellMissingInClose1Tx)
+                        }
+                    }
                     Err(err) => return Err(err.into()),
                 };
                 let vc_status = match load_cell_data(input_vc_idx, Source::Input) {
@@ -379,11 +389,19 @@ pub fn check_valid_close(
                     Err(err) => return Err(err.into()),
                 };
                 let vcts_args: Bytes = vcts.args().unpack();
-                let vchannel_constants =  match VCChannelConstants::from_slice(&vcts_args){
+                let vchannel_constants = match VCChannelConstants::from_slice(&vcts_args) {
                     Ok(args) => args,
-                    Err(err) => {debug!("Error encountered while reading VCChannelConstants");return Err(err.into())},
+                    Err(err) => {
+                        debug!("Error encountered while reading VCChannelConstants");
+                        return Err(err.into());
+                    }
                 };
-                check_vc_force_close(old_status, channel_constants, &vc_status, &vchannel_constants)
+                check_vc_force_close(
+                    old_status,
+                    channel_constants,
+                    &vc_status,
+                    &vchannel_constants,
+                )
             } else {
                 check_normal_force_close(old_status, channel_constants, channel_capacity)
             }

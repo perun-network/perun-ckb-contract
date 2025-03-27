@@ -14,7 +14,7 @@ use crate::perun::{
     test::{cell::FundingCell, transaction::common::channel_witness},
 };
 
-use super::common::{create_cells, add_cap_to_a};
+use super::common::{add_cap_to_a, create_cells};
 
 #[derive(Debug, Clone)]
 pub struct CloseArgs {

@@ -355,10 +355,7 @@ where
         Ok(())
     }
 
-    pub fn vc_lc_update(
-        &mut self,
-        vc: &mut VirtualChannel,
-    ) -> Result<(), perun::Error>{
+    pub fn vc_lc_update(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
         let vc_status = vc.vc_status();
         let lc_sigs = self.sigs_for_channel_state()?;

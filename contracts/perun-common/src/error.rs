@@ -115,7 +115,6 @@ pub enum Error {
     SUDTAllocationLengthMismatch,
     VCOutputCellMissingIngStartTx,
     VCDisputeWithoutChannelOutput,
-
 }
 
 impl From<SysError> for Error {

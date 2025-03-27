@@ -17,5 +17,5 @@ use perun_common::error::Error;
 // This should not be a substantial restriction, since a payment input will likely be used anyway (e.g. for funding or fees).
 
 pub fn main() -> Result<(), Error> {
-   Ok(())
+    Ok(())
 }
