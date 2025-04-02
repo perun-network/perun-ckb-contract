@@ -14,6 +14,11 @@ enable_type_id = false
 location = { file = "build/release/perun-funds-lockscript" }
 
 [[cells]]
+name = "sudt"
+enable_type_id = false
+location = { file = "build/release/sample-udt" }
+
+[[cells]]
 name = "vcts"
 enable_type_id = false
 location = { file = "build/release/perun-vchannel-typescript" }
@@ -22,11 +27,6 @@ location = { file = "build/release/perun-vchannel-typescript" }
 name = "vcls"
 enable_type_id = false
 location = { file = "build/release/perun-vchannel-lockscript" }
-
-[[cells]]
-name = "sudt"
-enable_type_id = false
-location = { file = "build/release/sample-udt" }
 
 #
 # # reference to on-chain cells
