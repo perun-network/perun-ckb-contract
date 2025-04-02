@@ -70,3 +70,16 @@ or run them using the IDE
 Additionally, to the available contracts we extracted common functionality into
 its own `perun-common` crate which gives some additional helpers and
 convenience functions when interacting with types used in Perun contracts.
+
+## Problems
+A common issue when compiling for RISC-V is the missing file: `gnu/stubs-lp64.h`
+
+If the necessary packages are already installed, the file `/usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h`
+should exist instead. This is due to the toolchain using the lp64d ABI (which includes double-precision floating point support) rather than plain lp64.
+
+To resolve this, simply create a symbolic link:
+```
+sudo ln -s /usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h /usr/riscv64-linux-gnu/include/gnu/stubs-lp64.h
+```
+
+Then try compiling again.
