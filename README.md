@@ -27,10 +27,32 @@ Basically a NFT script with extra functionality.
 This script handle access rights to all funds belonging to a Perun channel.
 It ensures that only channel participants are able to consume said funds.
 
+## Prerequisites
+Update the rustc version to 1.85.0 and install the following:
+```
+sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf \
+libc6-dev-riscv64-cross libc6-riscv64-cross linux-libc-dev-riscv64-cross
+```
+```
+wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18 && rm llvm.sh
+```
+```
+cargo install cargo-generate
+```
+Add the target:
+```
+rustup target add riscv64imac-unknown-none-elf
+```
+
+## Build and Test
 Build contracts:
 
 ``` sh
 chmod +x ./setup_env.sh
+```
+
+``` sh
+make prepare
 ```
 
 ``` sh
