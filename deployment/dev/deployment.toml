@@ -14,11 +14,6 @@ enable_type_id = false
 location = { file = "build/release/perun-funds-lockscript" }
 
 [[cells]]
-name = "sudt"
-enable_type_id = false
-location = { file = "build/release/sample-udt" }
-
-[[cells]]
 name = "vcts"
 enable_type_id = false
 location = { file = "build/release/perun-vchannel-typescript" }
@@ -27,6 +22,11 @@ location = { file = "build/release/perun-vchannel-typescript" }
 name = "vcls"
 enable_type_id = false
 location = { file = "build/release/perun-vchannel-lockscript" }
+
+[[cells]]
+name = "sudt"
+enable_type_id = false
+location = { file = "build/release/sample-udt" }
 
 #
 # # reference to on-chain cells
@@ -47,5 +47,5 @@ location = { file = "build/release/perun-vchannel-lockscript" }
 # # For example the secp256k1 lock
 [lock]
 code_hash = "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8"
-args = "0x7913da9bcbcc088261f505695bddee96e75bf19d"
+args = "0x1edcdab5ec7e0f748c60815fce513ee1fe4d63ee"
 hash_type = "type"

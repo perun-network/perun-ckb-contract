@@ -502,7 +502,7 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             Ok(Some(hash)) => hash,
             Ok(None) => continue,
             Err(SysError::IndexOutOfBound) => break,
-            Err(err) => return Err(err.into()),
+            Err(_) => return Err(Error::TypeHashNotFound),
         };
         if vcts_hash == input_cell_hash {
             input_cell_counter += 1;
@@ -513,7 +513,7 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             Ok(Some(hash)) => hash,
             Ok(None) => continue,
             Err(SysError::IndexOutOfBound) => break,
-            Err(err) => return Err(err.into()),
+            Err(_) => return Err(Error::TypeHashNotFound),
         };
 
         if vcts_hash == output_cell_hash {
@@ -529,7 +529,7 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
         let vc_status = match load_cell_data(0, Source::GroupOutput) {
             Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
             // Ok(None) => panic!("Cannot load cell data of vc cell in outputs"),
-            Err(err) => return Err(err.into()),
+            Err(_) => return Err(Error::UnableToLoadVirtualChannelStatus),
         };
 
         let parent_input_idx = get_parent_of_vc(&vc_status, Source::Input).unwrap();
