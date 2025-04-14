@@ -176,15 +176,22 @@ pub fn check_valid_vc_progress(
     debug!("verify_non_decreasing_version_number_vc passed");
 
     if old_vc_status.vcstate().version().unpack() < new_vc_status.vcstate().version().unpack() {
+        debug!("vc state version number is increasing");
         verify_vc_sigs_progress(new_vc_status, &vc_constants.params())?;
         debug!("verify_vc_sigs_progress passed");
+        verify_equal_sum_of_balances(
+            &old_vc_status.vcstate().balances(),
+            &new_vc_status.vcstate().balances(),
+        )?;
+        debug!("verify_equal_sum_of_balances passed");
     }
-
-    verify_equal_sum_of_balances(
-        &old_vc_status.vcstate().balances(),
-        &new_vc_status.vcstate().balances(),
-    )?;
-    debug!("verify_equal_sum_of_balances passed");
+    if old_vc_status.vcstate().version().unpack()
+        == new_vc_status.vcstate().version().unpack()
+    {   
+        debug!("vc state version number is equal");
+        verify_equal_vc_status(old_vc_status, new_vc_status)?;
+        debug!("verify_equal_channel_state passed");
+    }
 
     debug!("verify_valid_vc_progress passed");
     Ok(())
@@ -456,6 +463,16 @@ pub fn verify_equal_sum_of_balances(
         return Err(Error::SumOfBalancesNotEqual);
     }
     Ok(())
+}
+
+pub fn verify_equal_vc_status(
+    old_vc_status: &VirtualChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    if old_vc_status.as_slice()[..] == new_vc_status.as_slice()[..] {
+        return Ok(());
+    }
+    Err(Error::VCStatusNotEqual)
 }
 
 pub fn verify_equal_channel_state(
