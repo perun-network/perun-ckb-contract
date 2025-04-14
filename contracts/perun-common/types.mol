@@ -176,4 +176,5 @@ table VirtualChannelStatus {
   vcstate: ChannelState,
   parents:  ParentsVec,
   first_force_close: Bool,
+  owner: Participant,
 }

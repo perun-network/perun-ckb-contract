@@ -651,6 +651,9 @@ fn test_vc_start(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+             //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
 
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
                 &mut ctx.borrow_mut(),
@@ -661,6 +664,7 @@ fn test_vc_start(
                 &chan_bi,
                 &idx_map,
                 &random::nonce(),
+                &owner,
             );
             drop(ctx);
             // Simulate creating virtual channels
@@ -767,6 +771,10 @@ fn test_vc_progress_no_update(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+            //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
+
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
                 &mut ctx.borrow_mut(),
                 env,
@@ -776,6 +784,7 @@ fn test_vc_progress_no_update(
                 &chan_bi,
                 &idx_map,
                 &random::nonce(),
+                &owner,
             );
             drop(ctx);
             // Simulate creating virtual channels
@@ -888,16 +897,21 @@ fn test_vc_progress_update1(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+            //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
+ 
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &random::nonce(),
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &random::nonce(),
+                 &owner,
+             );
             drop(ctx);
             // Simulate creating virtual channels
             chan_ai.with(alice).update(update_virtual_channel(
@@ -1017,16 +1031,21 @@ fn test_vc_progress_update2(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+            //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
+ 
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &random::nonce(),
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &random::nonce(),
+                 &owner,
+             );
             drop(ctx);
             // Simulate creating virtual channels
             chan_ai.with(alice).update(update_virtual_channel(
@@ -1150,17 +1169,24 @@ fn test_vc_merge(
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
             let nonce = random::nonce();
+            //First vc cell is created by Alice so she is the owner
+            let owner_participants1 = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner_alice = owner_participants1.get(0).unwrap();
+ 
             let mut vc_ab_1 = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &nonce,
-            );
-
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &nonce,
+                 &owner_alice,
+             );
+            //Second owner is Bob so he is the owner of second vc cell
+            let owner_participants1 = funding_agreement_bi.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner_bob = owner_participants1.get(0).unwrap(); 
             let mut vc_ab_2 = perun::virtual_channel::VirtualChannel::new(
                 &mut ctx.borrow_mut(),
                 env,
@@ -1170,6 +1196,7 @@ fn test_vc_merge(
                 &chan_bi,
                 &idx_map,
                 &nonce,
+                &owner_bob,
             );
             drop(ctx);
             // Simulate creating virtual channels
@@ -1289,16 +1316,21 @@ fn test_vc_close1(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+            //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
+ 
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &random::nonce(),
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &random::nonce(),
+                 &owner,
+             );
             drop(ctx);
             // Simulate creating virtual channels
             chan_ai.with(alice).update(update_virtual_channel(
@@ -1428,16 +1460,21 @@ fn test_vc_close2(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+            //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
+ 
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &random::nonce(),
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &random::nonce(),
+                 &owner,
+             );
             drop(ctx);
             // Simulate creating virtual channels
             chan_ai.with(alice).update(update_virtual_channel(
@@ -1576,16 +1613,21 @@ fn test_vc_happy(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+            //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
+ 
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &random::nonce(),
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &random::nonce(),
+                 &owner,
+             );
             drop(ctx);
             // Simulate creating virtual channels
             chan_ai.with(alice).update(update_virtual_channel(
@@ -1739,16 +1781,21 @@ fn test_vc_happy_multi_asset(
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
+            //Alice sends vc_start to tx and is thus the owner
+            let owner_participants = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner = owner_participants.get(0).unwrap();
+ 
             let mut vc_ab = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &random::nonce(),
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &random::nonce(),
+                 &owner,
+             );
             drop(ctx);
             // Simulate creating virtual channels
             chan_ai.with(alice).update(update_virtual_channel(
@@ -1888,16 +1935,24 @@ fn test_vc_happy_with_merge(
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
             let nonce = random::nonce();
+            //First vc cell is created by Alice so she is the owner
+            let owner_participants1 = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner_alice = owner_participants1.get(0).unwrap();
+ 
             let mut vc_ab_1 = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &nonce,
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &nonce,
+                 &owner_alice,
+             );
+            //Second owner is Bob so he is the owner of second vc cell
+            let owner_participants1 = funding_agreement_bi.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner_bob = owner_participants1.get(0).unwrap(); 
             let mut vc_ab_2 = perun::virtual_channel::VirtualChannel::new(
                 &mut ctx.borrow_mut(),
                 env,
@@ -1907,6 +1962,7 @@ fn test_vc_happy_with_merge(
                 &chan_bi,
                 &idx_map,
                 &nonce,
+                &owner_bob,
             );
             drop(ctx);
             // Simulate creating virtual channels
@@ -2085,16 +2141,24 @@ fn test_vc_happy_multi_asset_with_merge(
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
             let nonce = random::nonce();
+            //First vc cell is created by Alice so she is the owner
+            let owner_participants1 = funding_agreement_ai.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner_alice = owner_participants1.get(0).unwrap();
+ 
             let mut vc_ab_1 = perun::virtual_channel::VirtualChannel::new(
-                &mut ctx.borrow_mut(),
-                env,
-                &parts_ab,
-                &funding_agreement_ab,
-                &chan_ai,
-                &chan_bi,
-                &idx_map,
-                &nonce,
-            );
+                 &mut ctx.borrow_mut(),
+                 env,
+                 &parts_ab,
+                 &funding_agreement_ab,
+                 &chan_ai,
+                 &chan_bi,
+                 &idx_map,
+                 &nonce,
+                 &owner_alice,
+             );
+            //Second owner is Bob so he is the owner of second vc cell
+            let owner_participants1 = funding_agreement_bi.mk_participants(&mut ctx.borrow_mut(), env, env.min_capacity_no_script);
+            let owner_bob = owner_participants1.get(0).unwrap(); 
             let mut vc_ab_2 = perun::virtual_channel::VirtualChannel::new(
                 &mut ctx.borrow_mut(),
                 env,
@@ -2104,6 +2168,7 @@ fn test_vc_happy_multi_asset_with_merge(
                 &chan_bi,
                 &idx_map,
                 &nonce,
+                &owner_bob,
             );
 
             drop(ctx);

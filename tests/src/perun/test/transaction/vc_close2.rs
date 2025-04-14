@@ -76,6 +76,14 @@ pub fn mk_vc_close2(
         env.vcts_script_dep.clone(),
         env.vcls_script_dep.clone(),
     ];
+    
+    let vc_cell_cap = env.min_capacity_for_vc_channel(args.vc_status.clone())?;
+    let owner_idx: u8 = 0;
+    let onwer_vc_rent_payout = CellOutput::new_builder()
+        .capacity(vc_cell_cap.pack())
+        .lock(env.build_lock_script(ctx, Bytes::from(vec![owner_idx])))
+        .build();
+
     let channel_cap = env.min_capacity_for_channel(args.parent_args.state.clone())?;
     let balances = add_cap_to_a(&args.parent_args.state.state().balances(), channel_cap); // give ckbytes locked for channel cell to first party
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
@@ -83,12 +91,14 @@ pub fn mk_vc_close2(
         IdxMapDirection::LedgerChannelToVirtualChannel => {}
         _ => panic!("Invalid direction for idx_map"),
     }
-    let outputs = balances.mk_unlocked_outputs(
+    
+    let mut outputs = balances.mk_unlocked_outputs(
         f,
         vec![0, 1],
         &args.idx_map_with_direction.idx_map,
         &args.vc_status.vcstate().balances(),
     );
+    outputs.push((onwer_vc_rent_payout, Bytes::new()));
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();
 
     let force_close_action = redeemer!(ForceClose);

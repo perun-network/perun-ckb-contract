@@ -1,5 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+use core::{result::Result, usize};
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::{
@@ -21,7 +21,7 @@ use ckb_std::{
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
         load_cell_type_hash, load_header, load_script, load_script_hash, load_transaction,
-        load_witness_args,
+        load_witness_args, QueryIter,
     },
     syscalls::{self, SysError},
 };
@@ -36,7 +36,8 @@ use perun_common::{
     perun_types::{
         Balances, Bool, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus,
         ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute, LockedBalances, ParentsVec,
-        SEC1EncodedPubKey, SubAlloc, VCChannelConstants, VCDispute, VirtualChannelStatus,
+        Participant, SEC1EncodedPubKey, SubAlloc, VCChannelConstants, VCDispute,
+        VirtualChannelStatus,
     },
     sig::verify_signature,
 };
@@ -124,7 +125,7 @@ pub fn main() -> Result<(), Error> {
             input_vc_status,
         } => {
             debug!("Close2 Tx detected");
-            check_valid_close2(&input_lc_status, &input_vc_status)
+            check_valid_close2(&input_lc_status, &input_vc_status, &channel_constants)
         }
     }
 }
@@ -153,10 +154,32 @@ pub fn check_valid_vc_start(
     verify_always_success_lock_script(vc_channel_constants)?;
     debug!("verify_always_success_lock_script passed");
 
+    //verify that the owner lock hash is correctly set
+    verify_owner_lock(&new_vc_status.owner())?;
     // verify that there is only one and the same parent lc cell in inputs and outputs
     verify_max_one_parent(&new_vc_status)?;
     debug!("verify_max_one_parent passed");
 
+    Ok(())
+}
+
+pub fn verify_owner_lock(owner: &Participant) -> Result<(), Error> {
+    let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
+    let matches: Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Input)
+        .enumerate()
+        .filter_map(|(idx, hash)| {
+            if hash == owner_lock_hash {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    match matches.len() {
+        0 => return Err(Error::InvalidVCTxStart), //Input should contain at least cell belonging to owner
+        _ => (),
+    };
     Ok(())
 }
 
@@ -185,10 +208,7 @@ pub fn check_valid_vc_progress(
         )?;
         debug!("verify_equal_sum_of_balances passed");
     }
-    if old_vc_status.vcstate().version().unpack()
-        == new_vc_status.vcstate().version().unpack()
-    {   
-        debug!("vc state version number is equal");
+    if old_vc_status.vcstate().version().unpack() == new_vc_status.vcstate().version().unpack() {
         verify_equal_vc_status(old_vc_status, new_vc_status)?;
         debug!("verify_equal_channel_state passed");
     }
@@ -210,24 +230,31 @@ pub fn check_valid_vc_merge(
     debug!("vc_cell2_block_num: {:?}", vc_cell2_block_num);
 
     let mut selected_vc_cell = None;
-
+    let mut discarded_vc_cell = None;
     if vc_cell1_block_num < vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats1);
+        discarded_vc_cell = Some(input_vc_stats2);
     } else if vc_cell1_block_num > vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats2);
+        discarded_vc_cell = Some(input_vc_stats1);
     } else if vc_cell1_block_num == vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats1);
+        discarded_vc_cell = Some(input_vc_stats2);
     } else {
+        debug!("error thrown from big if statement");
         return Err(Error::InvalidVCMergeTx);
     }
     debug!("selected_vc_cell: {:?}", selected_vc_cell);
     debug!("selected the block with lower block number");
-    // 2. Output vc cell should be contain a copy of the data of the selected input cell
-    if let Some(vc_cell) = selected_vc_cell {
-        if vc_cell.as_slice() != merged_vc_status.as_slice() {
-            return Err(Error::InvalidVCMergeTx);
-        }
-    }
+
+    verify_equal_vc_status(selected_vc_cell.unwrap(), merged_vc_status)?;
+    debug!("verify_equal_vc_status passed");
+
+    // funds put up for the vc cell being removed from chain should be returned to owner
+    verify_vc_rent_payout_merge(&discarded_vc_cell.unwrap().owner())?;
+    debug!("verify_vc_rent_payout_merge passed");
+
+    debug!("check_valid_vc_merge passed");
     Ok(())
 }
 
@@ -262,6 +289,7 @@ pub fn check_valid_close1(
 pub fn check_valid_close2(
     input_lc_status: &ChannelStatus,
     input_vc_status: &VirtualChannelStatus,
+    vc_constants: &VCChannelConstants,
 ) -> Result<(), Error> {
     let parent_input_idx = match get_parent_of_vc(input_vc_status, Source::Input) {
         Ok(idx) => idx,
@@ -274,6 +302,95 @@ pub fn check_valid_close2(
     //first force close flag is set in input vc cell
     verify_first_forced_closed_flag_set(input_vc_status)?;
     debug!("verify first force close flag set passed");
+
+    // verify that the output contains a payout cell for the participant, which created vc cell
+    verify_vc_rent_payout_close2(&input_vc_status.owner())?;
+    debug!("verify_vc_rent_payout_cell passed");
+    Ok(())
+}
+
+pub fn verify_vc_rent_payout_close2(owner: &Participant) -> Result<(), Error> {
+    let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
+    let vc_cell_capacity = load_cell_capacity(0, Source::GroupInput)?;
+
+    let matches: Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
+        .enumerate()
+        .filter_map(|(idx, hash)| {
+            if hash == owner_lock_hash {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if matches.len() == 0 {
+        return Err(Error::NoVCRentPayoutCell);
+    }
+
+    let mut total_capacity = 0;
+    for idx in matches.iter() {
+        let output_capacity = load_cell_capacity(*idx, Source::Output)?;
+        total_capacity += output_capacity;
+    }
+
+    debug!("vc cell capacity: {:?}", vc_cell_capacity);
+    debug!("total output capacity: {:?}", total_capacity);
+
+    if vc_cell_capacity > total_capacity {
+        return Err(Error::InvalidVCRentPayoutCell);
+    }
+    Ok(())
+}
+
+pub fn verify_vc_rent_payout_merge(owner: &Participant) -> Result<(), Error> {
+    let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
+    let vc_cell_capacity = load_cell_capacity(0, Source::GroupInput)?;
+
+    let matches: Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
+        .enumerate()
+        .filter_map(|(idx, hash)| {
+            if hash == owner_lock_hash {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let output_idx = match matches.len() {
+        1 => matches.get(0).unwrap(),
+        _ => return Err(Error::NoVCRentPayoutCell), //output shoud contain exactly one payout cell
+    };
+
+    let output_capacity = load_cell_capacity(output_idx.clone(), Source::Output)?;
+    debug!("vc cell capacity: {:?}", vc_cell_capacity);
+    debug!("output_capacity: {:?}", output_capacity);
+
+    if vc_cell_capacity != output_capacity {
+        return Err(Error::InvalidVCRentPayoutCell);
+    }
+    Ok(())
+}
+
+// two vc statuses are considered equal if all their fields except owner is identical
+pub fn verify_equal_vc_status(
+    input_vc_status: &VirtualChannelStatus,
+    merged_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    if input_vc_status.vcstate().as_slice() != merged_vc_status.vcstate().as_slice() {
+        return Err(Error::InvalidVCMergeTx);
+    }
+
+    if input_vc_status.parents().as_slice() != merged_vc_status.parents().as_slice() {
+        return Err(Error::InvalidVCMergeTx);
+    }
+
+    if input_vc_status.first_force_close().as_slice()
+        != merged_vc_status.first_force_close().as_slice()
+    {
+        return Err(Error::InvalidVCMergeTx);
+    }
     Ok(())
 }
 
@@ -463,16 +580,6 @@ pub fn verify_equal_sum_of_balances(
         return Err(Error::SumOfBalancesNotEqual);
     }
     Ok(())
-}
-
-pub fn verify_equal_vc_status(
-    old_vc_status: &VirtualChannelStatus,
-    new_vc_status: &VirtualChannelStatus,
-) -> Result<(), Error> {
-    if old_vc_status.as_slice()[..] == new_vc_status.as_slice()[..] {
-        return Ok(());
-    }
-    Err(Error::VCStatusNotEqual)
 }
 
 pub fn verify_equal_channel_state(

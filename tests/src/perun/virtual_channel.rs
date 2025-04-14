@@ -11,10 +11,7 @@ use perun_common::{
     cfalse, ctrue,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelConstants, ChannelParametersBuilder, ChannelState, IndexMap,
-        IndexMapBuilder, LockedBalances, ParentDataBuilder, ParentsVec, ParentsVecBuilder,
-        SUDTAllocation, SubAlloc, SubBalances, VCChannelConstants, VCChannelConstantsBuilder,
-        VirtualChannelStatus,
+        Balances, ChannelConstants, ChannelParametersBuilder, ChannelState, IndexMap, IndexMapBuilder, LockedBalances, ParentDataBuilder, ParentsVec, ParentsVecBuilder, Participant, SUDTAllocation, SubAlloc, SubBalances, VCChannelConstants, VCChannelConstantsBuilder, VirtualChannelStatus
     },
 };
 
@@ -89,6 +86,7 @@ impl VirtualChannel {
         chan_bi: &Channel<perun::State>,
         idx_map: &VCIndexMap,
         nonce: &[u8; 32],
+        owner: &Participant,
     ) -> Self {
         let m_parts: HashMap<_, _> = parts
             .iter()
@@ -141,6 +139,7 @@ impl VirtualChannel {
             &funding_agreement,
             &parents,
             first_force_close,
+            owner.clone(),
         ) {
             Ok(vc_status) => vc_status,
             Err(e) => panic!("Error building virtual channel state: {}", e),

@@ -118,6 +118,8 @@ pub enum Error {
     VCOutputCellMissingIngStartTx,
     VCDisputeWithoutChannelOutput,
     VCStatusNotEqual,
+    NoVCRentPayoutCell,
+    InvalidVCRentPayoutCell,
 }
 
 impl From<SysError> for Error {

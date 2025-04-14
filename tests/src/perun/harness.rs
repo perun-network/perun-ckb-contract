@@ -8,6 +8,7 @@ use ckb_testtool::{
 };
 use perun_common::perun_types::ChannelStateBuilder;
 use perun_common::perun_types::ChannelStatusBuilder;
+use perun_common::perun_types::Participant;
 use perun_common::perun_types::VirtualChannelStatusBuilder;
 use perun_common::perun_types::{
     self, ChannelParameters, ChannelStatus, ChannelToken, IndexMap, LockedBalances, ParentData,
@@ -401,6 +402,7 @@ impl Env {
         funding_agreement: &FundingAgreement,
         parents: &ParentsVec,
         first_force_close: bool,
+        owner: Participant,
     ) -> Result<VirtualChannelStatus, perun::Error> {
         let all_indices = funding_agreement
             .content()
@@ -423,6 +425,7 @@ impl Env {
             .vcstate(channel_state)
             .parents(parents.clone())
             .first_force_close(flag)
+            .owner(owner)
             .build();
         Ok(vc_status)
     }
