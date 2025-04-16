@@ -1,29 +1,18 @@
 use crate::error::Error;
 use crate::helpers::blake2b256;
-use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelConstants, ChannelParameters, ChannelStatus, ChannelToken,
-    LockedBalances, SEC1EncodedPubKey, SubBalances, VCChannelConstants, VirtualChannelStatus,
-};
+use crate::perun_types::{ChannelParameters, ChannelStatus, ChannelToken, VirtualChannelStatus};
 
 extern crate alloc;
-use alloc::{vec, vec::Vec};
 
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{
-        bytes::Bytes,
-        packed::{Byte32, Script},
-        prelude::*,
-    },
+    ckb_types::{packed::Byte32, prelude::*},
     debug,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash,
-        load_cell_type_hash, load_header, load_script, load_script_hash, load_transaction,
-        load_witness_args,
+        load_cell_data, load_cell_lock_hash, load_cell_type_hash, load_header, load_transaction,
     },
     syscalls::{self, SysError},
 };
-const SUDT_MIN_LEN: usize = 16;
 
 pub enum VChannelAction {
     /// Progress indicates that a higher version of virtual channel may be registered

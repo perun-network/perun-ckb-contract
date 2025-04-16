@@ -16,23 +16,21 @@ use ckb_std::{
     debug,
     high_level::{
         load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
-        load_cell_type_hash, load_header, load_script, load_script_hash, load_transaction,
-        load_witness_args,
+        load_cell_type_hash, load_script, load_script_hash, load_transaction, load_witness_args,
     },
-    syscalls::{self, SysError},
 };
 use perun_common::{
     channels::{
-        count_cells, find_cell_by_type_hash, find_closest_current_time, get_channel_action,
-        verify_channel_id_integrity, verify_max_one_channel, verify_thread_token_integrity,
-        verify_time_lock_expired, PChannelAction,
+        find_cell_by_type_hash, get_channel_action, verify_channel_id_integrity,
+        verify_max_one_channel, verify_thread_token_integrity, verify_time_lock_expired,
+        PChannelAction,
     },
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
-        ChannelWitness, ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey,
-        VCChannelConstants, VirtualChannelStatus,
+        Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
+        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, VCChannelConstants,
+        VirtualChannelStatus,
     },
     sig::verify_signature,
 };
@@ -938,13 +936,6 @@ pub fn verify_funded_status(status: &ChannelStatus, is_start: bool) -> Result<()
 pub fn verify_status_not_funded(status: &ChannelStatus) -> Result<(), Error> {
     if status.funded().to_bool() {
         return Err(Error::StateIsFunded);
-    }
-    Ok(())
-}
-
-pub fn verify_vc_status_not_disputed(status: &ChannelStatus) -> Result<(), Error> {
-    if status.disputed().to_bool() {
-        return Err(Error::StatusDisputed);
     }
     Ok(())
 }

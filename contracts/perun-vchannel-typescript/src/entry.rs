@@ -2,67 +2,31 @@
 use core::{result::Result, usize};
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
-use alloc::{
-    self,
-    string::ToString,
-    vec::{self, Vec},
-};
+use alloc::{self, vec::Vec};
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{
-        bytes::Bytes,
-        packed::{Byte32, Script},
-        prelude::*,
-    },
+    ckb_types::{bytes::Bytes, packed::Byte32, prelude::*},
     debug,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
-        load_cell_type_hash, load_header, load_script, load_script_hash, load_transaction,
-        load_witness_args, QueryIter,
+        load_cell_capacity, load_cell_data, load_cell_lock_hash, load_cell_type_hash, load_header,
+        load_script, load_script_hash, load_witness_args, QueryIter,
     },
-    syscalls::{self, SysError},
+    syscalls::SysError,
 };
 use perun_common::{
-    channels::{
-        count_cells, find_cell_by_lock_hash, find_cell_by_type_hash, find_closest_current_time,
-        verify_max_one_channel, verify_thread_token_integrity, verify_time_lock_expired,
-        VChannelAction,
-    },
+    channels::{find_cell_by_type_hash, VChannelAction},
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, Bool, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus,
-        ChannelToken, ChannelWitness, ChannelWitnessUnion, Dispute, LockedBalances, ParentsVec,
-        Participant, SEC1EncodedPubKey, SubAlloc, VCChannelConstants, VCDispute,
+        Balances, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
+        ChannelWitnessUnion, Participant, SEC1EncodedPubKey, VCChannelConstants,
         VirtualChannelStatus,
     },
     sig::verify_signature,
 };
-
-const SUDT_MIN_LEN: usize = 16;
-
-pub enum DisputeMode {
-    Normal,
-    VCDisputeStart {
-        old_lc_status: ChannelStatus,
-        new_lc_status: ChannelStatus,
-        new_vc_status: VirtualChannelStatus,
-    },
-    VCDisputeProgress {
-        old_lc_status: ChannelStatus,
-        old_vc_status: VirtualChannelStatus,
-        new_lc_status: ChannelStatus,
-        new_vc_status: VirtualChannelStatus,
-    },
-}
-
-pub enum CloseMode {
-    NormalMode,
-    VCMode,
-}
 
 pub fn main() -> Result<(), Error> {
     debug!("VCTS");
@@ -131,8 +95,8 @@ pub fn main() -> Result<(), Error> {
 }
 
 pub fn check_valid_vc_start(
-    old_lc_status: &ChannelStatus,
-    new_lc_status: &ChannelStatus,
+    _: &ChannelStatus,
+    _: &ChannelStatus,
     new_vc_status: &VirtualChannelStatus,
     vc_channel_constants: &VCChannelConstants,
 ) -> Result<(), Error> {
@@ -229,8 +193,8 @@ pub fn check_valid_vc_merge(
     let vc_cell2_block_num = load_header(1, Source::GroupInput)?.raw().number().unpack();
     debug!("vc_cell2_block_num: {:?}", vc_cell2_block_num);
 
-    let mut selected_vc_cell = None;
-    let mut discarded_vc_cell = None;
+    let selected_vc_cell;
+    let discarded_vc_cell;
     if vc_cell1_block_num < vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats1);
         discarded_vc_cell = Some(input_vc_stats2);
@@ -261,7 +225,7 @@ pub fn check_valid_vc_merge(
 pub fn check_valid_close1(
     input_vc_status: &VirtualChannelStatus,
     output_vc_status: &VirtualChannelStatus,
-    vc_constants: &VCChannelConstants,
+    _: &VCChannelConstants,
 ) -> Result<(), Error> {
     debug!("check_valid_close1");
     // a parent pcts must appear as input
@@ -287,9 +251,9 @@ pub fn check_valid_close1(
 }
 
 pub fn check_valid_close2(
-    input_lc_status: &ChannelStatus,
+    _input_lc_status: &ChannelStatus,
     input_vc_status: &VirtualChannelStatus,
-    vc_constants: &VCChannelConstants,
+    _vc_constants: &VCChannelConstants,
 ) -> Result<(), Error> {
     let parent_input_idx = match get_parent_of_vc(input_vc_status, Source::Input) {
         Ok(idx) => idx,
@@ -582,16 +546,6 @@ pub fn verify_equal_sum_of_balances(
     Ok(())
 }
 
-pub fn verify_equal_channel_state(
-    old_state: &ChannelState,
-    new_state: &ChannelState,
-) -> Result<(), Error> {
-    if old_state.as_slice()[..] == new_state.as_slice()[..] {
-        return Ok(());
-    }
-    Err(Error::ChannelStateNotEqual)
-}
-
 pub fn verify_vchannel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
         return Err(Error::AppChannelsNotSupported);
@@ -795,6 +749,7 @@ pub fn get_parent_of_vc(vc_status: &VirtualChannelStatus, source: Source) -> Res
     Ok(parent_idx)
 }
 
+/*
 pub fn verify_increasing_version_number_for_vc(
     old_vc_state: &ChannelState,
     new_vc_state: &ChannelState,
@@ -810,6 +765,7 @@ pub fn verify_increasing_version_number_for_vc(
     }
     Err(Error::VersionNumberNotIncreasing)
 }
+
 
 // TODO: We might want to verify that the capacity of the sudt output is at least the max_capacity of the SUDT asset.
 //      Not doing so may result in the ability to steal funds up to the
@@ -835,3 +791,4 @@ pub fn get_vc_sudt_amount(
     buf.copy_from_slice(&sudt_data[..SUDT_MIN_LEN]);
     return Ok((sudt_idx, u128::from_le_bytes(buf)));
 }
+*/
