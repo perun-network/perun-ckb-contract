@@ -8,11 +8,7 @@ use ckb_testtool::{
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
     ctrue,
-    perun_types::{
-        Balances, CKByteDistribution, ChannelConstants, ChannelState, ChannelStatus,
-        LockedBalances, ParentData, ParentsVec, SUDTAllocation, SubAlloc, SubBalances,
-        VirtualChannelStatus,
-    },
+    perun_types::{ChannelConstants, ChannelState, ChannelStatus},
 };
 
 use std::cell::RefCell;
@@ -29,8 +25,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 use super::{
-    test::{cell::FundingCell, ChannelId},
-    virtual_channel::{self, IdxMapWithDirection, VCIndexMap, VirtualChannel},
+    test::cell::FundingCell,
+    virtual_channel::{IdxMapWithDirection, VirtualChannel},
     Account,
 };
 
@@ -82,7 +78,7 @@ macro_rules! call_action {
     ($self:ident, $action:ident $(, $x:expr)*$(,)*) => (
         {
             println!("calling action {} on {}", stringify!($action), $self.active_part.name());
-            let mut ctx = match $self.ctx.try_lock() {
+            let ctx = match $self.ctx.try_lock() {
                 Ok(lock) => lock,
                 Err(_) => panic!("Failed to acquire lock on context"),
             };
@@ -216,7 +212,7 @@ where
             )
             .build()
             .into_view();
-        let mut ctx = match self.ctx.try_lock() {
+        let ctx = match self.ctx.try_lock() {
             Ok(lock) => lock,
             Err(_) => panic!("Failed to acquire lock on context"),
         };
@@ -257,8 +253,8 @@ where
 
     /// send a payment using the currently active participant set by `with(..)`
     /// to the given `to` participant.
-    pub fn send<P: perun::Account>(&mut self, to: &P, amount: u64) -> Result<(), perun::Error> {
-        let to = self.parts.get(&to.name()).expect("part not found");
+    pub fn send<P: perun::Account>(&mut self, to: &P, _amount: u64) -> Result<(), perun::Error> {
+        let _to = self.parts.get(&to.name()).expect("part not found");
         self.active_part.send(self.ctx.clone(), self.env)
     }
 
@@ -516,7 +512,7 @@ where
             .into_view();
         // Push a header with the current time which can be used in force_close
         // as for time validation purposes.
-        let mut ctx = self.ctx.lock().unwrap();
+        let ctx = self.ctx.lock().unwrap();
         ctx.borrow_mut().insert_header(h.clone());
         drop(ctx);
         match self.channel_cell.clone() {
@@ -554,7 +550,7 @@ where
             .build();
         // Push a header with the current time which can be used in force_close
         // as for time validation purposes.
-        let mut ctx = match self.ctx.try_lock() {
+        let ctx = match self.ctx.try_lock() {
             Ok(lock) => lock,
             Err(_) => panic!("Failed to acquire lock on context"),
         };

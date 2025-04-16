@@ -5,23 +5,19 @@ use ckb_testtool::ckb_types::packed::{Byte32, OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 
-use k256::ecdsa::recoverable::Id;
 use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::{
-    ChannelState, ChannelStatus, LockedBalances, VirtualChannelStatus,
-};
+use perun_common::perun_types::{ChannelState, ChannelStatus, VirtualChannelStatus};
 
 use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
 use crate::perun::test;
 use crate::perun::test::transaction::{
-    mk_vc_lc_update, mk_vc_merge, mk_vc_progress_no_update, mk_vc_update_only, vc_lc_update,
-    AbortArgs, OpenResult, VCLCUpdateArgs, VCMergeArgs, VCProgressNoUpdateArgs, VCStartArgs,
-    VCUpdateOnlyArgs,
+    mk_vc_lc_update, mk_vc_merge, mk_vc_progress_no_update, mk_vc_update_only, AbortArgs,
+    OpenResult, VCLCUpdateArgs, VCMergeArgs, VCProgressNoUpdateArgs, VCStartArgs, VCUpdateOnlyArgs,
 };
 use crate::perun::test::{keys, transaction};
 
@@ -79,9 +75,6 @@ impl Client {
         let pfls_code_hash = ctx
             .get_cell_data_hash(&env.pfls_out_point)
             .expect("pfls hash");
-        let always_success_hash = ctx
-            .get_cell_data_hash(&env.always_success_out_point)
-            .expect("always success hash");
 
         let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
 
@@ -157,8 +150,8 @@ impl Client {
 
     pub fn send(
         &self,
-        ctx: Rc<Mutex<RefCell<Context>>>,
-        env: &harness::Env,
+        _ctx: Rc<Mutex<RefCell<Context>>>,
+        _env: &harness::Env,
     ) -> Result<(), perun::Error> {
         Ok(())
     }

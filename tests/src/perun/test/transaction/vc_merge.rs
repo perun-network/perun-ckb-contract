@@ -3,7 +3,7 @@ use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
         core::{TransactionBuilder, TransactionView},
-        packed::{CellInput, CellOutput, OutPoint, Script, WitnessArgs},
+        packed::{CellInput, CellOutput, OutPoint, Script},
         prelude::{Builder, Entity, Pack},
     },
     context::Context,
@@ -83,7 +83,10 @@ pub fn mk_vc_merge(
         .capacity(capacity_for_vc2.pack())
         .lock(env.build_lock_script(ctx, Bytes::from(vec![owner_idx])))
         .build();
-    let outputs = vec![(vc_cell2.clone(), vc_status2.as_bytes()), (onwer_vc_rent_payout, Bytes::new())];
+    let outputs = vec![
+        (vc_cell2.clone(), vc_status2.as_bytes()),
+        (onwer_vc_rent_payout, Bytes::new()),
+    ];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();
 
     let headers: Vec<_> = ctx.headers.keys().cloned().collect();

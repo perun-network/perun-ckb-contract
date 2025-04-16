@@ -1,18 +1,14 @@
 use ckb_testtool::{
     ckb_types::{
         core::{TransactionBuilder, TransactionView},
-        packed::{CellInput, CellOutput, OutPoint, Script, WitnessArgs},
+        packed::{CellInput, CellOutput, OutPoint, Script},
         prelude::{Builder, Entity, Pack},
     },
     context::Context,
 };
 
 use crate::perun::{self, harness, test::transaction::common::channel_witness};
-use perun_common::{
-    dispute,
-    perun_types::{ChannelStatus, ChannelWitness, Dispute, VirtualChannelStatus},
-    redeemer,
-};
+use perun_common::{dispute, perun_types::VirtualChannelStatus, redeemer};
 
 use super::{common::create_cells, DisputeArgs};
 

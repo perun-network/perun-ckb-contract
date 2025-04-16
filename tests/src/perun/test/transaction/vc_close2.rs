@@ -3,19 +3,15 @@ use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
         core::{TransactionBuilder, TransactionView},
-        packed::Byte32,
         prelude::{Builder, Entity, Pack},
     },
     context::Context,
 };
-use perun_common::{
-    perun_types::{ChannelStatus, ForceClose, VirtualChannelStatus},
-    redeemer,
-};
+use perun_common::{perun_types::VirtualChannelStatus, redeemer};
 
 use crate::perun::{
     self, harness,
-    test::{cell::FundingCell, transaction::common::channel_witness},
+    test::transaction::common::channel_witness,
     virtual_channel::{IdxMapDirection, IdxMapWithDirection},
 };
 
@@ -76,7 +72,7 @@ pub fn mk_vc_close2(
         env.vcts_script_dep.clone(),
         env.vcls_script_dep.clone(),
     ];
-    
+
     let vc_cell_cap = env.min_capacity_for_vc_channel(args.vc_status.clone())?;
     let owner_idx: u8 = 0;
     let onwer_vc_rent_payout = CellOutput::new_builder()
@@ -91,7 +87,7 @@ pub fn mk_vc_close2(
         IdxMapDirection::LedgerChannelToVirtualChannel => {}
         _ => panic!("Invalid direction for idx_map"),
     }
-    
+
     let mut outputs = balances.mk_unlocked_outputs(
         f,
         vec![0, 1],

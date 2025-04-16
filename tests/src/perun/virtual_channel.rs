@@ -1,7 +1,6 @@
 use ckb_testtool::{
-    ckb_hash,
     ckb_types::{
-        packed::{Header, OutPoint, RawHeader, Script},
+        packed::{OutPoint, Script},
         prelude::{Builder, Entity, Pack, Unpack},
     },
     context::Context,
@@ -11,18 +10,19 @@ use perun_common::{
     cfalse, ctrue,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelConstants, ChannelParametersBuilder, ChannelState, IndexMap, IndexMapBuilder, LockedBalances, ParentDataBuilder, ParentsVec, ParentsVecBuilder, Participant, SUDTAllocation, SubAlloc, SubBalances, VCChannelConstants, VCChannelConstantsBuilder, VirtualChannelStatus
+        ChannelParametersBuilder, ChannelState, IndexMapBuilder, ParentDataBuilder,
+        ParentsVecBuilder, Participant, SUDTAllocation, VCChannelConstants,
+        VCChannelConstantsBuilder, VirtualChannelStatus,
     },
 };
 
 use super::test::FundingAgreement;
-use super::{test::cell::FundingCell, Account};
+use super::Account;
 use crate::perun::{
-    self, random,
+    self,
     test::{keys, ChannelId, Client},
 };
-use crate::perun::{channel::Channel, harness, test};
-use std::cmp::PartialEq;
+use crate::perun::{channel::Channel, test};
 use std::collections::HashMap;
 use std::fmt::Debug;
 

@@ -3,19 +3,15 @@ use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
         core::{TransactionBuilder, TransactionView},
-        packed::Byte32,
         prelude::{Builder, Entity, Pack},
     },
     context::Context,
 };
-use perun_common::{
-    perun_types::{ChannelStatus, ForceClose, VirtualChannelStatus},
-    redeemer,
-};
+use perun_common::{perun_types::VirtualChannelStatus, redeemer};
 
 use crate::perun::{
     self, harness,
-    test::{cell::FundingCell, transaction::common::channel_witness},
+    test::transaction::common::channel_witness,
     virtual_channel::{IdxMapDirection, IdxMapWithDirection},
 };
 

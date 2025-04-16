@@ -11,12 +11,10 @@ use perun_common::perun_types::ChannelStatusBuilder;
 use perun_common::perun_types::Participant;
 use perun_common::perun_types::VirtualChannelStatusBuilder;
 use perun_common::perun_types::{
-    self, ChannelParameters, ChannelStatus, ChannelToken, IndexMap, LockedBalances, ParentData,
-    ParentsVec, VirtualChannelStatus,
+    self, ChannelStatus, ChannelToken, ParentsVec, VirtualChannelStatus,
 };
 use perun_common::{cfalse, ctrue};
 
-use super::channel;
 use super::test::ChannelId;
 use super::test::FundingAgreement;
 use super::test::FundingAgreementEntry;
@@ -216,7 +214,7 @@ impl Env {
     pub fn build_pcts(&self, context: &mut Context, args: Bytes) -> Script {
         let pcts_out_point = &self.pcts_out_point;
         let result = context.build_script(pcts_out_point, args);
-        let script_hash = result.clone().unwrap().calc_script_hash();
+        let _script_hash = result.clone().unwrap().calc_script_hash();
         result.expect("Cannot build pcts")
     }
 
@@ -372,7 +370,7 @@ impl Env {
     pub fn build_initial_channel_state(
         &self,
         channel_id: ChannelId,
-        client_index: u8,
+        _client_index: u8,
         funding_agreement: &FundingAgreement,
     ) -> Result<ChannelStatus, perun::Error> {
         let all_indices = funding_agreement

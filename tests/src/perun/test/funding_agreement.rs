@@ -272,7 +272,7 @@ pub struct FundingAgreementEntry {
 pub struct Asset(pub u32);
 
 impl Asset {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Asset(0)
     }
 }
@@ -309,7 +309,7 @@ impl AssetRegister {
         }
     }
 
-    pub fn get_asset(&self, sudt_asset: SUDTAsset) -> Option<&Asset> {
+    pub fn _get_asset(&self, sudt_asset: SUDTAsset) -> Option<&Asset> {
         match self
             .assets
             .iter()

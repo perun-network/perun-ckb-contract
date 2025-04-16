@@ -1,12 +1,13 @@
 [workspace]
-members = [ "contracts/perun-channel-lockscript"
-    ,"contracts/perun-vchannel-lockscript"
-          , "contracts/perun-channel-typescript"
-        , "contracts/perun-vchannel-typescript"
-          , "contracts/perun-funds-lockscript"
-          , "contracts/perun-common"
-          , "contracts/sample-udt"
-          # , "tests"
+members = [
+  "contracts/perun-channel-lockscript",
+  "contracts/perun-vchannel-lockscript",
+  "contracts/perun-channel-typescript",
+  "contracts/perun-vchannel-typescript",
+  "contracts/perun-funds-lockscript",
+  "contracts/perun-common",
+  "contracts/sample-udt",
+  # , "tests"
 ]
 exclude = ["tests"]
 

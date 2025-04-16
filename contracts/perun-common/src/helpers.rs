@@ -573,7 +573,7 @@ impl SUDTAllocation {
         indices: Vec<u8>,
     ) -> Vec<(CellOutput, bytes::Bytes)> {
         let mut outputs: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
-        for (i, balance) in self.into_iter().enumerate() {
+        for (_i, balance) in self.into_iter().enumerate() {
             let udt_type = balance.asset().type_script();
             let udt_type_opt = ScriptOpt::new_builder().set(Some(udt_type)).build();
             let cap: u64 = balance.asset().max_capacity().unpack();
