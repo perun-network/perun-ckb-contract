@@ -6,11 +6,10 @@ use core::result::Result;
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
-    high_level::{load_cell_lock_hash, load_script, load_cell_data},
+    high_level::{load_cell_data, load_cell_lock_hash, load_script},
     syscalls::SysError,
 };
 use perun_common::error::Error;
-
 
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
@@ -36,17 +35,14 @@ pub fn check_owner_mode(args: &Bytes) -> Result<bool, Error> {
     // current transaction to see if any unlocked cell uses owner lock.
     for i in 0.. {
         // check input's lock_hash with script args
-        let lock_hash = match load_cell_lock_hash(
-            i,
-            Source::Input,
-        ) {
+        let lock_hash = match load_cell_lock_hash(i, Source::Input) {
             Ok(lock_hash) => lock_hash,
             Err(SysError::IndexOutOfBound) => return Ok(false),
             Err(err) => return Err(err.into()),
         };
         // invalid length of loaded data
         if args[..] == lock_hash[..] {
-           return Ok(true);
+            return Ok(true);
         }
     }
     Ok(false)

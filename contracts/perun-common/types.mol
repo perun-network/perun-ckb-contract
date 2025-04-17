@@ -9,6 +9,18 @@ array SUDTDistribution [Uint128; 2];
 
 vector SUDTAllocation <SUDTBalances>;
 
+vector Locked_balances <SubAlloc>;
+
+table SubAlloc{
+  id: Byte32, //subchannel/virtual channel id
+  balances: SubBalances,
+}
+
+table SubBalances{
+  ckbytes: CKByteDistribution,
+  sudts: SUDTAllocation,
+}
+
 table SUDTAsset {
   type_script: Script,
   // The max_capacity of an SUDTAsset should always be at least the capacity needed for the SUDT type script + outputs_data
@@ -25,6 +37,7 @@ table SUDTBalances {
 table Balances {
   ckbytes: CKByteDistribution,
   sudts: SUDTAllocation,
+  locked: Locked_balances,
 }
 
 array True [byte; 1];
@@ -70,9 +83,7 @@ table ChannelParameters {
   challenge_duration: Uint64,
   // The default should be NoApp!
   app: App,
-  // This should always be set to true for, as we currently only support ledger channels.
   is_ledger_channel: Bool,
-  // This should always be set to false for, as we currently do not support virtual channels.
   is_virtual_channel: Bool,
 }
 
@@ -97,9 +108,20 @@ table ChannelConstants {
   thread_token: ChannelToken,
 }
 
+table VCChannelConstants{
+  params: ChannelParameters,
+  vcls_code_hash: Byte32,
+  vcls_hash_type: byte,
+}
 array Fund [byte; 1];
 
 array Abort [byte; 1];
+
+table VCDispute {
+  sig_a: Bytes,
+  sig_b: Bytes,
+  parent_state_sigs: Dispute,
+}
 
 table Dispute {
   sig_a: Bytes,
@@ -112,17 +134,16 @@ table Close {
 }
 array ForceClose [byte; 1];
 
-
 union ChannelWitness {
   Fund,
   Abort,
   Dispute,
+  VCDispute,
   Close,
   ForceClose,
 }
 
 table ChannelState {
-  // 
   channel_id: Byte32,
   balances: Balances,
   version: Uint64,
@@ -133,8 +154,27 @@ table ChannelStatus {
   state: ChannelState,
   funded: Bool,
   disputed: Bool,
+  vc_disputed: Bool,
+  vcts_hash: Byte32, 
 }
 
 struct ChannelToken {
   out_point: OutPoint,
+}
+
+vector ParentsVec<ParentData>;
+
+array index_map[byte;2];
+
+table ParentData {
+  pcts_hash: Byte32,
+  idx_map: index_map,
+}
+
+
+table VirtualChannelStatus {
+  vcstate: ChannelState,
+  parents:  ParentsVec,
+  first_force_close: Bool,
+  owner: Participant,
 }

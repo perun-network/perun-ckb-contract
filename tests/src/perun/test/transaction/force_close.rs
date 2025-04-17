@@ -15,7 +15,7 @@ use crate::perun::{
     test::{cell::FundingCell, transaction::common::channel_witness},
 };
 
-use super::common::{create_cells, add_cap_to_a};
+use super::common::{add_cap_to_a, create_cells};
 
 #[derive(Debug, Clone)]
 pub struct ForceCloseArgs {
@@ -72,7 +72,7 @@ pub fn mk_force_close(
 
     // Rust...
     let channel_cap = env.min_capacity_for_channel(args.state.clone())?;
-    let balances = add_cap_to_a(&args.state.state().balances(), channel_cap);
+    let balances = add_cap_to_a(&args.state.state().balances(), channel_cap); // give ckbytes locked for channel cell to first party
     let f = |idx| env.build_lock_script(ctx, Bytes::from(vec![idx]));
     let outputs = balances.mk_outputs(f, vec![0, 1]);
     let outputs_data: Vec<_> = outputs.iter().map(|o| o.1.clone()).collect();

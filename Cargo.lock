@@ -453,9 +453,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.141"
+version = "0.2.172"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3304a64d199bb964be99741b7a14d26972741915b3649639149b2479bb46f4b5"
+checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 
 [[package]]
 name = "memchr"
@@ -564,11 +564,26 @@ dependencies = [
  "k256",
  "molecule",
  "rustc-std-workspace-alloc",
- "rustc-std-workspace-core",
 ]
 
 [[package]]
 name = "perun-funds-lockscript"
+version = "0.1.0"
+dependencies = [
+ "ckb-std",
+ "perun-common",
+]
+
+[[package]]
+name = "perun-vchannel-lockscript"
+version = "0.1.0"
+dependencies = [
+ "ckb-std",
+ "perun-common",
+]
+
+[[package]]
+name = "perun-vchannel-typescript"
 version = "0.1.0"
 dependencies = [
  "ckb-std",
@@ -662,12 +677,6 @@ name = "rustc-std-workspace-alloc"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff66d57013a5686e1917ed6a025d54dd591fcda71a41fe07edf4d16726aefa86"
-
-[[package]]
-name = "rustc-std-workspace-core"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1956f5517128a2b6f23ab2dadf1a976f4f5b27962e7724c2bf3d45e539ec098c"
 
 [[package]]
 name = "sample-udt"

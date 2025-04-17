@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod channels;
 pub mod error;
 pub mod helpers;
 #[allow(clippy::all)]
