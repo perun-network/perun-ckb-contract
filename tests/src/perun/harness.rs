@@ -174,28 +174,28 @@ impl Env {
     pub fn build_pcls(&self, context: &mut Context, args: Bytes) -> Script {
         let pcls_out_point = &self.pcls_out_point;
         context
-            .build_script(pcls_out_point, args)
+            .build_script_with_hash_type(pcls_out_point, ScriptHashType::Data1 ,args)
             .expect("perun-channel-lockscript")
     }
 
     pub fn build_pcts(&self, context: &mut Context, args: Bytes) -> Script {
         let pcts_out_point = &self.pcts_out_point;
         context
-            .build_script(pcts_out_point, args)
+            .build_script_with_hash_type(pcts_out_point, ScriptHashType::Data1 ,args)
             .expect("perun-channel-typescript")
     }
 
     pub fn build_pfls(&self, context: &mut Context, args: Bytes) -> Script {
         let pfls_out_point = &self.pfls_out_point;
         context
-            .build_script(pfls_out_point, args)
+            .build_script_with_hash_type(pfls_out_point, ScriptHashType::Data1 ,args)
             .expect("perun-funds-lockscript")
     }
 
     pub fn build_lock_script(&self, context: &mut Context, args: Bytes) -> Script {
         let always_success_out_point = &self.always_success_out_point;
         context
-            .build_script(always_success_out_point, args)
+            .build_script(always_success_out_point,args)
             .expect("always_success")
     }
 
