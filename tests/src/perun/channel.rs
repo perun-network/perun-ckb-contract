@@ -168,7 +168,7 @@ where
 
     pub fn vc_start(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
-        let vc_state = vc.vc_status();
+        let vc_status = vc.vc_status();
         self.channel_state = self
             .channel_state
             .clone()
@@ -191,7 +191,7 @@ where
             self,
             vc_start,
             parent_args,
-            vc_state.clone(),
+            vc_status.clone(),
             vc_sigs.clone(),
             vcts.clone(),
         )?;
@@ -289,7 +289,7 @@ where
     //register dispute for second lc parent without update on vc
     pub fn vc_progress_no_update(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
-        let vc_state = vc.vc_status();
+        let vc_status = vc.vc_status();
         self.channel_state = self
             .channel_state
             .clone()
@@ -312,7 +312,7 @@ where
             vc_progress_no_update,
             parent_args,
             vc.cell().clone(),
-            vc_state.clone(),
+            vc_status.clone(),
             vcts.clone(),
         )?;
         self.channel_cell = Some(result.parent_cell.clone());
@@ -324,7 +324,7 @@ where
 
     pub fn vc_update_only(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
-        let vc_state = vc.vc_status();
+        let vc_status = vc.vc_status();
         let lc_sigs = self.sigs_for_channel_state()?;
         let vc_sigs = vc.sigs_for_vc_status()?;
 
@@ -340,7 +340,7 @@ where
             vc_update_only,
             parent_args,
             vc.cell().clone(),
-            vc_state.clone(),
+            vc_status.clone(),
             vc_sigs.clone(),
             vcts.clone(),
         )?;
@@ -542,7 +542,7 @@ where
             )
             .build()
             .into_view();
-        let vc_state = vc
+        let vc_status = vc
             .vc_status()
             .clone()
             .as_builder()
@@ -565,7 +565,7 @@ where
                 self.funding_cells.clone(),
                 self.channel_state.clone(),
                 vc.cell().clone(),
-                vc_state,
+                vc_status,
                 idx_map.clone(),
                 vc.vcts().clone(),
             ),

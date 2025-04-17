@@ -194,7 +194,7 @@ impl Client {
         ctx: &mut Context,
         env: &harness::Env,
         lc_dispute_args: transaction::DisputeArgs,
-        vc_state: VirtualChannelStatus,
+        vc_status: VirtualChannelStatus,
         sigs: [Vec<u8>; 2],
         vcts: Script,
     ) -> Result<transaction::VCStartResult, perun::Error> {
@@ -203,7 +203,7 @@ impl Client {
             env,
             VCStartArgs {
                 parent_args: lc_dispute_args,
-                vc_status: vc_state,
+                vc_status: vc_status,
                 sigs: sigs,
                 vcts_script: vcts,
                 party_index: self.index,
@@ -245,7 +245,7 @@ impl Client {
         env: &harness::Env,
         lc_dispute_args: transaction::DisputeArgs,
         vc_cell: OutPoint,
-        vc_state: VirtualChannelStatus,
+        vc_status: VirtualChannelStatus,
         vc_sigs: [Vec<u8>; 2],
         vcts_script: Script,
     ) -> Result<VCUpdateOnlyResult, perun::Error> {
@@ -256,7 +256,7 @@ impl Client {
             VCUpdateOnlyArgs {
                 parent_args: lc_dispute_args,
                 vc_cell: vc_cell,
-                vc_status: vc_state,
+                vc_status: vc_status,
                 sigs: vc_sigs,
                 vcts_script: vcts_script,
                 party_index: self.index,
@@ -301,8 +301,8 @@ impl Client {
         env: &harness::Env,
         vc_cell1: OutPoint,
         vc_cell2: OutPoint,
-        vc_state1: VirtualChannelStatus,
-        vc_state2: VirtualChannelStatus,
+        vc_status1: VirtualChannelStatus,
+        vc_status2: VirtualChannelStatus,
         vcts_script: Script,
         index: u8,
     ) -> Result<VCMergeResult, perun::Error> {
@@ -314,8 +314,8 @@ impl Client {
                 vc_cell1: vc_cell1,
                 vc_cell2: vc_cell2,
                 party_index: index,
-                vc_status1: vc_state1,
-                vc_status2: vc_state2,
+                vc_status1: vc_status1,
+                vc_status2: vc_status2,
                 vcts_script: vcts_script,
             },
         )?;

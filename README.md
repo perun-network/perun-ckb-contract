@@ -27,6 +27,15 @@ Basically a NFT script with extra functionality.
 This script handle access rights to all funds belonging to a Perun channel.
 It ensures that only channel participants are able to consume said funds.
 
+## perun-vchannel-lockscript
+This script is used to handle access-rights to the live Perun virtual channel cell.
+
+## perun-vchannel-typescript
+This script is used to handle a Perun virtual channel's state progression on-chain.
+
+## Developement
+Require: `capsule` with version `0.9.2`, `ckb` with version `0.109.0+`
+
 Build contracts:
 
 ``` sh

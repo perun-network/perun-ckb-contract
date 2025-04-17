@@ -749,23 +749,6 @@ pub fn get_parent_of_vc(vc_status: &VirtualChannelStatus, source: Source) -> Res
     Ok(parent_idx)
 }
 
-/*
-pub fn verify_increasing_version_number_for_vc(
-    old_vc_state: &ChannelState,
-    new_vc_state: &ChannelState,
-) -> Result<(), Error> {
-    debug!(
-        "verify_increasing_version_number for vc old: {},  new: {}",
-        old_vc_state.version().unpack(),
-        new_vc_state.version().unpack()
-    );
-
-    if old_vc_state.version().unpack() < new_vc_state.version().unpack() {
-        return Ok(());
-    }
-    Err(Error::VersionNumberNotIncreasing)
-}
-
 
 // TODO: We might want to verify that the capacity of the sudt output is at least the max_capacity of the SUDT asset.
 //      Not doing so may result in the ability to steal funds up to the

@@ -64,13 +64,6 @@ pub fn mk_vc_merge(
     ];
 
     let vcls_script = env.build_vcls(ctx, Default::default());
-    // let vc_status1 = args.vc_state1.clone();
-    // let capacity_for_vc1 = env.min_capacity_for_vc_channel(vc_status1.clone())?;
-    // let vc_cell1 = CellOutput::new_builder()
-    //     .capacity(capacity_for_vc1.pack())
-    //     .lock(vcls_script.clone())
-    //     .type_(Some(args.vcts_script.clone()).pack())
-    //     .build();
     let vc_status2 = args.vc_status2.clone();
     let capacity_for_vc2 = env.min_capacity_for_vc_channel(vc_status2.clone())?;
     let vc_cell2 = CellOutput::new_builder()
