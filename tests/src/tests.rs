@@ -10,19 +10,13 @@ use perun;
 use perun::{test, virtual_channel};
 use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{
-    Balances, Bool, CKByteDistribution, ChannelState, LockedBalances, LockedBalancesBuilder,
-    SEC1EncodedPubKey, SubAlloc, SubAllocBuilder,
+    Balances, Bool, CKByteDistribution, ChannelState, LockedBalances, SEC1EncodedPubKey, SubAlloc,
 };
 
+use perun_common::sig::verify_signature;
 use std::cell::RefCell;
-use std::default;
-use std::ops::Index;
 use std::rc::Rc;
 use std::sync::Mutex;
-
-use hex::encode;
-
-use perun_common::sig::verify_signature;
 
 const MAX_CYCLES: u64 = 100 * 10_000_000;
 const CHALLENGE_DURATION_MS: u64 = 10 * 1000;
@@ -68,8 +62,6 @@ fn test_signature() {
         .build();
     let msg = channel_state.as_slice();
     let msg_hash = blake2b256(msg);
-    println!("msg_hash: {:?}", encode(msg));
-
     verify_signature(&msg_hash, &sig_bytes, pubkey.as_slice()).expect("valid signature");
 }
 

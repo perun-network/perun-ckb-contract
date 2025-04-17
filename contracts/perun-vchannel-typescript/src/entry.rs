@@ -205,10 +205,8 @@ pub fn check_valid_vc_merge(
         selected_vc_cell = Some(input_vc_stats1);
         discarded_vc_cell = Some(input_vc_stats2);
     } else {
-        debug!("error thrown from big if statement");
         return Err(Error::InvalidVCMergeTx);
     }
-    debug!("selected_vc_cell: {:?}", selected_vc_cell);
     debug!("selected the block with lower block number");
 
     verify_equal_vc_status(selected_vc_cell.unwrap(), merged_vc_status)?;
@@ -387,12 +385,6 @@ pub fn verify_non_decreasing_version_number_vc(
     old_vc_status: &VirtualChannelStatus,
     new_vc_status: &VirtualChannelStatus,
 ) -> Result<(), Error> {
-    debug!(
-        "verify_non-decreasing_version_number old: {},  new: {}",
-        old_vc_status.vcstate().version().unpack(),
-        new_vc_status.vcstate().version().unpack()
-    );
-
     if old_vc_status.vcstate().version().unpack() > new_vc_status.vcstate().version().unpack() {
         return Err(Error::InvalidVersionNumberVCProgressTx);
     }
@@ -419,7 +411,6 @@ pub fn verify_vc_sigs_start(
         Ok(idx) => idx,
         Err(e) => return Err(e),
     };
-    debug!("parent_input_idx: {}", parent_input_idx);
     let witnes_args = load_witness_args(parent_input_idx, Source::Input)?;
     debug!("witness_args loaded");
     let witness_bytes: Bytes = witnes_args
@@ -598,10 +589,6 @@ pub fn get_vchannel_action() -> Result<VChannelAction, Error> {
             output_cell_counter += 1;
         }
     }
-    debug!(
-        "input_cell_counter: {}, output_cell_counter: {}",
-        input_cell_counter, output_cell_counter
-    );
     //MODE: VC Start Tx
     if input_cell_counter == 0 && output_cell_counter == 1 {
         let vc_status = match load_cell_data(0, Source::GroupOutput) {
@@ -748,30 +735,3 @@ pub fn get_parent_of_vc(vc_status: &VirtualChannelStatus, source: Source) -> Res
     };
     Ok(parent_idx)
 }
-
-
-// TODO: We might want to verify that the capacity of the sudt output is at least the max_capacity of the SUDT asset.
-//      Not doing so may result in the ability to steal funds up to the
-//      (max_capacity of the SUDT asset - actual occupied capacity of the SUDT type script), if the SUDT asset's max_capacity
-//      is smaller than the payment_min_capacity of the participant. We do not do this for now, because it is an extreme edge case
-//      and the max_capacity of an SUDT should never be set that low.
-pub fn get_vc_sudt_amount(
-    balances: &LockedBalances,
-    output_idx: usize,
-    type_script: &Script,
-) -> Result<(usize, u128), Error> {
-    let mut buf = [0u8; SUDT_MIN_LEN];
-
-    let (sudt_idx, _) = balances
-        .get_unchecked(output_idx)
-        .balances()
-        .sudts()
-        .get_distribution(type_script)?; //sudts().get_distribution(type_script)?;
-    let sudt_data = load_cell_data(output_idx, Source::Output)?;
-    if sudt_data.len() < SUDT_MIN_LEN {
-        return Err(Error::InvalidSUDTDataLength);
-    }
-    buf.copy_from_slice(&sudt_data[..SUDT_MIN_LEN]);
-    return Ok((sudt_idx, u128::from_le_bytes(buf)));
-}
-*/

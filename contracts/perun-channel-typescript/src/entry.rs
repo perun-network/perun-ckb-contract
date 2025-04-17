@@ -38,7 +38,6 @@ use perun_common::{
 const SUDT_MIN_LEN: usize = 16;
 
 pub fn main() -> Result<(), Error> {
-    debug!("PCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
 
@@ -56,8 +55,6 @@ pub fn main() -> Result<(), Error> {
     let channel_constants =
         ChannelConstants::from_slice(&args).expect("unable to parse args as ChannelConstants");
     debug!("parsing channel constants passed");
-
-    debug!("channel_constants: {:?}", channel_constants);
 
     // Verify that the channel parameters are compatible with the currently supported
     // features of perun channels.
@@ -255,7 +252,6 @@ pub fn check_vc_dispute(
 
     //A vc cell having the same vcts hash should exist in the outputs
     let vcts_hash = new_status.vcts_hash().unpack();
-    debug!("vcts script hash: {:?}", vcts_hash.pack());
     let output_vc_idx = match find_cell_by_type_hash(&vcts_hash, Source::Output) {
         Ok(Some(idx)) => idx,
         Ok(None) => return Err(Error::VCOutputCellMissingIngStartTx),
@@ -366,15 +362,9 @@ pub fn check_valid_close(
             debug!("ChannelWitnessUnion::ForceClose");
             if old_status.vc_disputed().to_bool() {
                 let vc_pcts_hash = old_status.vcts_hash().unpack();
-                debug!("vcts hash unpacked : {:?}", vc_pcts_hash.pack());
                 let input_vc_idx = match find_cell_by_type_hash(&vc_pcts_hash, Source::Input) {
                     Ok(Some(idx)) => idx,
-                    Ok(None) => {
-                        return {
-                            debug!("DEBUG: Cannot Find VC Cell in Input");
-                            Err(Error::VCInputCellMissingInClose1Tx)
-                        }
-                    }
+                    Ok(None) => return Err(Error::VCInputCellMissingInClose1Tx),
                     Err(err) => return Err(err.into()),
                 };
                 let vc_status = match load_cell_data(input_vc_idx, Source::Input) {
@@ -597,13 +587,6 @@ pub fn verify_all_paid_vc(
         .payment_script_hash()
         .unpack();
 
-    debug!("lc balance_a: {:?}", lc_final_balances.ckbytes().get(0)?);
-    debug!("lc balance_b: {:?}", lc_final_balances.ckbytes().get(1)?);
-    debug!("vc balance_a: {:?}", ckbytes_balance_vc_a);
-    debug!("vc balance_b: {:?}", ckbytes_balance_vc_b);
-    debug!("total_ckbytes_balance_a: {}", total_ckbytes_balance_a);
-    debug!("total_ckbytes_balance_b: {}", total_ckbytes_balance_b);
-
     let mut ckbytes_outputs_a = 0;
     let mut ckbytes_outputs_b = 0;
 
@@ -642,8 +625,6 @@ pub fn verify_all_paid_vc(
             ckbytes_outputs_b += output.capacity().unpack();
         }
     }
-    debug!("ckbytes_outputs_a: {}", ckbytes_outputs_a);
-    debug!("ckbytes_outputs_b: {}", ckbytes_outputs_b);
 
     // Parties with balances below the minimum capacity of the payment script
     // are not required to be payed.
@@ -653,9 +634,6 @@ pub fn verify_all_paid_vc(
     {
         return Err(Error::NotAllPaid);
     }
-
-    debug!("udt_outputs_a: {:?}", udt_outputs_a);
-    debug!("udt_outputs_b: {:?}", udt_outputs_b);
 
     if !lc_final_balances.sudts().fully_represented_vc(
         0,
@@ -745,15 +723,6 @@ pub fn verify_increasing_version_number(
     old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    debug!(
-        "verify_increasing_version_number old_state disputed:  {}",
-        old_status.disputed().to_bool()
-    );
-    debug!(
-        "verify_increasing_version_number old: {},  new: {}",
-        old_status.state().version().unpack(),
-        new_state.version().unpack()
-    );
     // Allow registering initial state
     if !old_status.disputed().to_bool()
         && old_status.state().version().unpack() == 0
@@ -771,12 +740,6 @@ pub fn verify_non_decreasing_version_number(
     old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    debug!(
-        "verify_non-decreasing_version_number old: {},  new: {}",
-        old_status.state().version().unpack(),
-        new_state.version().unpack()
-    );
-
     if old_status.state().version().unpack() > new_state.version().unpack() {
         return Err(Error::InvalidVersionNumberVCProgressTx);
     }
@@ -895,10 +858,6 @@ pub fn verify_funding_in_outputs(
         }
     }
     if capacity_sum != to_fund {
-        debug!(
-            "verify_funding_in_outputs: capacity_sum: {}, to_fund: {}",
-            capacity_sum, to_fund
-        );
         return Err(Error::OwnFundingNotInOutputs);
     }
     if !initial_balance.sudts().fully_represented(idx, &udt_sum)? {

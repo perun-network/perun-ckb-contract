@@ -3,7 +3,6 @@ use ckb_testtool::ckb_types::{
     prelude::Unpack,
 };
 use ckb_types::bytes;
-use molecule::prelude::Entity;
 
 use super::{Asset, AssetRegister};
 

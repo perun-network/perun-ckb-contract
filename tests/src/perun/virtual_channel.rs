@@ -150,10 +150,6 @@ impl VirtualChannel {
             .vcls_code_hash(env.get_vcls_().calc_script_hash())
             .vcls_hash_type(env.get_vcls_().hash_type().clone())
             .build();
-        println!(
-            "Debug vc_channel_constants: {:?}",
-            vc_channel_constants.as_bytes().pack()
-        );
         let vcts = env.build_vcts(context, vc_channel_constants.as_bytes());
 
         VirtualChannel {

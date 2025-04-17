@@ -69,7 +69,7 @@ impl Env {
         challenge_duration: u64,
     ) -> Result<Env, perun::error::Error> {
         // borrow the context
-        let mut ctx = context.lock().unwrap();
+        let ctx = context.lock().unwrap();
 
         // Perun contracts.
         let pcls: Bytes = Loader::default().load_binary("perun-channel-lockscript");
