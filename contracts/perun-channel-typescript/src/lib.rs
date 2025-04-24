@@ -23,18 +23,22 @@ use ckb_std::{
     },
     debug,
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_header,
-        load_script, load_script_hash, load_transaction, load_witness_args,
+        load_cell_capacity, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type,
+        load_cell_type_hash, load_script, load_script_hash, load_transaction, load_witness_args,
     },
-    syscalls::{self, SysError},
 };
-use ckb_std::ckb_types::packed::Uint64;
 use perun_common::{
+    channels::{
+        find_cell_by_type_hash, get_channel_action, verify_channel_id_integrity,
+        verify_max_one_channel, verify_thread_token_integrity, verify_time_lock_expired,
+        PChannelAction,
+    },
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelToken,
-        ChannelWitness, ChannelWitnessUnion, SEC1EncodedPubKey,
+        Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
+        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, VCChannelConstants,
+        VirtualChannelStatus,
     },
     sig::verify_signature,
 };
@@ -78,10 +82,10 @@ pub fn program_entry() -> i8 {
 }
 
 pub fn main() -> Result<(), Error> {
+    debug!("PCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-    debug!("Raw args: {:?}", script.args());
-    debug!("Raw args length: {}", args.len());
+
     // return an error if args is empty
     if args.is_empty() {
         return Err(Error::NoArgs);
@@ -108,8 +112,8 @@ pub fn main() -> Result<(), Error> {
     debug!("get_channel_action passed");
 
     match channel_action {
-        ChannelAction::Start { new_status } => check_valid_start(&new_status, &channel_constants),
-        ChannelAction::Progress {
+        PChannelAction::Start { new_status } => check_valid_start(&new_status, &channel_constants),
+        PChannelAction::Progress {
             old_status,
             new_status,
         } => {
@@ -122,7 +126,7 @@ pub fn main() -> Result<(), Error> {
                 &channel_constants,
             )
         }
-        ChannelAction::Close { old_status } => {
+        PChannelAction::Close { old_status } => {
             let channel_witness = load_witness()?;
             debug!("load_witness passed");
             check_valid_close(&old_status, &channel_witness, &channel_constants)
@@ -259,48 +263,110 @@ pub fn check_valid_progress(
         }
         ChannelWitnessUnion::Dispute(d) => {
             debug!("ChannelWitnessUnion::Dispute");
+            check_normal_dispute(old_status, new_status, channel_constants, &d)
+        }
 
-            // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
-            // the channel. For this, the honest party needs to provide the latest state (in the "new" channel status)
-            // as well as a valid signature by each party on that state (in the witness). After the expiration of the
-            // relative time lock (challenge duration), the honest party can forcibly close the channel.
-            // If a malicious party disputes with an old channel state, an honest party can dispute again with
-            // the latest state (with higher version number) and the corresponding signatures within the challenge
-            // duration.
-
-            // First, we verify the integrity of the channel state. For this, the following must hold:
-            // - channel id is equal
-            // - version number is increasing (see verify_increasing_version_number)
-            // - sum of balances is equal
-            // - old state is not final
-            verify_channel_state_progression(old_status, &new_status.state())?;
-            debug!("verify_channel_state_progression passed");
-
-            // One cannot dispute if funding is not complete.
-            verify_status_funded(old_status)?;
-            debug!("verify_status_funded passed");
-
-            // The disputed flag in the new status must be set. This indicates that the channel can be closed
-            // forcibly after the expiration of the challenge duration in a later transaction.
-            verify_status_disputed(new_status)?;
-            debug!("verify_status_disputed passed");
-
-            // We verify that the signatures of both parties are valid on the new channel state.
-            verify_valid_state_sigs(
-                &d.sig_a().unpack(),
-                &d.sig_b().unpack(),
-                &new_status.state(),
-                &channel_constants.params().party_a().pub_key(),
-                &channel_constants.params().party_b().pub_key(),
+        ChannelWitnessUnion::VCDispute(vcd) => {
+            debug!("ChannelWitnessUnion::VCDispute");
+            check_normal_dispute(
+                old_status,
+                new_status,
+                channel_constants,
+                &vcd.parent_state_sigs(),
             )?;
-            debug!("verify_valid_state_sigs passed");
-            Ok(())
+            check_vc_dispute(old_status, new_status)
         }
         // Close, ForceClose and Abort may not happen as channel progression (if there is a continuing channel output).
         ChannelWitnessUnion::Close(_) => Err(Error::ChannelCloseWithChannelOutput),
         ChannelWitnessUnion::ForceClose(_) => Err(Error::ChannelForceCloseWithChannelOutput),
         ChannelWitnessUnion::Abort(_) => Err(Error::ChannelAbortWithChannelOutput),
     }
+}
+
+pub fn check_vc_dispute(
+    old_status: &ChannelStatus,
+    new_status: &ChannelStatus,
+) -> Result<(), Error> {
+    debug!("check_vc_dispute");
+
+    //A vc cell can only be created once by this channel cell
+    if !(!old_status.disputed().to_bool() && new_status.disputed().to_bool()) {
+        return Err(Error::InvalidVCTxStart);
+    }
+    debug!("Verified that vc cell can only be created once by this lc cell");
+
+    //A vc cell having the same vcts hash should exist in the outputs
+    let vcts_hash = new_status.vcts_hash().unpack();
+    let output_vc_idx = match find_cell_by_type_hash(&vcts_hash, Source::Output) {
+        Ok(Some(idx)) => idx,
+        Ok(None) => return Err(Error::VCOutputCellMissingIngStartTx),
+        Err(err) => return Err(err.into()),
+    };
+    debug!("Verified that vc cell having the same vcts hash exists in the outputs");
+    let vc_status = match load_cell_data(output_vc_idx, Source::Output) {
+        Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+        Err(err) => return Err(err.into()),
+    };
+    verify_vc_parent(&vc_status)?;
+    debug!("verify_vc_parent passed");
+
+    //Funds in lc are blocked for vc
+    verify_locked_funds(new_status, &vc_status)?;
+    debug!("verify_locked_funds passed");
+    debug!("check_vc_dispute passed");
+    Ok(())
+}
+
+pub fn check_normal_dispute(
+    old_status: &ChannelStatus,
+    new_status: &ChannelStatus,
+    channel_constants: &ChannelConstants,
+    d: &Dispute,
+) -> Result<(), Error> {
+    // An honest party will dispute a channel, e.g. if its peer does not respond and it wants to close
+    // the channel. For this, the honest party needs to provide the latest state (in the "new" channel status)
+    // as well as a valid signature by each party on that state (in the witness). After the expiration of the
+    // relative time lock (challenge duration), the honest party can forcibly close the channel.
+    // If a malicious party disputes with an old channel state, an honest party can dispute again with
+    // the latest state (with higher version number) and the corresponding signatures within the challenge
+    // duration.
+
+    // In normal cases (no vc dispute), we verify the integrity of the channel state. For this, the following must hold:
+    // - channel id is equal
+    // - version number is increasing (see verify_increasing_version_number)
+    // - sum of balances is equal
+    // - old state is not final
+    // In case of vc disputes, we allow version number to be non-decreasing
+    debug!("check_normal_dispute");
+    if !old_status.vc_disputed().to_bool() {
+        debug!("verify_channel_state_progression");
+        verify_channel_state_progression(old_status, &new_status.state())?;
+    } else {
+        debug!("verify_vc_parent_state_progression");
+        verify_vc_parent_state_progression(old_status, &new_status.state())?;
+    }
+    debug!("verify_channel_state_progression passed");
+
+    // One cannot dispute if funding is not complete.
+    verify_status_funded(old_status)?;
+    debug!("verify_status_funded passed");
+
+    // The disputed flag in the new status must be set. This indicates that the channel can be closed
+    // forcibly after the expiration of the challenge duration in a later transaction.
+    verify_status_disputed(new_status)?;
+    debug!("verify_status_disputed passed");
+
+    // We verify that the signatures of both parties are valid on the new channel state.
+    verify_valid_state_sigs(
+        &d.sig_a().unpack(),
+        &d.sig_b().unpack(),
+        &new_status.state(),
+        &channel_constants.params().party_a().pub_key(),
+        &channel_constants.params().party_b().pub_key(),
+    )?;
+    debug!("verify_valid_state_sigs passed");
+    debug!("check_normal_dispute passed");
+    Ok(())
 }
 
 pub fn check_valid_close(
@@ -313,7 +379,7 @@ pub fn check_valid_close(
     // At this point we know that this transaction closes the channel. There are three different kinds of
     // closing: Abort, ForceClose and Close. Which kind of closing is performed depends on the witness.
     // Every channel closing transaction must pay out all funds the the channel participants. The amount
-    // to be payed to each party
+    // to be paid to each party
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
     match channel_witness.to_enum() {
         ChannelWitnessUnion::Abort(_) => {
@@ -327,37 +393,55 @@ pub fn check_valid_close(
             verify_status_not_funded(old_status)?;
             debug!("verify_status_not_funded passed");
 
-            // We verify that every party is payed the amount of funds that it has locked to the channel so far.
+            // We verify that every party is paid the amount of funds that it has locked to the channel so far.
             // If abourt is called, Party A must have fully funded the channel and Party B can not have funded
             // the channel because of our funding protocol.
-            verify_all_payed(
+            verify_all_paid(
                 &old_status.state().balances().clear_index(PARTY_B_INDEX)?,
                 channel_capacity,
                 channel_constants,
                 true,
             )?;
-            debug!("verify_all_payed passed");
+            debug!("verify_all_paid passed");
             Ok(())
         }
         ChannelWitnessUnion::ForceClose(_) => {
             debug!("ChannelWitnessUnion::ForceClose");
-            // A force close can be performed after the channel was disputed and the challenge duration has
-            // expired. Upon force close, each party is payed according to the balance distribution in the
-            // latest state.
-            verify_status_funded(old_status)?;
-            debug!("verify_status_funded passed");
-            verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
-            debug!("verify_time_lock_expired passed");
-            verify_status_disputed(old_status)?;
-            debug!("verify_status_disputed passed");
-            verify_all_payed(
-                &old_status.state().balances(),
-                channel_capacity,
-                channel_constants,
-                false,
-            )?;
-            debug!("verify_all_payed passed");
-            Ok(())
+            if old_status.vc_disputed().to_bool() {
+                debug!("Force Close (VC)");
+                let vc_pcts_hash = old_status.vcts_hash().unpack();
+                let input_vc_idx = match find_cell_by_type_hash(&vc_pcts_hash, Source::Input) {
+                    Ok(Some(idx)) => idx,
+                    Ok(None) => return Err(Error::VCInputCellMissingInClose1Tx),
+                    Err(err) => return Err(err.into()),
+                };
+                let vc_status = match load_cell_data(input_vc_idx, Source::Input) {
+                    Ok(data) => VirtualChannelStatus::from_slice(data.as_slice())?,
+                    Err(err) => return Err(err.into()),
+                };
+                let vcts = match load_cell_type(input_vc_idx, Source::Input) {
+                    Ok(Some(script)) => script,
+                    Ok(None) => return Err(Error::VCInputCellMissingInClose1Tx),
+                    Err(err) => return Err(err.into()),
+                };
+                let vcts_args: Bytes = vcts.args().unpack();
+                let vchannel_constants = match VCChannelConstants::from_slice(&vcts_args) {
+                    Ok(args) => args,
+                    Err(err) => {
+                        debug!("Error encountered while reading VCChannelConstants");
+                        return Err(err.into());
+                    }
+                };
+                check_vc_force_close(
+                    old_status,
+                    channel_constants,
+                    &vc_status,
+                    &vchannel_constants,
+                )
+            } else {
+                debug!("Force Close (Normal)");
+                check_normal_force_close(old_status, channel_constants, channel_capacity)
+            }
         }
         ChannelWitnessUnion::Close(c) => {
             debug!("check_valid_close: Close");
@@ -378,19 +462,297 @@ pub fn check_valid_close(
                 &channel_constants.params().party_a().pub_key(),
                 &channel_constants.params().party_b().pub_key(),
             )?;
-            // We verify that each party is payed according to the balance distribution in the final state.
-            verify_all_payed(
+            // We verify that each party is paid according to the balance distribution in the final state.
+            verify_all_paid(
                 &c.state().balances(),
                 channel_capacity,
                 channel_constants,
                 false,
             )?;
-            debug!("verify_all_payed passed");
+            debug!("verify_all_paid passed");
             Ok(())
         }
         ChannelWitnessUnion::Fund(_) => Err(Error::ChannelFundWithoutChannelOutput),
         ChannelWitnessUnion::Dispute(_) => Err(Error::ChannelDisputeWithoutChannelOutput),
+        ChannelWitnessUnion::VCDispute(_) => Err(Error::VCDisputeWithoutChannelOutput),
     }
+}
+
+pub fn check_vc_force_close(
+    old_status: &ChannelStatus,
+    channel_constants: &ChannelConstants,
+    vc_status: &VirtualChannelStatus,
+    vcts_args: &VCChannelConstants,
+) -> Result<(), Error> {
+    debug!("check_vc_force_close");
+    let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
+
+    //perform closing checks for ledger channel
+    verify_status_funded(old_status)?;
+    debug!("verify_status_funded(lc) passed");
+    verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
+    debug!("verify_time_lock_expired(lc) passed");
+    verify_status_disputed(old_status)?;
+    debug!("verify_status_disputed(lc) passed");
+
+    //perform checks for child vc
+    verify_time_lock_expired(vcts_args.params().challenge_duration().unpack())?;
+    debug!("verify_time_lock_expired(vc) passed");
+
+    //check that the funds are payed out correctly
+    verify_all_paid_vc(
+        &old_status.state().balances(),
+        channel_capacity,
+        channel_constants,
+        &vc_status,
+    )?;
+    debug!("verify_all_paid_vc passed");
+    Ok(())
+}
+
+pub fn check_normal_force_close(
+    old_status: &ChannelStatus,
+    channel_constants: &ChannelConstants,
+    channel_capacity: u64,
+) -> Result<(), Error> {
+    debug!("ChannelWitnessUnion::ForceClose (Normal)");
+    // A force close can be performed after the channel was disputed and the challenge duration has
+    // expired. Upon force close, each party is paid according to the balance distribution in the
+    // latest state.
+
+    verify_status_funded(old_status)?;
+    debug!("verify_status_funded passed");
+    verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
+    debug!("verify_time_lock_expired passed");
+    verify_status_disputed(old_status)?;
+    debug!("verify_status_disputed passed");
+
+    // Check if this is a case where vc cell is being closed
+    verify_all_paid(
+        &old_status.state().balances(),
+        channel_capacity,
+        channel_constants,
+        false,
+    )?;
+    debug!("verify_all_paid passed");
+    Ok(())
+}
+
+pub fn verify_locked_funds(
+    new_lc_status: &ChannelStatus,
+    new_vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    let vc_balances = new_vc_status.vcstate().balances();
+    let locked_funds_in_lc = new_lc_status.state().balances().locked();
+    let vc_id = new_vc_status.vcstate().channel_id();
+
+    for sub_alloc in locked_funds_in_lc.into_iter() {
+        if sub_alloc.id().as_slice() == vc_id.as_slice() {
+            if sub_alloc.balances().equal_in_sum(&vc_balances)? {
+                return Ok(());
+            } else {
+                return Err(Error::UnequalBalanceInLockedFundsAndVirtualChannelBalance);
+            }
+        }
+    }
+    Err(Error::FundsForVCNotLocked)
+}
+pub fn verify_vc_parent(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
+    let parents = vc_status.parents();
+    let pcts_hash = load_script_hash()?;
+    let mut found = false;
+    for i in 0..parents.len() {
+        let parent = match parents.get(i) {
+            Some(parent) => parent,
+            None => return Err(Error::InvalidVCParentData),
+        };
+
+        if parent.pcts_hash().unpack() == pcts_hash {
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        return Err(Error::InvalidVCParentData);
+    }
+    Ok(())
+}
+
+pub fn verify_all_paid_vc(
+    lc_final_balances: &Balances,
+    lc_channel_capacity: u64,
+    lc_channel_constants: &ChannelConstants,
+    vc_status: &VirtualChannelStatus,
+) -> Result<(), Error> {
+    debug!("verify_all_paid_vc");
+    let vc_sudts = vc_status.vcstate().balances().sudts();
+    let minimum_payment_a = lc_channel_constants
+        .params()
+        .party_a()
+        .payment_min_capacity()
+        .unpack();
+
+    let minimum_payment_b = lc_channel_constants
+        .params()
+        .party_b()
+        .payment_min_capacity()
+        .unpack();
+
+    let reimburse_a = lc_final_balances.sudts().get_locked_ckbytes();
+
+    let reimburse_b = reimburse_a;
+    let idx_map = match get_idx_map(&vc_status.parents()) {
+        Ok(map) => map,
+        Err(err) => return Err(err.into()),
+    };
+
+    let party_a_vc_participant_idx = get_vc_participant_idx(0, &idx_map)?;
+    let party_b_vc_participant_idx = get_vc_participant_idx(1, &idx_map)?;
+
+    let ckbytes_balance_a = lc_final_balances.ckbytes().get(0)? + lc_channel_capacity + reimburse_a;
+    let ckbytes_balance_vc_a = vc_status
+        .vcstate()
+        .balances()
+        .ckbytes()
+        .get(party_a_vc_participant_idx)?;
+    let total_ckbytes_balance_a = ckbytes_balance_vc_a + ckbytes_balance_a;
+    let payment_script_hash_a = lc_channel_constants
+        .params()
+        .party_a()
+        .payment_script_hash()
+        .unpack();
+
+    let ckbytes_balance_b = lc_final_balances.ckbytes().get(1)? + reimburse_b;
+    let ckbytes_balance_vc_b = vc_status
+        .vcstate()
+        .balances()
+        .ckbytes()
+        .get(party_b_vc_participant_idx)?;
+    let total_ckbytes_balance_b = ckbytes_balance_vc_b + ckbytes_balance_b;
+
+    let payment_script_hash_b = lc_channel_constants
+        .params()
+        .party_b()
+        .payment_script_hash()
+        .unpack();
+
+    let mut ckbytes_outputs_a = 0;
+    let mut ckbytes_outputs_b = 0;
+
+    let mut udt_outputs_a =
+        vec![0u128; lc_final_balances.sudts().len().try_into().unwrap()].into_boxed_slice();
+    let mut udt_outputs_b =
+        vec![0u128; lc_final_balances.sudts().len().try_into().unwrap()].into_boxed_slice();
+
+    let outputs = load_transaction()?.raw().outputs();
+
+    // Note: Currently it is allowed to pay out a party's CKBytes in the capacity field of an
+    // output, that is used as SUDT payment.
+    for (i, output) in outputs.into_iter().enumerate() {
+        let output_lock_script_hash = load_cell_lock_hash(i, Source::Output)?;
+
+        if output_lock_script_hash[..] == payment_script_hash_a[..] {
+            if output.type_().is_some() {
+                let (sudt_idx, amount) = get_sudt_amount(
+                    lc_final_balances,
+                    i,
+                    &output.type_().to_opt().expect("checked above"),
+                )?;
+                udt_outputs_a[sudt_idx] += amount;
+            }
+            ckbytes_outputs_a += output.capacity().unpack();
+        }
+        if output_lock_script_hash[..] == payment_script_hash_b[..] {
+            if output.type_().is_some() {
+                let (sudt_idx, amount) = get_sudt_amount(
+                    lc_final_balances,
+                    i,
+                    &output.type_().to_opt().expect("checked above"),
+                )?;
+                udt_outputs_b[sudt_idx] += amount;
+            }
+            ckbytes_outputs_b += output.capacity().unpack();
+        }
+    }
+
+    // Parties with balances below the minimum capacity of the payment script
+    // are not required to be payed.
+    if (total_ckbytes_balance_a > ckbytes_outputs_a && total_ckbytes_balance_a >= minimum_payment_a)
+        || (total_ckbytes_balance_b > ckbytes_outputs_b
+            && total_ckbytes_balance_b >= minimum_payment_b)
+    {
+        return Err(Error::NotAllPaid);
+    }
+
+    if !lc_final_balances.sudts().fully_represented_vc(
+        0,
+        party_a_vc_participant_idx,
+        &vc_sudts,
+        &udt_outputs_a,
+    )? {
+        return Err(Error::NotAllPaid);
+    }
+    if !lc_final_balances.sudts().fully_represented_vc(
+        1,
+        party_b_vc_participant_idx,
+        &vc_sudts,
+        &udt_outputs_b,
+    )? {
+        return Err(Error::NotAllPaid);
+    }
+    Ok(())
+}
+
+/// get the participant index in vc, for a given participant index in lc
+pub fn get_vc_participant_idx(lc_participant_idx: u8, idx_map: &IndexMap) -> Result<usize, Error> {
+    //CONTEXT:
+    //For any perun channel, the participant index of proposer is defined to be 0 and that of proposee is 1
+    // Consider the situation where:
+    //  Alice and Ingrid have a ledger channel (C_AI),
+    //  Ingrid and Bob have lc C_IB,
+    //  Alice and Bob have virtual channel VC_AB
+    //
+    // Let Bob be the proposer of the VC_AB then,
+    //      participant index of Bob in VC_AB is 0
+    //      participant index of Alice in VC_AB is 1
+    // In C_IB, let Ingrid be the proposer then,
+    //      participant index of Ingrid in C_IB is 0
+    //      participant index of Bob in C_IB is 1
+    //
+    // An index map exists for every parent of a VC. Thus VC_AB will have an index map for C_AI and one for C_IB
+    // The index map for C_IB will be [1,0]. Why?
+    // index_map[0] = 1 ==> This means the funds for Proposer of VC (aka Bob) is covered by the proposee of C_IB (aka Bob) ===> True according to given situation
+    // index_map[1] = 0 ==> This means the funds for Proposee of VC (aka Alice) is covered by the proposer of C_IB (aka Ingrid) ===> True according to given situation
+    //
+    // Which idx does this function return?
+    // Let this PCTS belong to C_IB, then
+    //      calling this function for Bob i.e, get_vc_participant_idx(1, &index_map) should return 0
+    //      calling this function for Ingrid i.e, get_vc_participant_idx(0, &index_map) should return 1
+    if idx_map.nth0().as_slice()[0] == lc_participant_idx {
+        return Ok(0);
+    }
+    if idx_map.nth1().as_slice()[0] == lc_participant_idx {
+        return Ok(1);
+    }
+    Err(Error::VCParticipantIdxNotFound)
+}
+
+/// get the index map for the channel cell running this pcts
+pub fn get_idx_map(parents: &ParentsVec) -> Result<IndexMap, Error> {
+    let pcts_hash = match load_cell_type_hash(0, Source::GroupInput)? {
+        Some(hash) => hash,
+        None => panic!("type script not found"),
+    };
+    for i in 0..parents.len() {
+        let parent = match parents.get(i) {
+            Some(parent) => parent,
+            None => return Err(Error::InvalidVCParentData),
+        };
+        if parent.pcts_hash().unpack() == pcts_hash {
+            return Ok(parent.idx_map());
+        }
+    }
+    Err(Error::InvalidVCParentData)
 }
 
 pub fn load_witness() -> Result<ChannelWitness, Error> {
@@ -410,15 +772,6 @@ pub fn verify_increasing_version_number(
     old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    debug!(
-        "verify_increasing_version_number old_state disputed:  {}",
-        old_status.disputed().to_bool()
-    );
-    debug!(
-        "verify_increasing_version_number old: {},  new: {}",
-        old_status.state().version().unpack(),
-        new_state.version().unpack()
-    );
     // Allow registering initial state
     if !old_status.disputed().to_bool()
         && old_status.state().version().unpack() == 0
@@ -430,6 +783,16 @@ pub fn verify_increasing_version_number(
         return Ok(());
     }
     Err(Error::VersionNumberNotIncreasing)
+}
+
+pub fn verify_non_decreasing_version_number(
+    old_status: &ChannelStatus,
+    new_state: &ChannelState,
+) -> Result<(), Error> {
+    if old_status.state().version().unpack() > new_state.version().unpack() {
+        return Err(Error::InvalidVersionNumberVCProgressTx);
+    }
+    Ok(())
 }
 
 pub fn verify_valid_state_sigs(
@@ -465,6 +828,8 @@ pub fn verify_equal_sum_of_balances(
     old_balances: &Balances,
     new_balances: &Balances,
 ) -> Result<(), Error> {
+    debug!("old balances {:?}", old_balances);
+    debug!("new balances {:?}", new_balances);
     if !old_balances.equal_in_sum(new_balances)? {
         return Err(Error::SumOfBalancesNotEqual);
     }
@@ -534,7 +899,7 @@ pub fn verify_funding_in_outputs(
                 return Err(Error::InvalidPFLSInOutputs);
             }
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amout(
+                let (sudt_idx, amount) = get_sudt_amount(
                     initial_balance,
                     i,
                     &output.type_().to_opt().expect("checked above"),
@@ -544,10 +909,6 @@ pub fn verify_funding_in_outputs(
         }
     }
     if capacity_sum != to_fund {
-        debug!(
-            "verify_funding_in_outputs: capacity_sum: {}, to_fund: {}",
-            capacity_sum, to_fund
-        );
         return Err(Error::OwnFundingNotInOutputs);
     }
     if !initial_balance.sudts().fully_represented(idx, &udt_sum)? {
@@ -594,10 +955,10 @@ pub fn verify_channel_params_compatibility(params: &ChannelParameters) -> Result
         return Err(Error::AppChannelsNotSupported);
     }
     if !params.is_ledger_channel().to_bool() {
-        return Err(Error::NonLedgerChannelsNotSupported);
+        return Err(Error::WrongChannelType);
     }
     if params.is_virtual_channel().to_bool() {
-        return Err(Error::VirtualChannelsNotSupported);
+        return Err(Error::WrongChannelType);
     }
     Ok(())
 }
@@ -623,24 +984,18 @@ pub fn verify_channel_state_progression(
     Ok(())
 }
 
-pub fn verify_thread_token_integrity(thread_token: &ChannelToken) -> Result<(), Error> {
-    let inputs = load_transaction()?.raw().inputs();
-    for input in inputs.into_iter() {
-        if input.previous_output().as_slice()[..] == thread_token.out_point().as_slice()[..] {
-            return Ok(());
-        }
-    }
-    Err(Error::InvalidThreadToken)
-}
-
-pub fn verify_channel_id_integrity(
-    channel_id: &Byte32,
-    params: &ChannelParameters,
+pub fn verify_vc_parent_state_progression(
+    old_status: &ChannelStatus,
+    new_state: &ChannelState,
 ) -> Result<(), Error> {
-    let digest = blake2b256(params.as_slice());
-    if digest[..] != channel_id.unpack()[..] {
-        return Err(Error::InvalidChannelId);
-    }
+    verify_equal_channel_id(&old_status.state(), new_state)?;
+    debug!("verif_equal_channel_id");
+    verify_non_decreasing_version_number(old_status, new_state)?;
+    debug!("verify_non_decreasing_version_number");
+    verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
+    debug!("verify_equal_sum_of_balances");
+    verify_state_not_finalized(&old_status.state())?;
+    debug!("verify_state_not_finalized");
     Ok(())
 }
 
@@ -671,34 +1026,16 @@ pub fn verify_state_valid_as_start(
 pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let lock_script = load_cell_lock(0, Source::GroupOutput)?;
     if lock_script.code_hash().unpack()[..] != channel_constants.pcls_code_hash().unpack()[..] {
-        debug!("wrong code_hash");
         return Err(Error::InvalidPCLSCodeHash);
     }
-    for i in 0.. {
-        if let Ok(script) = load_cell_lock(i, Source::Input) {
-            debug!("Input cell {} lock script: {:?}", i, script.code_hash());
-        } else {
-            break;
-        }
-    }
-    for i in 0.. {
-        if let Ok(script) = load_cell_lock(i, Source::Output) {
-            debug!("Output cell {} lock script: {:?}", i, script.code_hash());
-        } else {
-            break;
-        }
-    }
-    debug!("hash: {:?}", lock_script.code_hash());
     if !lock_script
         .hash_type()
         .eq(&channel_constants.pcls_hash_type())
     {
-        debug!("invalid type {:?}, {:?}", lock_script.hash_type(), channel_constants.pcls_hash_type());
         return Err(Error::InvalidPCLSHashType);
     }
 
     if !lock_script.args().is_empty() {
-        debug!("empty {:?}", lock_script.args());
         return Err(Error::PCLSWithArgs);
     }
     Ok(())
@@ -718,13 +1055,13 @@ pub fn verify_status_disputed(status: &ChannelStatus) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_all_payed(
+pub fn verify_all_paid(
     final_balance: &Balances,
     channel_capacity: u64,
     channel_constants: &ChannelConstants,
     is_abort: bool,
 ) -> Result<(), Error> {
-    debug!("verify_all_payed");
+    debug!("verify_all_paid");
     debug!("is_abort: {}", is_abort);
     let minimum_payment_a = channel_constants
         .params()
@@ -777,7 +1114,7 @@ pub fn verify_all_payed(
 
         if output_lock_script_hash[..] == payment_script_hash_a[..] {
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amout(
+                let (sudt_idx, amount) = get_sudt_amount(
                     final_balance,
                     i,
                     &output.type_().to_opt().expect("checked above"),
@@ -788,7 +1125,7 @@ pub fn verify_all_payed(
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
             if output.type_().is_some() {
-                let (sudt_idx, amount) = get_sudt_amout(
+                let (sudt_idx, amount) = get_sudt_amount(
                     final_balance,
                     i,
                     &output.type_().to_opt().expect("checked above"),
@@ -802,21 +1139,47 @@ pub fn verify_all_payed(
     debug!("ckbytes_outputs_b: {}", ckbytes_outputs_b);
 
     // Parties with balances below the minimum capacity of the payment script
-    // are not required to be payed.
+    // are not required to be paid.
     if (ckbytes_balance_a > ckbytes_outputs_a && ckbytes_balance_a >= minimum_payment_a)
         || (ckbytes_balance_b > ckbytes_outputs_b && ckbytes_balance_b >= minimum_payment_b)
     {
-        return Err(Error::NotAllPayed);
+        return Err(Error::NotAllPaid);
     }
 
     debug!("udt_outputs_a: {:?}", udt_outputs_a);
     debug!("udt_outputs_b: {:?}", udt_outputs_b);
 
     if !final_balance.sudts().fully_represented(0, &udt_outputs_a)? {
-        return Err(Error::NotAllPayed);
+        return Err(Error::NotAllPaid);
     }
     if !final_balance.sudts().fully_represented(1, &udt_outputs_b)? {
-        return Err(Error::NotAllPayed);
+        return Err(Error::NotAllPaid);
+    }
+    Ok(())
+}
+
+pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
+    if !state.is_final().to_bool() {
+        return Err(Error::StateNotFinal);
+    }
+    Ok(())
+}
+
+pub fn verify_different_payment_addresses(
+    channel_constants: &ChannelConstants,
+) -> Result<(), Error> {
+    if channel_constants
+        .params()
+        .party_a()
+        .payment_script_hash()
+        .unpack()[..]
+        == channel_constants
+            .params()
+            .party_b()
+            .payment_script_hash()
+            .unpack()[..]
+    {
+        return Err(Error::SamePaymentAddress);
     }
     Ok(())
 }
@@ -826,7 +1189,7 @@ pub fn verify_all_payed(
 //      (max_capacity of the SUDT asset - actual occupied capacity of the SUDT type script), if the SUDT asset's max_capacity
 //      is smaller than the payment_min_capacity of the participant. We do not do this for now, because it is an extreme edge case
 //      and the max_capacity of an SUDT should never be set that low.
-pub fn get_sudt_amout(
+pub fn get_sudt_amount(
     balances: &Balances,
     output_idx: usize,
     type_script: &Script,
@@ -840,100 +1203,4 @@ pub fn get_sudt_amout(
     }
     buf.copy_from_slice(&sudt_data[..SUDT_MIN_LEN]);
     return Ok((sudt_idx, u128::from_le_bytes(buf)));
-}
-
-pub fn verify_time_lock_expired(time_lock: u64) -> Result<(), Error> {
-    let old_header = load_header(0, Source::GroupInput)?;
-    let old_timestamp = old_header.raw().timestamp().unpack();
-    let current_time = find_closest_current_time();
-    if old_timestamp + time_lock > current_time {
-        return Err(Error::TimeLockNotExpired);
-    }
-    Ok(())
-}
-
-pub fn find_closest_current_time() -> u64 {
-    let mut latest_time = 0;
-    for i in 0.. {
-        match load_header(i, Source::HeaderDep) {
-            Ok(header) => {
-                let timestamp = header.raw().timestamp().unpack();
-                if timestamp > latest_time {
-                    latest_time = timestamp;
-                }
-            }
-            Err(_) => break,
-        }
-    }
-    latest_time
-}
-
-pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
-    if !state.is_final().to_bool() {
-        return Err(Error::StateNotFinal);
-    }
-    Ok(())
-}
-
-pub fn get_channel_action() -> Result<ChannelAction, Error> {
-    let input_status_opt = load_cell_data(0, Source::GroupInput)
-        .ok()
-        .map(|data| ChannelStatus::from_slice(data.as_slice()))
-        .map_or(Ok(None), |v| v.map(Some))?;
-
-    let output_status_opt = load_cell_data(0, Source::GroupOutput)
-        .ok()
-        .map(|data| ChannelStatus::from_slice(data.as_slice()))
-        .map_or(Ok(None), |v| v.map(Some))?;
-
-    match (input_status_opt, output_status_opt) {
-        (Some(old_status), Some(new_status)) => Ok(ChannelAction::Progress {
-            old_status,
-            new_status,
-        }),
-        (Some(old_status), None) => Ok(ChannelAction::Close { old_status }),
-        (None, Some(new_status)) => Ok(ChannelAction::Start { new_status }),
-        (None, None) => Err(Error::UnableToLoadAnyChannelStatus),
-    }
-}
-
-/// verify_max_one_channel verifies that there is at most one channel in the group input and group output respectively.
-pub fn verify_max_one_channel() -> Result<(), Error> {
-    if count_cells(Source::GroupInput)? > 1 || count_cells(Source::GroupOutput)? > 1 {
-        return Err(Error::MoreThanOneChannel);
-    } else {
-        return Ok(());
-    }
-}
-
-pub fn count_cells(source: Source) -> Result<usize, Error> {
-    let mut null_buf: [u8; 0] = [];
-    for i in 0.. {
-        match syscalls::load_cell(&mut null_buf, 0, i, source) {
-            Ok(_) => continue,
-            Err(SysError::LengthNotEnough(_)) => continue,
-            Err(SysError::IndexOutOfBound) => return Ok(i),
-            Err(err) => return Err(err.into()),
-        }
-    }
-    Ok(0)
-}
-
-pub fn verify_different_payment_addresses(
-    channel_constants: &ChannelConstants,
-) -> Result<(), Error> {
-    if channel_constants
-        .params()
-        .party_a()
-        .payment_script_hash()
-        .unpack()[..]
-        == channel_constants
-        .params()
-        .party_b()
-        .payment_script_hash()
-        .unpack()[..]
-    {
-        return Err(Error::SamePaymentAddress);
-    }
-    Ok(())
 }

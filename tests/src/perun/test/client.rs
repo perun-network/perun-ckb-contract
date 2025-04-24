@@ -9,23 +9,33 @@ use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::{ChannelState, ChannelStatus};
+use perun_common::perun_types::{ChannelState, ChannelStatus, VirtualChannelStatus};
 
 use crate::perun;
 use crate::perun::harness;
 use crate::perun::random;
 use crate::perun::test;
-use crate::perun::test::transaction::{AbortArgs, OpenResult};
+use crate::perun::test::transaction::{
+    mk_vc_lc_update, mk_vc_merge, mk_vc_progress_no_update, mk_vc_update_only, AbortArgs,
+    OpenResult, VCLCUpdateArgs, VCMergeArgs, VCProgressNoUpdateArgs, VCStartArgs, VCUpdateOnlyArgs,
+};
 use crate::perun::test::{keys, transaction};
 
 use k256::ecdsa::{Signature, SigningKey};
 
 use super::cell::FundingCell;
+use super::transaction::{
+    VCLCUpdateResult, VCMergeResult, VCProgressNoUpdateResult, VCUpdateOnlyResult,
+};
 use super::ChannelId;
+
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Mutex;
 
 #[derive(Clone, Debug)]
 pub struct Client {
-    index: u8,
+    pub index: u8,
     signing_key: SigningKey,
     name: String,
 }
@@ -56,8 +66,7 @@ impl Client {
         funding_agreement: &test::FundingAgreement,
     ) -> Result<(ChannelId, OpenResult), perun::Error> {
         // Prepare environment so that this party has the required funds.
-        let inputs =
-            env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
+        let inputs = env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         // Create the channel token.
         let (channel_token, channel_token_outpoint) = env.create_channel_token(ctx);
 
@@ -124,8 +133,7 @@ impl Client {
         pcts: Script,
     ) -> Result<transaction::FundResult, perun::Error> {
         // Prepare environment so that this party has the required funds.
-        let inputs =
-            env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
+        let inputs = env.create_funds_from_agreement(ctx, self.index, funding_agreement)?;
         let fr = transaction::mk_fund(
             ctx,
             env,
@@ -143,7 +151,7 @@ impl Client {
         Ok(fr)
     }
 
-    pub fn send(&self, ctx: &mut Context, env: &harness::Env) -> Result<(), perun::Error> {
+    pub fn send(&self, _ctx: Rc<Mutex<RefCell<Context>>>, _env: &harness::Env) -> Result<(), perun::Error> {
         Ok(())
     }
 
@@ -178,6 +186,141 @@ impl Client {
         let cycles = ctx.verify_tx(&dr.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
         Ok(dr)
+    }
+
+    pub fn vc_start(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        lc_dispute_args: transaction::DisputeArgs,
+        vc_status: VirtualChannelStatus,
+        sigs: [Vec<u8>; 2],
+        vcts: Script,
+    ) -> Result<transaction::VCStartResult, perun::Error> {
+        let vcsr = transaction::mk_vc_start(
+            ctx,
+            env,
+            VCStartArgs {
+                parent_args: lc_dispute_args,
+                vc_status: vc_status,
+                sigs: sigs,
+                vcts_script: vcts,
+                party_index: self.index,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&vcsr.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vcsr)
+    }
+
+    pub fn vc_progress_no_update(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        lc_dispute_args: transaction::DisputeArgs,
+        vc_cell: OutPoint,
+        vc_status: VirtualChannelStatus,
+        vcts_script: Script,
+    ) -> Result<VCProgressNoUpdateResult, perun::Error> {
+        let vcp_no_update = mk_vc_progress_no_update(
+            ctx,
+            env,
+            VCProgressNoUpdateArgs {
+                parent_args: lc_dispute_args,
+                vc_cell: vc_cell,
+                vc_status: vc_status,
+                vcts_script: vcts_script,
+                party_index: self.index,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&vcp_no_update.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vcp_no_update)
+    }
+
+    pub fn vc_update_only(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        lc_dispute_args: transaction::DisputeArgs,
+        vc_cell: OutPoint,
+        vc_status: VirtualChannelStatus,
+        vc_sigs: [Vec<u8>; 2],
+        vcts_script: Script,
+    ) -> Result<VCUpdateOnlyResult, perun::Error> {
+        //make tx
+        let vc_update_only_result = mk_vc_update_only(
+            ctx,
+            env,
+            VCUpdateOnlyArgs {
+                parent_args: lc_dispute_args,
+                vc_cell: vc_cell,
+                vc_status: vc_status,
+                sigs: vc_sigs,
+                vcts_script: vcts_script,
+                party_index: self.index,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&vc_update_only_result.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vc_update_only_result)
+    }
+
+    pub fn vc_lc_update(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        lc_dispute_args: transaction::DisputeArgs,
+        vc_cell: OutPoint,
+        vc_status: VirtualChannelStatus,
+        vc_sigs: [Vec<u8>; 2],
+        vcts_script: Script,
+    ) -> Result<VCLCUpdateResult, perun::Error> {
+        //make tx
+        let vc_lc_result = mk_vc_lc_update(
+            ctx,
+            env,
+            VCLCUpdateArgs {
+                parent_args: lc_dispute_args,
+                vc_cell: vc_cell,
+                vc_status: vc_status,
+                sigs: vc_sigs,
+                vcts_script: vcts_script,
+                party_index: self.index,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&vc_lc_result.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vc_lc_result)
+    }
+
+    pub fn vc_merge(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        vc_cell1: OutPoint,
+        vc_cell2: OutPoint,
+        vc_status1: VirtualChannelStatus,
+        vc_status2: VirtualChannelStatus,
+        vcts_script: Script,
+        index: u8,
+    ) -> Result<VCMergeResult, perun::Error> {
+        //make tx
+        let vc_merge_result = mk_vc_merge(
+            ctx,
+            env,
+            VCMergeArgs {
+                vc_cell1: vc_cell1,
+                vc_cell2: vc_cell2,
+                party_index: index,
+                vc_status1: vc_status1,
+                vc_status2: vc_status2,
+                vcts_script: vcts_script,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&vc_merge_result.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vc_merge_result)
     }
 
     pub fn abort(
@@ -255,5 +398,77 @@ impl Client {
         let cycles = ctx.verify_tx(&fcr.tx, env.max_cycles)?;
         println!("consumed cycles: {}", cycles);
         Ok(fcr)
+    }
+
+    pub fn vc_close1(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        _cid: test::ChannelId,
+        parent_cell: OutPoint,
+        fund_cells: Vec<FundingCell>,
+        parent_state: ChannelStatus,
+        vc_cell: OutPoint,
+        vc_status: VirtualChannelStatus,
+        idx_map: perun::virtual_channel::IdxMapWithDirection,
+        vcts: Script,
+    ) -> Result<transaction::VCClose1Result, perun::Error> {
+        let hs = ctx.headers.keys().cloned().collect();
+        let vcc1r = transaction::mk_vc_close1(
+            ctx,
+            env,
+            transaction::VCClose1Args {
+                parent_args: transaction::ForceCloseArgs {
+                    channel_cell: parent_cell,
+                    headers: hs,
+                    funds_cells: fund_cells,
+                    state: parent_state,
+                    party_index: self.index,
+                },
+                vc_cell: vc_cell,
+                vc_status: vc_status,
+                idx_map_with_direction: idx_map,
+                vcts_script: vcts,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&vcc1r.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vcc1r)
+    }
+
+    pub fn vc_close2(
+        &self,
+        ctx: &mut Context,
+        env: &harness::Env,
+        _cid: test::ChannelId,
+        parent_cell: OutPoint,
+        fund_cells: Vec<FundingCell>,
+        parent_state: ChannelStatus,
+        vc_cell: OutPoint,
+        vc_status: VirtualChannelStatus,
+        idx_map: perun::virtual_channel::IdxMapWithDirection,
+        vcts: Script,
+    ) -> Result<transaction::VCClose2Result, perun::Error> {
+        let hs = ctx.headers.keys().cloned().collect();
+        let vcc2r = transaction::mk_vc_close2(
+            ctx,
+            env,
+            transaction::VCClose2Args {
+                parent_args: transaction::ForceCloseArgs {
+                    channel_cell: parent_cell,
+                    headers: hs,
+                    funds_cells: fund_cells,
+                    state: parent_state,
+                    party_index: self.index,
+                },
+                vc_cell: vc_cell,
+                vc_status: vc_status,
+                idx_map_with_direction: idx_map,
+                vcts_script: vcts,
+            },
+        )?;
+        let cycles = ctx.verify_tx(&vcc2r.tx, env.max_cycles)?;
+        println!("consumed cycles: {}", cycles);
+        Ok(vcc2r)
     }
 }

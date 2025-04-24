@@ -66,11 +66,10 @@ run:
 # test, check, clippy and fmt here are provided for completeness,
 # there is nothing wrong invoking cargo directly instead of make.
 test:
-	cargo test --lib tests::channel_test_bench \
-    		--no-fail-fast \
-    		--manifest-path ./tests/Cargo.toml \
-    		-- --show-output --nocapture
-
+	cargo test --lib \
+		--no-fail-fast \
+		--manifest-path ./tests/Cargo.toml \
+		-- --show-output --nocapture
 check:
 	cargo check $(CARGO_ARGS)
 

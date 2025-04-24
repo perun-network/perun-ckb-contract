@@ -6,12 +6,12 @@ use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 use perun_common::perun_types::{
-    self, Balances, CKByteDistribution, ParticipantBuilder,
-    SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution,
+    self, Balances, CKByteDistribution, LockedBalances, ParticipantBuilder,
+    SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances,
 };
 
 use crate::perun;
-
+use crate::perun::test::ChannelId;
 #[derive(Debug, Clone)]
 pub struct FundingAgreement {
     entries: Vec<FundingAgreementEntry>,
@@ -167,6 +167,54 @@ impl FundingAgreement {
                     .build(),
             )
             .sudts(SUDTAllocation::new_builder().set(sudt_alloc).build())
+            .build())
+    }
+
+    pub fn mk_locked_balances(&self, id: ChannelId) -> Result<LockedBalances, perun::Error> {
+        let mut ckbytes = [0u64; 2];
+        let sudts = self.register.get_sudtassets();
+        let mut sudt_dist: Vec<[u128; 2]> = Vec::new();
+        for _ in 0..sudts.len() {
+            sudt_dist.push([0u128, 0]);
+        }
+        for fae in self.entries.iter() {
+            ckbytes[fae.index as usize] = fae.ckbytes;
+            for (asset, amount) in fae.sudts.iter() {
+                sudt_dist[asset.0 as usize][fae.index as usize] = *amount;
+            }
+        }
+        let mut sudt_alloc: Vec<SUDTBalances> = Vec::new();
+        for (i, asset) in sudts.iter().enumerate() {
+            sudt_alloc.push(
+                SUDTBalances::new_builder()
+                    .asset(asset.clone())
+                    .distribution(
+                        SUDTDistribution::new_builder()
+                            .nth0(sudt_dist[i][0].pack())
+                            .nth1(sudt_dist[i][1].pack())
+                            .build(),
+                    )
+                    .build(),
+            );
+        }
+
+        let sub_balances = SubBalances::new_builder()
+            .ckbytes(
+                CKByteDistribution::new_builder()
+                    .nth0(ckbytes[0].pack())
+                    .nth1(ckbytes[1].pack())
+                    .build(),
+            )
+            .sudts(SUDTAllocation::new_builder().set(sudt_alloc).build())
+            .build();
+
+        Ok(LockedBalances::new_builder()
+            .push(
+                SubAlloc::new_builder()
+                    .id(id.to_byte32())
+                    .balances(sub_balances)
+                    .build(),
+            )
             .build())
     }
 

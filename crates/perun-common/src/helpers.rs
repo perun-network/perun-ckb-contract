@@ -14,7 +14,7 @@ use {
 };
 
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey,
+    Balances, SubBalances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey,
 };
 use crate::{
     error::Error,
@@ -104,6 +104,24 @@ macro_rules! dispute {
             $crate::perun_types::Dispute::new_builder()
                 .sig_a($siga)
                 .sig_b($sigb)
+                .build(),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! vc_dispute {
+    ($sig_vc_a:expr, $sig_vc_b:expr, $sig_lc_a:expr, $sig_lc_b:expr) => {
+        $crate::perun_types::ChannelWitnessUnion::VCDispute(
+            $crate::perun_types::VCDispute::new_builder()
+                .sig_a($sig_vc_a)
+                .sig_b($sig_vc_b)
+                .parent_state_sigs(
+                    $crate::perun_types::Dispute::new_builder()
+                        .sig_a($sig_lc_a)
+                        .sig_b($sig_lc_b)
+                        .build(),
+                )
                 .build(),
         )
     };
@@ -200,7 +218,20 @@ impl Balances {
     }
 
     pub fn equal_in_sum(&self, other: &Balances) -> Result<bool, Error> {
-        if self.ckbytes().sum() != other.ckbytes().sum() {
+        let self_total_ckbytes = self.ckbytes().sum()
+            + self
+                .locked()
+                .into_iter()
+                .map(|sub_alloc| sub_alloc.balances().ckbytes().sum())
+                .sum::<u64>();
+        let other_total_ckbytes = other.ckbytes().sum()
+            + other
+                .locked()
+                .into_iter()
+                .map(|sub_alloc| sub_alloc.balances().ckbytes().sum())
+                .sum::<u64>();
+
+        if self_total_ckbytes != other_total_ckbytes {
             return Ok(false);
         }
         if self.sudts().len() != other.sudts().len() {
@@ -211,12 +242,33 @@ impl Balances {
             if sb.asset().as_slice() != other_sb.asset().as_slice() {
                 return Ok(false);
             }
-            if sb.distribution().sum() != other_sb.distribution().sum() {
+
+            // Sum `sudts` including locked balances
+            let mut self_total_amount = sb.distribution().sum();
+            let mut other_total_amount = other_sb.distribution().sum();
+
+            for sub_alloc in self.locked().into_iter() {
+                for sub_sb in sub_alloc.balances().sudts().into_iter() {
+                    if sub_sb.asset().as_slice() == sb.asset().as_slice() {
+                        self_total_amount += sub_sb.distribution().sum();
+                    }
+                }
+            }
+
+            for sub_alloc in other.locked().into_iter() {
+                for sub_sb in sub_alloc.balances().sudts().into_iter() {
+                    if sub_sb.asset().as_slice() == other_sb.asset().as_slice() {
+                        other_total_amount += sub_sb.distribution().sum();
+                    }
+                }
+            }
+
+            if self_total_amount != other_total_amount {
                 return Ok(false);
             }
         }
-        return Ok(true);
-    }
+        Ok(true)
+    }    
 
     pub fn equal(&self, other: &Balances) -> bool {
         self.as_slice()[..] == other.as_slice()[..]
@@ -253,6 +305,32 @@ impl SUDTAllocation {
             }
         }
         return Ok(true);
+    }
+
+    pub fn fully_represented_vc(
+        &self,
+        lc_participant_idx: usize,
+        vc_participant_idx: usize,
+        vc_sudts: &SUDTAllocation,
+        values: &[u128],
+    ) -> Result<bool, Error> {
+        if values.len() < self.len() {
+            return Ok(false);
+        }
+        if self.len() != vc_sudts.len() {
+            return Err(Error::SUDTAllocationLengthMismatch);
+        }
+        for (i, sudt_balances_lc) in self.clone().into_iter().enumerate() {
+            let lc_balance = sudt_balances_lc.distribution().get(lc_participant_idx)?;
+            let (_, vc_distribution) =
+                vc_sudts.get_distribution(&sudt_balances_lc.asset().type_script())?;
+            let vc_balance = vc_distribution.get(vc_participant_idx)?;
+            // lc_balance + vc_balance should be equal to values[i]
+            if lc_balance + vc_balance != values[i] {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 }
 
@@ -356,6 +434,59 @@ impl Balances {
         ckbytes.append(&mut sudts);
         return ckbytes;
     }
+
+    pub fn mk_unlocked_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>,
+        lc_to_vc_idx_map: &[u8; 2],
+        vc_balances: &Balances,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        let mut ckbytes = self.ckbytes().mk_unlocked_outputs(
+            &mut mk_lock_script,
+            indices.clone(),
+            lc_to_vc_idx_map,
+            &vc_balances.ckbytes().clone(),
+        );
+
+        let mut sudts = self.sudts().mk_unlocked_outputs(
+            mk_lock_script,
+            indices,
+            lc_to_vc_idx_map,
+            vc_balances.sudts(),
+        );
+        ckbytes.append(&mut sudts);
+        return ckbytes;
+    }
+}
+
+impl SubBalances {
+    /// Compares the sum of balances for each asset in SubBalances to the same in Balances(locked funds)
+    /// Returns true if the sum of balances for each asset in SubBalances is equal to the sum of balances for each asset in Balances
+    /// Returns false otherwise
+    pub fn equal_in_sum(&self, vc_balances: &Balances) -> Result<bool, Error> {
+        let self_total_ckbytes = self.ckbytes().sum();
+        let vc_ckbytes = vc_balances.ckbytes().sum();
+
+        if self_total_ckbytes != vc_ckbytes {
+            return Ok(false);
+        }
+
+        if self.sudts().len() != vc_balances.sudts().len() {
+            return Ok(false);
+        }
+
+        for locked_sudt in self.sudts().into_iter() {
+            for vc_sudt in vc_balances.sudts().into_iter() {
+                if locked_sudt.asset().as_slice() == vc_sudt.asset().as_slice() {
+                    if locked_sudt.distribution().sum() != vc_sudt.distribution().sum() {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+        Ok(true)
+    }
 }
 
 #[cfg(feature = "std")]
@@ -373,6 +504,32 @@ impl CKByteDistribution {
                 acc.push((
                     CellOutput::new_builder()
                         .capacity(cap.pack())
+                        .lock(mk_lock_script(*index))
+                        .build(),
+                    bytes::Bytes::new(),
+                ));
+                acc
+            })
+    }
+
+    pub fn mk_unlocked_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>,
+        lc_to_vc_idx_map: &[u8; 2],
+        vc_balances: &CKByteDistribution,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        indices
+            .iter()
+            .fold(vec![], |mut acc: Vec<(CellOutput, bytes::Bytes)>, index| {
+                let cap = self.get(index.clone() as usize).expect("invalid index");
+                let locked = vc_balances
+                    .get(lc_to_vc_idx_map[*index as usize] as usize)
+                    .expect("invalid index");
+                let total_cap = cap + locked;
+                acc.push((
+                    CellOutput::new_builder()
+                        .capacity(total_cap.pack())
                         .lock(mk_lock_script(*index))
                         .build(),
                     bytes::Bytes::new(),
@@ -423,6 +580,69 @@ impl SUDTAllocation {
                                 .to_le_bytes()
                                 .to_vec(),
                         ),
+                    ));
+                }
+            }
+        }
+        return outputs;
+    }
+
+    pub fn mk_unlocked_outputs(
+        self,
+        mut mk_lock_script: impl FnMut(u8) -> Script,
+        indices: Vec<u8>,
+        lc_to_vc_idx_map: &[u8; 2],
+        vc_balances: SUDTAllocation,
+    ) -> Vec<(CellOutput, bytes::Bytes)> {
+        let mut outputs: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
+        for (i, balance) in self.into_iter().enumerate() {
+            let udt_type = balance.asset().type_script();
+            let udt_type_opt = ScriptOpt::new_builder().set(Some(udt_type)).build();
+            let cap: u64 = balance.asset().max_capacity().unpack();
+            for f in indices.iter() {
+                if balance
+                    .distribution()
+                    .get(*f as usize)
+                    .expect("invalid index")
+                    == 0u128
+                {
+                    let bal = balance
+                        .distribution()
+                        .get(*f as usize)
+                        .expect("invalid index");
+                    let vc_bal = vc_balances
+                        .get(i as usize)
+                        .expect("invalid index")
+                        .distribution()
+                        .get(lc_to_vc_idx_map[*f as usize] as usize)
+                        .expect("invalid index");
+                    let total_bal = bal + vc_bal;
+                    outputs.push((
+                        CellOutput::new_builder()
+                            .capacity(cap.pack())
+                            .lock(mk_lock_script(*f))
+                            .build(),
+                        bytes::Bytes::from(total_bal.to_le_bytes().to_vec()),
+                    ));
+                } else {
+                    let bal = balance
+                        .distribution()
+                        .get(*f as usize)
+                        .expect("invalid index");
+                    let vc_bal = vc_balances
+                        .get(i as usize)
+                        .expect("invalid index")
+                        .distribution()
+                        .get(lc_to_vc_idx_map[*f as usize] as usize)
+                        .expect("invalid index");
+                    let total_bal = bal + vc_bal;
+                    outputs.push((
+                        CellOutput::new_builder()
+                            .capacity(cap.pack())
+                            .lock(mk_lock_script(*f))
+                            .type_(udt_type_opt.clone())
+                            .build(),
+                        bytes::Bytes::from(total_bal.to_le_bytes().to_vec()),
                     ));
                 }
             }

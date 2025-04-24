@@ -20,3 +20,5 @@ pub mod random;
 
 mod account;
 pub use account::*;
+
+pub mod virtual_channel;
