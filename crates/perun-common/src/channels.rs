@@ -207,3 +207,11 @@ pub fn count_cells(source: Source) -> Result<usize, Error> {
     }
     Ok(0)
 }
+
+pub fn unpack_u64<T: Unpack<u64>>(t: &T) -> u64 {
+    t.unpack()
+}
+
+pub fn unpack_Byte32<T: Unpack<[u8; 32]>>(t: &T) -> [u8; 32] {
+    t.unpack()
+}

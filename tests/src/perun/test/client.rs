@@ -151,7 +151,11 @@ impl Client {
         Ok(fr)
     }
 
-    pub fn send(&self, _ctx: Rc<Mutex<RefCell<Context>>>, _env: &harness::Env) -> Result<(), perun::Error> {
+    pub fn send(
+        &self,
+        _ctx: Rc<Mutex<RefCell<Context>>>,
+        _env: &harness::Env,
+    ) -> Result<(), perun::Error> {
         Ok(())
     }
 

@@ -11,9 +11,9 @@ default_alloc!();
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
-    debug,
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
+    debug,
     high_level::{load_cell_lock_hash, load_cell_type, load_script},
     syscalls::SysError,
 };
@@ -32,7 +32,7 @@ use perun_common::{error::Error, perun_types::ChannelConstants};
 
 pub fn program_entry() -> i8 {
     match main() {
-        Ok(_) => 0,  // Success
+        Ok(_) => 0,   // Success
         Err(_) => -1, // Failure
     }
 }

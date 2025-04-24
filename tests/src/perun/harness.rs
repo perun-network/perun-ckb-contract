@@ -7,9 +7,11 @@ use ckb_testtool::{
     context::Context,
 };
 use ckb_types::core::ScriptHashType;
-use perun_common::{ctrue, cfalse};
 use perun_common::perun_types::{
-    self, ChannelStateBuilder, ChannelStatus, ChannelStatusBuilder, ChannelToken, ParentsVec, VirtualChannelStatus, VirtualChannelStatusBuilder, Participant,};
+    self, ChannelStateBuilder, ChannelStatus, ChannelStatusBuilder, ChannelToken, ParentsVec,
+    Participant, VirtualChannelStatus, VirtualChannelStatusBuilder,
+};
+use perun_common::{cfalse, ctrue};
 
 use super::test::ChannelId;
 use super::test::FundingAgreement;
@@ -130,7 +132,11 @@ impl Env {
         );
         let sample_udt_script = context
             .borrow_mut()
-            .build_script_with_hash_type(&sample_udt_out_point, ScriptHashType::Data1, Default::default())
+            .build_script_with_hash_type(
+                &sample_udt_out_point,
+                ScriptHashType::Data1,
+                Default::default(),
+            )
             .ok_or("sample-udt")?;
         println!(
             "Built sample_udt_script: code_hash = {:?}, hash_type = {:?}",
@@ -155,7 +161,9 @@ impl Env {
         let sample_udt_script_dep = CellDep::new_builder()
             .out_point(sample_udt_out_point.clone())
             .build();
-        let sample_udt_max_cap = sample_udt_script.occupied_capacity()?.safe_mul(Capacity::shannons(10))?;
+        let sample_udt_max_cap = sample_udt_script
+            .occupied_capacity()?
+            .safe_mul(Capacity::shannons(10))?;
         // Auxiliary scripts.
         let always_success_script = context
             .borrow_mut()
@@ -183,7 +191,10 @@ impl Env {
         println!("asset code hash: {}", sample_udt_script.code_hash());
         println!("pcts code hash: {}", pcts_script.code_hash());
         println!("pcls code hash: {}", pcls_script.code_hash());
-        println!("always_success code hash: {}", always_success_script.code_hash());
+        println!(
+            "always_success code hash: {}",
+            always_success_script.code_hash()
+        );
         Ok(Env {
             pcls_out_point,
             pcts_out_point,
@@ -217,14 +228,14 @@ impl Env {
     pub fn build_pcls(&self, context: &mut Context, args: Bytes) -> Script {
         let pcls_out_point = &self.pcls_out_point;
         context
-            .build_script_with_hash_type(pcls_out_point, ScriptHashType::Data1 ,args)
+            .build_script_with_hash_type(pcls_out_point, ScriptHashType::Data1, args)
             .expect("perun-channel-lockscript")
     }
 
     pub fn build_pcts(&self, context: &mut Context, args: Bytes) -> Script {
         let pcts_out_point = &self.pcts_out_point;
         context
-            .build_script_with_hash_type(pcts_out_point, ScriptHashType::Data1 ,args)
+            .build_script_with_hash_type(pcts_out_point, ScriptHashType::Data1, args)
             .expect("perun-channel-typescript")
     }
 
@@ -243,18 +254,17 @@ impl Env {
         result.expect("Cannot build vcts")
     }
 
-
     pub fn build_pfls(&self, context: &mut Context, args: Bytes) -> Script {
         let pfls_out_point = &self.pfls_out_point;
         context
-            .build_script_with_hash_type(pfls_out_point, ScriptHashType::Data1 ,args)
+            .build_script_with_hash_type(pfls_out_point, ScriptHashType::Data1, args)
             .expect("perun-funds-lockscript")
     }
 
     pub fn build_lock_script(&self, context: &mut Context, args: Bytes) -> Script {
         let always_success_out_point = &self.always_success_out_point;
         context
-            .build_script(always_success_out_point,args)
+            .build_script(always_success_out_point, args)
             .expect("always_success")
     }
 
@@ -311,8 +321,19 @@ impl Env {
         party_index: u8,
         funding_agreement: &FundingAgreement,
     ) -> Result<Vec<(OutPoint, Capacity)>, perun::Error> {
-        let mut funds = self.create_ckbytes_funds_for_index(context, party_index, funding_agreement.expected_ckbytes_funding_for(party_index)?)?;
-        funds.append(self.create_sudts_funds_for_index(context, party_index, funding_agreement.expected_sudts_funding_for(party_index)?)?.as_mut());
+        let mut funds = self.create_ckbytes_funds_for_index(
+            context,
+            party_index,
+            funding_agreement.expected_ckbytes_funding_for(party_index)?,
+        )?;
+        funds.append(
+            self.create_sudts_funds_for_index(
+                context,
+                party_index,
+                funding_agreement.expected_sudts_funding_for(party_index)?,
+            )?
+            .as_mut(),
+        );
         return Ok(funds);
     }
 
@@ -332,7 +353,12 @@ impl Env {
         Ok(vec![(cell, required_funds.into_capacity())])
     }
 
-    pub fn create_sudts_funds_for_index(&self, context: &mut Context, party_index: u8, required_funds: Vec<(Script, Capacity, u128)>) -> Result<Vec<(OutPoint, Capacity)>, perun::Error> {
+    pub fn create_sudts_funds_for_index(
+        &self,
+        context: &mut Context,
+        party_index: u8,
+        required_funds: Vec<(Script, Capacity, u128)>,
+    ) -> Result<Vec<(OutPoint, Capacity)>, perun::Error> {
         let mut outs: Vec<(OutPoint, Capacity)> = Vec::new();
         for (sudt_script, capacity, amount) in required_funds {
             let my_output = CellOutput::new_builder()
@@ -341,16 +367,26 @@ impl Env {
                 .lock(self.build_lock_script(context, Bytes::from(vec![party_index])))
                 .type_(Some(sudt_script).pack())
                 .build();
-            let cell = context.create_cell(my_output.clone(), Bytes::from(amount.to_le_bytes().to_vec()));
+            let cell = context.create_cell(
+                my_output.clone(),
+                Bytes::from(amount.to_le_bytes().to_vec()),
+            );
             outs.push((cell, capacity));
         }
         Ok(outs)
     }
 
     pub fn create_min_cell_for_index(&self, context: &mut Context, party_index: u8) -> OutPoint {
-        self.create_ckbytes_funds_for_index(context, party_index, self.min_capacity_no_script.as_u64())
-            .unwrap()
-            .get(0).unwrap().clone().0
+        self.create_ckbytes_funds_for_index(
+            context,
+            party_index,
+            self.min_capacity_no_script.as_u64(),
+        )
+        .unwrap()
+        .get(0)
+        .unwrap()
+        .clone()
+        .0
     }
 
     pub fn build_initial_channel_state(

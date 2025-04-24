@@ -1,4 +1,8 @@
-use k256::{ecdsa::{VerifyingKey, Signature, signature::{hazmat::PrehashVerifier}}, elliptic_curve::sec1::EncodedPoint, Secp256k1};
+use k256::{
+    ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey},
+    elliptic_curve::sec1::EncodedPoint,
+    Secp256k1,
+};
 
 use crate::error::Error;
 

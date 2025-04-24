@@ -8,7 +8,6 @@ use {ckb_types::packed::*, ckb_types::prelude::*};
 #[cfg(not(feature = "std"))]
 use {ckb_gen_types::packed::*, ckb_gen_types::prelude::*};
 
-
 use molecule::prelude::*;
 #[derive(Clone)]
 pub struct SEC1EncodedPubKey(molecule::bytes::Bytes);

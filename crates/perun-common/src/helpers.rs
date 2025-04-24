@@ -14,7 +14,7 @@ use {
 };
 
 use crate::perun_types::{
-    Balances, SubBalances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey,
+    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances,
 };
 use crate::{
     error::Error,
@@ -268,7 +268,7 @@ impl Balances {
             }
         }
         Ok(true)
-    }    
+    }
 
     pub fn equal(&self, other: &Balances) -> bool {
         self.as_slice()[..] == other.as_slice()[..]

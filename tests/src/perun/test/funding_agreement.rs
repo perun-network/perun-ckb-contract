@@ -7,7 +7,8 @@ use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 use perun_common::perun_types::{
     self, Balances, CKByteDistribution, LockedBalances, ParticipantBuilder,
-    SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances,
+    SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc,
+    SubBalances,
 };
 
 use crate::perun;
@@ -228,9 +229,12 @@ impl FundingAgreement {
     }
 
     pub fn sudt_max_cap_sum(&self) -> u64 {
-        self.register.get_sudtassets().iter().fold(0u64, |old, asset| {
-            old + Capacity::shannons(asset.max_capacity().unpack()).as_u64()
-        })
+        self.register
+            .get_sudtassets()
+            .iter()
+            .fold(0u64, |old, asset| {
+                old + Capacity::shannons(asset.max_capacity().unpack()).as_u64()
+            })
     }
 
     pub fn expected_sudts_funding_for(
@@ -285,9 +289,7 @@ pub struct AssetRegister {
 
 impl AssetRegister {
     fn new() -> Self {
-        AssetRegister {
-            assets: Vec::new(),
-        }
+        AssetRegister { assets: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -307,18 +309,20 @@ impl AssetRegister {
     }
 
     pub fn get_asset(&self, sudt_asset: SUDTAsset) -> Option<&Asset> {
-        match self.assets.iter().find(|(_, a)| a.as_slice()[..] == sudt_asset.as_slice()[..]) {
+        match self
+            .assets
+            .iter()
+            .find(|(_, a)| a.as_slice()[..] == sudt_asset.as_slice()[..])
+        {
             Some((asset, _)) => Some(asset),
             None => None,
         }
     }
 
     pub fn guess_asset_from_script(&self, script: &Script) -> Option<&Asset> {
-        match self
-            .assets
-            .iter()
-            .find(|(_, sudt_asset)| sudt_asset.type_script().as_slice()[..] == script.as_slice()[..])
-        {
+        match self.assets.iter().find(|(_, sudt_asset)| {
+            sudt_asset.type_script().as_slice()[..] == script.as_slice()[..]
+        }) {
             Some((asset, _)) => Some(asset),
             None => None,
         }

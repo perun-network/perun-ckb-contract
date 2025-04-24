@@ -1,9 +1,11 @@
-use ckb_testtool::{ckb_types::{packed::{OutPoint, CellOutput}, prelude::{Unpack, Pack}}};
+use ckb_testtool::ckb_types::{
+    packed::{CellOutput, OutPoint},
+    prelude::{Pack, Unpack},
+};
 use ckb_types::bytes;
-use molecule::prelude::{Entity, Builder};
+use molecule::prelude::{Builder, Entity};
 
 use super::{Asset, AssetRegister};
-
 
 #[derive(Debug, Clone)]
 
@@ -44,9 +46,17 @@ impl Default for FundingCell {
     }
 }
 
-pub fn mk_funding_cell(party_index: u8, out_point: OutPoint, cell_output: &CellOutput, data: bytes::Bytes, register: &AssetRegister) -> FundingCell {
-    if cell_output.type_().is_some(){
-        let asset = register.guess_asset_from_script(&cell_output.type_().to_opt().unwrap()).unwrap();
+pub fn mk_funding_cell(
+    party_index: u8,
+    out_point: OutPoint,
+    cell_output: &CellOutput,
+    data: bytes::Bytes,
+    register: &AssetRegister,
+) -> FundingCell {
+    if cell_output.type_().is_some() {
+        let asset = register
+            .guess_asset_from_script(&cell_output.type_().to_opt().unwrap())
+            .unwrap();
         FundingCell::FundingCellSUDT(FundingCellSUDT {
             index: party_index,
             cap: cell_output.capacity().unpack(),
@@ -61,7 +71,6 @@ pub fn mk_funding_cell(party_index: u8, out_point: OutPoint, cell_output: &CellO
             out_point,
         })
     }
-
 }
 
 impl FundingCell {

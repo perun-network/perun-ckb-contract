@@ -20,11 +20,10 @@ use ckb_std::{
 /// **Main entry point for contract**
 pub fn program_entry() -> i8 {
     match main() {
-        Ok(_) => 0,  // Success
+        Ok(_) => 0,   // Success
         Err(_) => -1, // Failure
     }
 }
-
 
 // The Perun Funds Lock Script can be unlocked by including an input cell with the pcts script hash
 // that is specified in the args of the pfls.

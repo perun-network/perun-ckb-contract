@@ -8,7 +8,7 @@ use ckb_testtool::{
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
     ctrue,
-    perun_types::{ChannelConstants, ChannelStatus, ChannelState},
+    perun_types::{ChannelConstants, ChannelState, ChannelStatus},
 };
 
 use std::cell::RefCell;
@@ -17,18 +17,19 @@ use std::sync::Mutex;
 
 use crate::perun::{
     self,
-    test::{keys, transaction ,Client},
+    test::{keys, transaction, Client},
 };
 use crate::perun::{harness, test};
+use ckb_testtool::ckb_types::prelude::IntoHeaderView;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use ckb_testtool::ckb_types::prelude::IntoHeaderView;
 
 use super::{
     test::cell::FundingCell,
     virtual_channel::{IdxMapWithDirection, VirtualChannel},
-    Account};
+    Account,
+};
 
 enum ActionValidity {
     Valid,
@@ -217,7 +218,8 @@ where
         };
         ctx.borrow_mut().insert_header(header.clone());
         // We will always use 0 as the `tx_index`.
-        ctx.borrow_mut().link_cell_with_block(cell, header.hash(), 0);
+        ctx.borrow_mut()
+            .link_cell_with_block(cell, header.hash(), 0);
         drop(ctx);
     }
 
@@ -259,7 +261,12 @@ where
     /// dispute a channel using the currently active participant set by
     /// `with(..)`.
     pub fn dispute(&mut self) -> Result<(), perun::Error> {
-        self.channel_state = self.channel_state.clone().as_builder().disputed(ctrue!()).build();
+        self.channel_state = self
+            .channel_state
+            .clone()
+            .as_builder()
+            .disputed(ctrue!())
+            .build();
         let sigs = self.sigs_for_channel_state()?;
         let res = match &self.channel_cell {
             Some(channel_cell) => {
@@ -280,8 +287,8 @@ where
         Ok(())
     }
 
-     //register dispute for second lc parent without update on vc
-     pub fn vc_progress_no_update(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
+    //register dispute for second lc parent without update on vc
+    pub fn vc_progress_no_update(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();
         let vc_status = vc.vc_status();
         self.channel_state = self
@@ -417,14 +424,23 @@ where
     pub fn finalize(&mut self) -> &mut Self {
         let status = self.channel_state.clone();
         let old_version: u64 = status.state().version().unpack();
-        let state = status.state().as_builder().is_final(ctrue!()).version((old_version + 1).pack()).build();
+        let state = status
+            .state()
+            .as_builder()
+            .is_final(ctrue!())
+            .version((old_version + 1).pack())
+            .build();
         self.channel_state = status.as_builder().state(state).build();
         self
     }
 
-    pub fn update(&mut self, update: impl Fn(&ChannelState) -> Result<ChannelState, perun::Error>) -> &mut Self {
+    pub fn update(
+        &mut self,
+        update: impl Fn(&ChannelState) -> Result<ChannelState, perun::Error>,
+    ) -> &mut Self {
         let new_state = update(&self.channel_state.state()).expect("update failed");
-        self.channel_state = self.channel_state
+        self.channel_state = self
+            .channel_state
             .clone()
             .as_builder()
             .state(new_state)

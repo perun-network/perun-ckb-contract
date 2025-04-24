@@ -9,7 +9,9 @@ use ckb_testtool::context::Context;
 use perun;
 use perun::{test, virtual_channel};
 use perun_common::helpers::blake2b256;
-use perun_common::perun_types::{Balances, Bool, ChannelState, LockedBalances, SEC1EncodedPubKey, SubAlloc, CKByteDistribution};
+use perun_common::perun_types::{
+    Balances, Bool, CKByteDistribution, ChannelState, LockedBalances, SEC1EncodedPubKey, SubAlloc,
+};
 use perun_common::sig::verify_signature;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -85,7 +87,6 @@ fn channel_test_bench() -> Result<(), perun::Error> {
     ]
     .iter()
     .map(|test| {
-        
         let mut context = Rc::new(Mutex::new(RefCell::new(Context::default())));
         let pe = perun::harness::Env::new(context.clone(), MAX_CYCLES, CHALLENGE_DURATION_MS)
             .expect("preparing environment");

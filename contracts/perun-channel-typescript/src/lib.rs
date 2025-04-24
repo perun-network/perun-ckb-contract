@@ -29,9 +29,9 @@ use ckb_std::{
 };
 use perun_common::{
     channels::{
-        find_cell_by_type_hash, get_channel_action, verify_channel_id_integrity,
-        verify_max_one_channel, verify_thread_token_integrity, verify_time_lock_expired,
-        PChannelAction,
+        find_cell_by_type_hash, get_channel_action, unpack_Byte32, unpack_u64,
+        verify_channel_id_integrity, verify_max_one_channel, verify_thread_token_integrity,
+        verify_time_lock_expired, PChannelAction,
     },
     error::Error,
     helpers::blake2b256,
@@ -45,38 +45,9 @@ use perun_common::{
 
 const SUDT_MIN_LEN: usize = 16;
 
-/// ChannelAction describes what kind of interaction with the channel is currently happening.
-///
-/// If there is an old ChannelStatus, it is the status of the channel before the interaction.
-/// The old ChannelStatus lives in the cell data of the pcts input cell.
-/// It is stored in the parallel outputs_data array of the transaction that produced the consumed
-/// channel output cell.
-///
-/// If there is a new ChannelStatus, it is the status of the channel after the interaction.
-/// The new ChannelStatus lives in the cell data of the pcts output cell. It is stored in the
-/// parallel outputs_data array of the consuming transaction
-pub enum ChannelAction {
-    /// Progress indicates that a channel is being progressed. This means that a channel cell is consumed
-    /// in the inputs and the same channel with updated state is progressed in the outputs.
-    /// The possible redeemers associated with the Progress action are Fund and Dispute.
-    Progress {
-        old_status: ChannelStatus,
-        new_status: ChannelStatus,
-    }, // one PCTS input, one PCTS output
-    /// Start indicates that a channel is being started. This means that a **new channel** lives in the
-    /// output cells of this transaction. No channel cell is consumes as an input.
-    /// As Start does not consume a channel cell, there is no Witness associated with the Start action.
-    Start { new_status: ChannelStatus }, // no PCTS input, one PCTS output
-    /// Close indicates that a channel is being closed. This means that a channel's cell is consumed without being
-    /// recreated in the outputs with updated state. The possible redeemers associated with the Close action are
-    /// Close, Abort and ForceClose.
-    /// The channel type script assures that all funds are payed out to the correct parties upon closing.
-    Close { old_status: ChannelStatus }, // one PCTS input , no PCTS output
-}
-
 pub fn program_entry() -> i8 {
     match main() {
-        Ok(_) => 0,  // Success
+        Ok(_) => 0,   // Success
         Err(_) => -1, // Failure
     }
 }
@@ -566,8 +537,8 @@ pub fn verify_vc_parent(vc_status: &VirtualChannelStatus) -> Result<(), Error> {
             Some(parent) => parent,
             None => return Err(Error::InvalidVCParentData),
         };
-
-        if parent.pcts_hash().unpack() == pcts_hash {
+        let parent_hash: [u8; 32] = parent.pcts_hash().unpack();
+        if parent_hash == pcts_hash {
             found = true;
             break;
         }
@@ -616,7 +587,7 @@ pub fn verify_all_paid_vc(
         .ckbytes()
         .get(party_a_vc_participant_idx)?;
     let total_ckbytes_balance_a = ckbytes_balance_vc_a + ckbytes_balance_a;
-    let payment_script_hash_a = lc_channel_constants
+    let payment_script_hash_a: [u8; 32] = lc_channel_constants
         .params()
         .party_a()
         .payment_script_hash()
@@ -630,7 +601,7 @@ pub fn verify_all_paid_vc(
         .get(party_b_vc_participant_idx)?;
     let total_ckbytes_balance_b = ckbytes_balance_vc_b + ckbytes_balance_b;
 
-    let payment_script_hash_b = lc_channel_constants
+    let payment_script_hash_b: [u8; 32] = lc_channel_constants
         .params()
         .party_b()
         .payment_script_hash()
@@ -660,7 +631,8 @@ pub fn verify_all_paid_vc(
                 )?;
                 udt_outputs_a[sudt_idx] += amount;
             }
-            ckbytes_outputs_a += output.capacity().unpack();
+            let output_cap: u64 = output.capacity().unpack();
+            ckbytes_outputs_a += output_cap;
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
             if output.type_().is_some() {
@@ -671,7 +643,8 @@ pub fn verify_all_paid_vc(
                 )?;
                 udt_outputs_b[sudt_idx] += amount;
             }
-            ckbytes_outputs_b += output.capacity().unpack();
+            let output_cap: u64 = output.capacity().unpack();
+            ckbytes_outputs_b += output_cap;
         }
     }
 
@@ -748,7 +721,8 @@ pub fn get_idx_map(parents: &ParentsVec) -> Result<IndexMap, Error> {
             Some(parent) => parent,
             None => return Err(Error::InvalidVCParentData),
         };
-        if parent.pcts_hash().unpack() == pcts_hash {
+        let parent_hash: [u8; 32] = parent.pcts_hash().unpack();
+        if parent_hash == pcts_hash {
             return Ok(parent.idx_map());
         }
     }
@@ -772,14 +746,16 @@ pub fn verify_increasing_version_number(
     old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
+    let old_status_disputed: bool = old_status.disputed().to_bool();
+    let old_state_version: u64 = old_status.state().version().unpack();
+    let new_state_version: u64 = new_state.version().unpack();
+
     // Allow registering initial state
-    if !old_status.disputed().to_bool()
-        && old_status.state().version().unpack() == 0
-        && new_state.version().unpack() == 0
-    {
+    if !old_status_disputed && old_state_version == 0 && new_state_version == 0 {
+        debug!("Allow registering initial state");
         return Ok(());
     }
-    if old_status.state().version().unpack() < new_state.version().unpack() {
+    if old_state_version < new_state_version {
         return Ok(());
     }
     Err(Error::VersionNumberNotIncreasing)
@@ -789,7 +765,10 @@ pub fn verify_non_decreasing_version_number(
     old_status: &ChannelStatus,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    if old_status.state().version().unpack() > new_state.version().unpack() {
+    let old_state_version: u64 = old_status.state().version().unpack();
+    let new_state_version: u64 = new_state.version().unpack();
+
+    if old_state_version > new_state_version {
         return Err(Error::InvalidVersionNumberVCProgressTx);
     }
     Ok(())
@@ -848,10 +827,10 @@ pub fn verify_channel_continues_locked() -> Result<(), Error> {
 pub fn verify_no_funds_in_inputs(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let num_inputs = load_transaction()?.raw().inputs().len();
     for i in 0..num_inputs {
-        let cell_lock_hash = load_cell_lock(i, Source::Input)?;
-        if cell_lock_hash.code_hash().unpack()[..]
-            == channel_constants.pfls_code_hash().unpack()[..]
-        {
+        let cell_lockscript = load_cell_lock(i, Source::Input)?;
+        let lockscript_codehash: [u8; 32] = cell_lockscript.code_hash().unpack();
+        let pfls_code_hash: [u8; 32] = channel_constants.pfls_code_hash().unpack();
+        if lockscript_codehash[..] == pfls_code_hash[..] {
             return Err(Error::FundsInInputs);
         }
     }
@@ -884,17 +863,19 @@ pub fn verify_funding_in_outputs(
 
     let expected_pcts_script_hash = load_script_hash()?;
     let outputs = load_transaction()?.raw().outputs();
-    let expected_pfls_code_hash = channel_constants.pfls_code_hash().unpack();
+    let expected_pfls_code_hash: [u8; 32] = channel_constants.pfls_code_hash().unpack();
     let expected_pfls_hash_type = channel_constants.pfls_hash_type();
     let mut capacity_sum: u64 = 0;
     for (i, output) in outputs.into_iter().enumerate() {
-        if output.lock().code_hash().unpack()[..] == expected_pfls_code_hash[..]
+        let output_lockscript_codehash: [u8; 32] = output.lock().code_hash().unpack();
+        if output_lockscript_codehash[..] == expected_pfls_code_hash[..]
             && output.lock().hash_type().eq(&expected_pfls_hash_type)
         {
             let output_lock_args: Bytes = output.lock().args().unpack();
-            let script_hash_in_pfls_args = Byte32::from_slice(&output_lock_args)?.unpack();
+            let script_hash_in_pfls_args: [u8; 32] =
+                Byte32::from_slice(&output_lock_args)?.unpack();
             if script_hash_in_pfls_args[..] == expected_pcts_script_hash[..] {
-                capacity_sum += output.capacity().unpack();
+                capacity_sum += unpack_u64(&output.capacity());
             } else {
                 return Err(Error::InvalidPFLSInOutputs);
             }
@@ -967,7 +948,7 @@ pub fn verify_equal_channel_id(
     old_state: &ChannelState,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    if old_state.channel_id().unpack()[..] != new_state.channel_id().unpack()[..] {
+    if unpack_Byte32(&old_state.channel_id())[..] != unpack_Byte32(&new_state.channel_id())[..] {
         return Err(Error::ChannelIdMismatch);
     }
     Ok(())
@@ -989,13 +970,9 @@ pub fn verify_vc_parent_state_progression(
     new_state: &ChannelState,
 ) -> Result<(), Error> {
     verify_equal_channel_id(&old_status.state(), new_state)?;
-    debug!("verif_equal_channel_id");
     verify_non_decreasing_version_number(old_status, new_state)?;
-    debug!("verify_non_decreasing_version_number");
     verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
-    debug!("verify_equal_sum_of_balances");
     verify_state_not_finalized(&old_status.state())?;
-    debug!("verify_state_not_finalized");
     Ok(())
 }
 
@@ -1003,7 +980,7 @@ pub fn verify_state_valid_as_start(
     state: &ChannelState,
     pfls_min_capacity: u64,
 ) -> Result<(), Error> {
-    if state.version().unpack() != 0 {
+    if unpack_u64(&state.version()) != 0 {
         return Err(Error::StartWithNonZeroVersion);
     }
     if state.is_final().to_bool() {
@@ -1025,7 +1002,9 @@ pub fn verify_state_valid_as_start(
 
 pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let lock_script = load_cell_lock(0, Source::GroupOutput)?;
-    if lock_script.code_hash().unpack()[..] != channel_constants.pcls_code_hash().unpack()[..] {
+    if unpack_Byte32(&lock_script.code_hash())[..]
+        != unpack_Byte32(&channel_constants.pcls_code_hash())[..]
+    {
         return Err(Error::InvalidPCLSCodeHash);
     }
     if !lock_script
@@ -1081,18 +1060,12 @@ pub fn verify_all_paid(
     }
 
     let ckbytes_balance_a = final_balance.ckbytes().get(0)? + channel_capacity + reimburse_a;
-    let payment_script_hash_a = channel_constants
-        .params()
-        .party_a()
-        .payment_script_hash()
-        .unpack();
+    let payment_script_hash_a =
+        unpack_Byte32(&channel_constants.params().party_a().payment_script_hash());
 
     let ckbytes_balance_b = final_balance.ckbytes().get(1)? + reimburse_b;
-    let payment_script_hash_b = channel_constants
-        .params()
-        .party_b()
-        .payment_script_hash()
-        .unpack();
+    let payment_script_hash_b =
+        unpack_Byte32(&channel_constants.params().party_b().payment_script_hash());
 
     debug!("ckbytes_balance_a: {}", ckbytes_balance_a);
     debug!("ckbytes_balance_b: {}", ckbytes_balance_b);
@@ -1121,7 +1094,7 @@ pub fn verify_all_paid(
                 )?;
                 udt_outputs_a[sudt_idx] += amount;
             }
-            ckbytes_outputs_a += output.capacity().unpack();
+            ckbytes_outputs_a += unpack_u64(&output.capacity());
         }
         if output_lock_script_hash[..] == payment_script_hash_b[..] {
             if output.type_().is_some() {
@@ -1132,7 +1105,7 @@ pub fn verify_all_paid(
                 )?;
                 udt_outputs_b[sudt_idx] += amount;
             }
-            ckbytes_outputs_b += output.capacity().unpack();
+            ckbytes_outputs_b += unpack_u64(&output.capacity());
         }
     }
     debug!("ckbytes_outputs_a: {}", ckbytes_outputs_a);
@@ -1168,17 +1141,17 @@ pub fn verify_state_finalized(state: &ChannelState) -> Result<(), Error> {
 pub fn verify_different_payment_addresses(
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {
-    if channel_constants
+    let payment_script_hash_a: [u8; 32] = channel_constants
         .params()
         .party_a()
         .payment_script_hash()
-        .unpack()[..]
-        == channel_constants
-            .params()
-            .party_b()
-            .payment_script_hash()
-            .unpack()[..]
-    {
+        .unpack();
+    let payment_script_hash_b: [u8; 32] = channel_constants
+        .params()
+        .party_b()
+        .payment_script_hash()
+        .unpack();
+    if payment_script_hash_a[..] == payment_script_hash_b[..] {
         return Err(Error::SamePaymentAddress);
     }
     Ok(())

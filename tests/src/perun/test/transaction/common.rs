@@ -1,10 +1,13 @@
 use ckb_occupied_capacity::Capacity;
 use ckb_testtool::{
     bytes,
-    ckb_types::{packed::{Byte32, CellOutput, OutPoint}, prelude::{Unpack, Pack}},
+    ckb_types::{
+        packed::{Byte32, CellOutput, OutPoint},
+        prelude::{Pack, Unpack},
+    },
     context::Context,
 };
-use molecule::prelude::{Entity, Builder};
+use molecule::prelude::{Builder, Entity};
 use perun_common::perun_types::Balances;
 
 use crate::perun;
@@ -35,7 +38,15 @@ pub fn create_cells(ctx: &mut Context, hash: Byte32, outputs: Vec<(CellOutput, b
 
 pub fn add_cap_to_a(balances: &Balances, cap: Capacity) -> Balances {
     let bal_a: u64 = balances.ckbytes().nth0().unpack();
-    balances.clone().as_builder().ckbytes(
-        balances.ckbytes().as_builder().nth0(
-            (cap.as_u64() + bal_a).pack()).build()).build()
+    balances
+        .clone()
+        .as_builder()
+        .ckbytes(
+            balances
+                .ckbytes()
+                .as_builder()
+                .nth0((cap.as_u64() + bal_a).pack())
+                .build(),
+        )
+        .build()
 }
