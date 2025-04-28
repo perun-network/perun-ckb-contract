@@ -14,7 +14,7 @@ pub struct TestAccount {
 }
 
 impl TestAccount {
-    pub fn new(sk: SigningKey, name: String) -> Self {
+    pub fn _new(sk: SigningKey, name: String) -> Self {
         Self { sk, name }
     }
 
@@ -25,7 +25,7 @@ impl TestAccount {
         }
     }
 
-    pub fn id(&self) -> &str {
+    pub fn _id(&self) -> &str {
         &self.name
     }
 }

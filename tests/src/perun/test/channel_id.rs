@@ -12,7 +12,7 @@ impl ChannelId {
         ChannelId(Default::default())
     }
 
-    pub fn new_random() -> Self {
+    pub fn _new_random() -> Self {
         ChannelId(rand::thread_rng().gen())
     }
 

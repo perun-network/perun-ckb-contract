@@ -22,7 +22,7 @@ use ckb_std::{
 };
 
 use perun_common::{
-    channels::{find_cell_by_type_hash, unpack_Byte32, VChannelAction},
+    channels::{find_cell_by_type_hash, unpack_byte32, VChannelAction},
     error::Error,
     helpers::blake2b256,
     perun_types::{
@@ -571,7 +571,7 @@ pub fn verify_vchannel_id_integrity(
     params: &ChannelParameters,
 ) -> Result<(), Error> {
     let digest = blake2b256(params.as_slice());
-    if digest[..] != unpack_Byte32(channel_id)[..] {
+    if digest[..] != unpack_byte32(channel_id)[..] {
         return Err(Error::InvalidChannelId);
     }
     Ok(())

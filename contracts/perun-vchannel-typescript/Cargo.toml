@@ -3,6 +3,7 @@ name = "perun-vchannel-typescript"
 version = "0.1.0"
 edition = "2021"
 
+
 [dependencies]
 ckb-std = "0.17.0"
 perun-common = { path = "../../crates/perun-common", default-features = false, features = ["contract"] }

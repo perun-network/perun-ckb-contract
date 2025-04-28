@@ -271,7 +271,7 @@ pub struct FundingAgreementEntry {
 pub struct Asset(pub u32);
 
 impl Asset {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Asset(0)
     }
 }

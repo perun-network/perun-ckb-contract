@@ -21,6 +21,7 @@ pub enum Error {
     UnexpectedSysError,
     TypeIDError,
     // Verification Errors
+    InvalidDisputeMode,
     TotalSizeNotMatch,
     HeaderIsBroken,
     UnknownItem,

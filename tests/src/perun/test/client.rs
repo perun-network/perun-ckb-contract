@@ -75,9 +75,6 @@ impl Client {
         let pfls_code_hash = ctx
             .get_cell_data_hash(&env.pfls_out_point)
             .expect("pfls hash");
-        let always_success_hash = ctx
-            .get_cell_data_hash(&env.always_success_out_point)
-            .expect("always success hash");
 
         let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
 

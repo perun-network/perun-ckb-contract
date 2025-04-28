@@ -29,7 +29,7 @@ use ckb_std::{
 };
 use perun_common::{
     channels::{
-        find_cell_by_type_hash, get_channel_action, unpack_Byte32, unpack_u64,
+        find_cell_by_type_hash, get_channel_action, unpack_byte32, unpack_u64,
         verify_channel_id_integrity, verify_max_one_channel, verify_thread_token_integrity,
         verify_time_lock_expired, PChannelAction,
     },
@@ -948,7 +948,7 @@ pub fn verify_equal_channel_id(
     old_state: &ChannelState,
     new_state: &ChannelState,
 ) -> Result<(), Error> {
-    if unpack_Byte32(&old_state.channel_id())[..] != unpack_Byte32(&new_state.channel_id())[..] {
+    if unpack_byte32(&old_state.channel_id())[..] != unpack_byte32(&new_state.channel_id())[..] {
         return Err(Error::ChannelIdMismatch);
     }
     Ok(())
@@ -1002,8 +1002,8 @@ pub fn verify_state_valid_as_start(
 
 pub fn verify_valid_lock_script(channel_constants: &ChannelConstants) -> Result<(), Error> {
     let lock_script = load_cell_lock(0, Source::GroupOutput)?;
-    if unpack_Byte32(&lock_script.code_hash())[..]
-        != unpack_Byte32(&channel_constants.pcls_code_hash())[..]
+    if unpack_byte32(&lock_script.code_hash())[..]
+        != unpack_byte32(&channel_constants.pcls_code_hash())[..]
     {
         return Err(Error::InvalidPCLSCodeHash);
     }
@@ -1061,11 +1061,11 @@ pub fn verify_all_paid(
 
     let ckbytes_balance_a = final_balance.ckbytes().get(0)? + channel_capacity + reimburse_a;
     let payment_script_hash_a =
-        unpack_Byte32(&channel_constants.params().party_a().payment_script_hash());
+        unpack_byte32(&channel_constants.params().party_a().payment_script_hash());
 
     let ckbytes_balance_b = final_balance.ckbytes().get(1)? + reimburse_b;
     let payment_script_hash_b =
-        unpack_Byte32(&channel_constants.params().party_b().payment_script_hash());
+        unpack_byte32(&channel_constants.params().party_b().payment_script_hash());
 
     debug!("ckbytes_balance_a: {}", ckbytes_balance_a);
     debug!("ckbytes_balance_b: {}", ckbytes_balance_b);
