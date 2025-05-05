@@ -1,17 +1,12 @@
 [[cells]]
-name = "pcts"
+name = "vcts"
 enable_type_id = false
-location = { file = "build/release/perun-channel-typescript" }
+location = { file = "build/release/perun-vchannel-typescript" }
 
 [[cells]]
-name = "pcls"
+name = "vcls"
 enable_type_id = false
-location = { file = "build/release/perun-channel-lockscript" }
-
-[[cells]]
-name = "pfls"
-enable_type_id = false
-location = { file = "build/release/perun-funds-lockscript" }
+location = { file = "build/release/perun-vchannel-lockscript" }
 
 #
 # # reference to on-chain cells
