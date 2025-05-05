@@ -72,6 +72,7 @@ its own `perun-common` crate which gives some additional helpers and
 convenience functions when interacting with types used in Perun contracts.
 
 ## Problems
+### 1. Missing file gnu/stubs-lp64.h
 A common issue when compiling for RISC-V is the missing file: `gnu/stubs-lp64.h`
 
 If the necessary packages are already installed, the file `/usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h`
