@@ -12,7 +12,6 @@ use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{
     Balances, Bool, CKByteDistribution, ChannelState, LockedBalances, SEC1EncodedPubKey, SubAlloc,
 };
-
 use perun_common::sig::verify_signature;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -20,6 +19,10 @@ use std::sync::Mutex;
 
 const MAX_CYCLES: u64 = 100 * 10_000_000;
 const CHALLENGE_DURATION_MS: u64 = 10 * 1000;
+
+// Include your tests here
+// See https://github.com/xxuejie/ckb-native-build-sample/blob/main/tests/src/tests.rs for more examples
+
 #[test]
 fn test_signature() {
     // This tests the interoperability between the on-chain signature verification
@@ -84,7 +87,7 @@ fn channel_test_bench() -> Result<(), perun::Error> {
     ]
     .iter()
     .map(|test| {
-        let context = Rc::new(Mutex::new(RefCell::new(Context::default())));
+        let mut context = Rc::new(Mutex::new(RefCell::new(Context::default())));
         let pe = perun::harness::Env::new(context.clone(), MAX_CYCLES, CHALLENGE_DURATION_MS)
             .expect("preparing environment");
         test(context, &pe)

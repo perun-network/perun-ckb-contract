@@ -1,11 +1,15 @@
-// Import from `core` instead of from `std` since we are in no-std mode
-use core::{result::Result, usize};
-// Import heap related library from `alloc`
-// https://doc.rust-lang.org/alloc/index.html
-use alloc::{self, vec::Vec};
+#![cfg_attr(not(feature = "library"), no_std)]
+#![allow(special_module_name)]
+#![allow(unused_attributes)]
 
-// Import CKB syscalls and structures
-// https://docs.rs/ckb-std/
+use ckb_std::default_alloc;
+
+ckb_std::entry!(program_entry);
+default_alloc!();
+use alloc::vec;
+use core::iter::IntoIterator;
+use core::{result::Result, usize};
+
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, packed::Byte32, prelude::*},
@@ -16,8 +20,9 @@ use ckb_std::{
     },
     syscalls::SysError,
 };
+
 use perun_common::{
-    channels::{find_cell_by_type_hash, VChannelAction},
+    channels::{find_cell_by_type_hash, unpack_byte32, VChannelAction},
     error::Error,
     helpers::blake2b256,
     perun_types::{
@@ -27,6 +32,13 @@ use perun_common::{
     },
     sig::verify_signature,
 };
+
+pub fn program_entry() -> i8 {
+    match main() {
+        Ok(_) => 0,   // Success
+        Err(_) => -1, // Failure
+    }
+}
 
 pub fn main() -> Result<(), Error> {
     debug!("VCTS");
@@ -129,7 +141,7 @@ pub fn check_valid_vc_start(
 
 pub fn verify_owner_lock(owner: &Participant) -> Result<(), Error> {
     let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
-    let matches: Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Input)
+    let matches: vec::Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Input)
         .enumerate()
         .filter_map(|(idx, hash)| {
             if hash == owner_lock_hash {
@@ -162,7 +174,9 @@ pub fn check_valid_vc_progress(
     verify_non_decreasing_version_number_vc(old_vc_status, new_vc_status)?;
     debug!("verify_non_decreasing_version_number_vc passed");
 
-    if old_vc_status.vcstate().version().unpack() < new_vc_status.vcstate().version().unpack() {
+    let old_vc_state_version: u64 = old_vc_status.vcstate().version().unpack();
+    let new_vc_state_version: u64 = new_vc_status.vcstate().version().unpack();
+    if old_vc_state_version < new_vc_state_version {
         debug!("vc state version number is increasing");
         verify_vc_sigs_progress(new_vc_status, &vc_constants.params())?;
         debug!("verify_vc_sigs_progress passed");
@@ -172,7 +186,7 @@ pub fn check_valid_vc_progress(
         )?;
         debug!("verify_equal_sum_of_balances passed");
     }
-    if old_vc_status.vcstate().version().unpack() == new_vc_status.vcstate().version().unpack() {
+    if old_vc_state_version == new_vc_state_version {
         verify_equal_vc_status(old_vc_status, new_vc_status)?;
         debug!("verify_equal_channel_state passed");
     }
@@ -188,9 +202,9 @@ pub fn check_valid_vc_merge(
 ) -> Result<(), Error> {
     debug!("check_valid_vc_merge");
     // 1. We take the vc cell that was created first i.e., lower block number
-    let vc_cell1_block_num = load_header(0, Source::GroupInput)?.raw().number().unpack();
+    let vc_cell1_block_num: u64 = load_header(0, Source::GroupInput)?.raw().number().unpack();
     debug!("vc_cell1_block_num: {:?}", vc_cell1_block_num);
-    let vc_cell2_block_num = load_header(1, Source::GroupInput)?.raw().number().unpack();
+    let vc_cell2_block_num: u64 = load_header(1, Source::GroupInput)?.raw().number().unpack();
     debug!("vc_cell2_block_num: {:?}", vc_cell2_block_num);
 
     let selected_vc_cell;
@@ -275,7 +289,7 @@ pub fn verify_vc_rent_payout_close2(owner: &Participant) -> Result<(), Error> {
     let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
     let vc_cell_capacity = load_cell_capacity(0, Source::GroupInput)?;
 
-    let matches: Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
+    let matches: vec::Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
         .enumerate()
         .filter_map(|(idx, hash)| {
             if hash == owner_lock_hash {
@@ -309,7 +323,7 @@ pub fn verify_vc_rent_payout_merge(owner: &Participant) -> Result<(), Error> {
     let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
     let vc_cell_capacity = load_cell_capacity(0, Source::GroupInput)?;
 
-    let matches: Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
+    let matches: vec::Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
         .enumerate()
         .filter_map(|(idx, hash)| {
             if hash == owner_lock_hash {
@@ -385,7 +399,9 @@ pub fn verify_non_decreasing_version_number_vc(
     old_vc_status: &VirtualChannelStatus,
     new_vc_status: &VirtualChannelStatus,
 ) -> Result<(), Error> {
-    if old_vc_status.vcstate().version().unpack() > new_vc_status.vcstate().version().unpack() {
+    let old_vc_state_version: u64 = old_vc_status.vcstate().version().unpack();
+    let new_vc_state_version: u64 = new_vc_status.vcstate().version().unpack();
+    if old_vc_state_version > new_vc_state_version {
         return Err(Error::InvalidVersionNumberVCProgressTx);
     }
     Ok(())
@@ -395,9 +411,9 @@ pub fn verify_equal_channel_id_vc(
     old_vc_status: &VirtualChannelStatus,
     new_vc_status: &VirtualChannelStatus,
 ) -> Result<(), Error> {
-    if old_vc_status.vcstate().channel_id().unpack()[..]
-        != new_vc_status.vcstate().channel_id().unpack()[..]
-    {
+    let old_vc_state_channel_id: [u8; 32] = old_vc_status.vcstate().channel_id().unpack();
+    let new_vc_state_channel_id: [u8; 32] = new_vc_status.vcstate().channel_id().unpack();
+    if old_vc_state_channel_id[..] != new_vc_state_channel_id[..] {
         return Err(Error::ChannelIdMismatch);
     }
     Ok(())
@@ -555,7 +571,7 @@ pub fn verify_vchannel_id_integrity(
     params: &ChannelParameters,
 ) -> Result<(), Error> {
     let digest = blake2b256(params.as_slice());
-    if digest[..] != channel_id.unpack()[..] {
+    if digest[..] != unpack_byte32(channel_id)[..] {
         return Err(Error::InvalidChannelId);
     }
     Ok(())

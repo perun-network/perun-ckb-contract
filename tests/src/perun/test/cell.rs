@@ -1,8 +1,9 @@
 use ckb_testtool::ckb_types::{
     packed::{CellOutput, OutPoint},
-    prelude::Unpack,
+    prelude::{Pack, Unpack},
 };
 use ckb_types::bytes;
+use molecule::prelude::{Builder, Entity};
 
 use super::{Asset, AssetRegister};
 

@@ -6,8 +6,6 @@ pub use error::*;
 
 pub mod channel;
 
-pub mod virtual_channel;
-
 pub mod mutators;
 
 pub mod test;
@@ -22,3 +20,5 @@ pub mod random;
 
 mod account;
 pub use account::*;
+
+pub mod virtual_channel;

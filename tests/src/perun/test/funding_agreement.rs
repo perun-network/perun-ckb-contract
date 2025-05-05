@@ -13,7 +13,6 @@ use perun_common::perun_types::{
 
 use crate::perun;
 use crate::perun::test::ChannelId;
-
 #[derive(Debug, Clone)]
 pub struct FundingAgreement {
     entries: Vec<FundingAgreementEntry>,
@@ -309,7 +308,7 @@ impl AssetRegister {
         }
     }
 
-    pub fn _get_asset(&self, sudt_asset: SUDTAsset) -> Option<&Asset> {
+    pub fn get_asset(&self, sudt_asset: SUDTAsset) -> Option<&Asset> {
         match self
             .assets
             .iter()

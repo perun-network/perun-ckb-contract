@@ -1,11 +1,19 @@
-// Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+#![cfg_attr(not(feature = "library"), no_std)]
+#![allow(special_module_name)]
+#![allow(unused_attributes)]
+
+use ckb_std::default_alloc;
+use core::arch::asm;
+
+ckb_std::entry!(program_entry);
+default_alloc!();
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
+    debug,
     high_level::{load_cell_lock_hash, load_cell_type, load_script},
     syscalls::SysError,
 };
@@ -22,6 +30,13 @@ use perun_common::{error::Error, perun_types::ChannelConstants};
 // Note: This means, that each participant needs to use a secp256k1_blake160_sighash_all as input to interact with the channel.
 // This should not be a substantial restriction, since a payment input will likely be used anyway (e.g. for funding or fees).
 
+pub fn program_entry() -> i8 {
+    match main() {
+        Ok(_) => 0,   // Success
+        Err(_) => -1, // Failure
+    }
+}
+
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
@@ -36,7 +51,10 @@ pub fn main() -> Result<(), Error> {
         // Loop over all input cells.
         let type_script = match load_cell_type(i, Source::GroupInput) {
             Ok(Some(script)) => script,
-            Ok(None) => panic!("type script not found"),
+            Ok(None) => {
+                debug!("Error: Type script not found");
+                return Err(Error::PCTSNotFound);
+            }
             Err(SysError::IndexOutOfBound) => break,
             Err(err) => return Err(err.into()),
         };
@@ -68,8 +86,8 @@ pub fn verify_is_participant(
         // Loop over all input cells.
         let cell_lock_script_hash = match load_cell_lock_hash(i, Source::Input) {
             Ok(lock_hash) => lock_hash,
-            Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(err) => return Err(err.into()),
+            Result::Err(SysError::IndexOutOfBound) => return Ok(false),
+            Result::Err(err) => return Result::Err(err.into()),
         };
         if cell_lock_script_hash[..] == unlock_script_hash_a[..]
             || cell_lock_script_hash[..] == unlock_script_hash_b[..]

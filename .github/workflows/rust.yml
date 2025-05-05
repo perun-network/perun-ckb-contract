@@ -5,13 +5,13 @@ on:
     branches: [ "dev" ]
   pull_request:
     branches: [ "dev" ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -24,15 +24,37 @@ jobs:
           target
           tests/target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    - name: Capsule
-      run: cargo install --version 0.9.2 ckb-capsule
-    - name: Build perun-common
-      run: cargo build
-      working-directory: contracts/perun-common
-    - name: Test perun-common
-      run: cargo test
-      working-directory: contracts/perun-common
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf libc6-dev-riscv64-cross libc6-riscv64-cross linux-libc-dev-riscv64-cross
+        wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18 && rm llvm.sh
+        cargo install cargo-generate
+        rustup target add riscv64imac-unknown-none-elf
+    - name: Create Symlink
+      run: sudo ln -s /usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h /usr/riscv64-linux-gnu/include/gnu/stubs-lp64.h
     - name: Build contracts
-      run: capsule build
+      env:
+        RUSTFLAGS: "-C linker=rust-lld"
+        CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER: rust-lld
+        CC_riscv64imac_unknown_none_elf: riscv64-unknown-elf-gcc
+        AR_riscv64imac_unknown_none_elf: riscv64-unknown-elf-ar
+        C_INCLUDE_PATH: /usr/riscv64-linux-gnu/include
+        CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+        TARGET_CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+      run: |
+        chmod +x ./setup_env.sh
+        source ./setup_env.sh build && make build
+
     - name: Test contracts
-      run: capsule test
+      env:
+        RUSTFLAGS: "-C linker=rust-lld"
+        CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER: rust-lld
+        CC_riscv64imac_unknown_none_elf: riscv64-unknown-elf-gcc
+        AR_riscv64imac_unknown_none_elf: riscv64-unknown-elf-ar
+        C_INCLUDE_PATH: /usr/riscv64-linux-gnu/include
+        CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+        TARGET_CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+      run: |
+        source ./setup_env.sh test && make test

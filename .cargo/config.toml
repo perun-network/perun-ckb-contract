@@ -1,0 +1,6 @@
+[target.riscv64imac-unknown-none-elf]
+linker = "rust-lld"
+rustflags = ["-C", "linker=rust-lld"]
+
+[build]
+target = "x86_64-unknown-linux-gnu"

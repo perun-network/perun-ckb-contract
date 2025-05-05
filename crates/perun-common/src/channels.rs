@@ -143,7 +143,8 @@ pub fn verify_channel_id_integrity(
     params: &ChannelParameters,
 ) -> Result<(), Error> {
     let digest = blake2b256(params.as_slice());
-    if digest[..] != channel_id.unpack()[..] {
+    let channel_id_bytes: [u8; 32] = channel_id.unpack();
+    if digest[..] != channel_id_bytes[..] {
         return Err(Error::InvalidChannelId);
     }
     Ok(())
@@ -161,7 +162,7 @@ pub fn verify_thread_token_integrity(thread_token: &ChannelToken) -> Result<(), 
 
 pub fn verify_time_lock_expired(time_lock: u64) -> Result<(), Error> {
     let old_header = load_header(0, Source::GroupInput)?;
-    let old_timestamp = old_header.raw().timestamp().unpack();
+    let old_timestamp: u64 = old_header.raw().timestamp().unpack();
     let current_time = find_closest_current_time();
     if old_timestamp + time_lock > current_time {
         return Err(Error::TimeLockNotExpired);
@@ -205,4 +206,12 @@ pub fn count_cells(source: Source) -> Result<usize, Error> {
         }
     }
     Ok(0)
+}
+
+pub fn unpack_u64<T: Unpack<u64>>(t: &T) -> u64 {
+    t.unpack()
+}
+
+pub fn unpack_byte32<T: Unpack<[u8; 32]>>(t: &T) -> [u8; 32] {
+    t.unpack()
 }

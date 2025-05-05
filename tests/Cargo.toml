@@ -3,16 +3,18 @@ name = "tests"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+native-simulator = [ "ckb-testtool/native-simulator" ]
 
 [dependencies]
-ckb-testtool = "0.9"
+ckb-testtool = "0.15.0"
+serde_json = "1.0"
 hex = "0.4.3"
-rand = "0.8.5"
-perun-common = { path = "../contracts/perun-common", default-features = false, features = ["testing"] }
-molecule = "0.7.3"
-ckb-types = { package = "ckb-standalone-types", version = "0.1.2" }
-k256 = { version = "0.11.6", default-features = false, features = ["ecdsa", "arithmetic"]}
+rand = "0.9.0"
+perun-common = { path = "../crates/perun-common", default-features = false, features = ["testing"] }
+molecule = "0.8.0"
+ckb-types = { package = "ckb-gen-types", version = "0.200.0" }
+k256 = { version = "0.13.4", default-features = false, features = ["ecdsa", "arithmetic"]}
 rand_core = { version = "0.6", features = ["getrandom"] }
-ckb-std = "0.10.0"
-ckb-occupied-capacity = "0.108.0"
+ckb-std = "0.16.4"
+ckb-occupied-capacity = "0.200.0"

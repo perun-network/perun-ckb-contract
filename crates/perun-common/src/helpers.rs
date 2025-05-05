@@ -8,8 +8,8 @@ use {
 
 #[cfg(not(feature = "std"))]
 use {
-    ckb_standalone_types::packed::*,
-    ckb_standalone_types::prelude::*,
+    ckb_gen_types::packed::*,
+    ckb_gen_types::prelude::*,
     molecule::prelude::{vec, Vec},
 };
 
@@ -269,64 +269,9 @@ impl Balances {
         }
         Ok(true)
     }
-    //this balance contains funds to cover another balances
-    pub fn covers_funds(&self, other: &Balances) -> Result<bool, Error> {
-        let self_total_ckbytes = self.ckbytes().sum();
-        let other_total_ckbytes = other.ckbytes().sum();
-
-        if self_total_ckbytes < other_total_ckbytes {
-            return Ok(false);
-        }
-
-        if self.sudts().len() != other.sudts().len() {
-            return Ok(false);
-        }
-        for (i, sb) in self.sudts().into_iter().enumerate() {
-            let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
-            if sb.asset().as_slice() != other_sb.asset().as_slice() {
-                return Ok(false);
-            }
-            let self_total_amount = sb.distribution().sum();
-            let other_total_amount = other_sb.distribution().sum();
-
-            if self_total_amount < other_total_amount {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
 
     pub fn equal(&self, other: &Balances) -> bool {
         self.as_slice()[..] == other.as_slice()[..]
-    }
-}
-
-impl SubBalances {
-    /// Compares the sum of balances for each asset in SubBalances to the same in Balances(locked funds)
-    /// Returns true if the sum of balances for each asset in SubBalances is equal to the sum of balances for each asset in Balances
-    /// Returns false otherwise
-    pub fn equal_in_sum(&self, vc_balances: &Balances) -> Result<bool, Error> {
-        let self_total_ckbytes = self.ckbytes().sum();
-        let vc_ckbytes = vc_balances.ckbytes().sum();
-
-        if self_total_ckbytes != vc_ckbytes {
-            return Ok(false);
-        }
-
-        if self.sudts().len() != vc_balances.sudts().len() {
-            return Ok(false);
-        }
-
-        for locked_sudt in self.sudts().into_iter() {
-            for vc_sudt in vc_balances.sudts().into_iter() {
-                if locked_sudt.asset().as_slice() == vc_sudt.asset().as_slice() {
-                    if locked_sudt.distribution().sum() != vc_sudt.distribution().sum() {
-                        return Ok(false);
-                    }
-                }
-            }
-        }
-        Ok(true)
     }
 }
 
@@ -515,6 +460,35 @@ impl Balances {
     }
 }
 
+impl SubBalances {
+    /// Compares the sum of balances for each asset in SubBalances to the same in Balances(locked funds)
+    /// Returns true if the sum of balances for each asset in SubBalances is equal to the sum of balances for each asset in Balances
+    /// Returns false otherwise
+    pub fn equal_in_sum(&self, vc_balances: &Balances) -> Result<bool, Error> {
+        let self_total_ckbytes = self.ckbytes().sum();
+        let vc_ckbytes = vc_balances.ckbytes().sum();
+
+        if self_total_ckbytes != vc_ckbytes {
+            return Ok(false);
+        }
+
+        if self.sudts().len() != vc_balances.sudts().len() {
+            return Ok(false);
+        }
+
+        for locked_sudt in self.sudts().into_iter() {
+            for vc_sudt in vc_balances.sudts().into_iter() {
+                if locked_sudt.asset().as_slice() == vc_sudt.asset().as_slice() {
+                    if locked_sudt.distribution().sum() != vc_sudt.distribution().sum() {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+        Ok(true)
+    }
+}
+
 #[cfg(feature = "std")]
 impl CKByteDistribution {
     pub fn mk_outputs(
@@ -573,7 +547,7 @@ impl SUDTAllocation {
         indices: Vec<u8>,
     ) -> Vec<(CellOutput, bytes::Bytes)> {
         let mut outputs: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
-        for (_i, balance) in self.into_iter().enumerate() {
+        for (i, balance) in self.into_iter().enumerate() {
             let udt_type = balance.asset().type_script();
             let udt_type_opt = ScriptOpt::new_builder().set(Some(udt_type)).build();
             let cap: u64 = balance.asset().max_capacity().unpack();

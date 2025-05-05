@@ -6,12 +6,10 @@ use ckb_testtool::{
     ckb_types::{bytes::Bytes, packed::*, prelude::*},
     context::Context,
 };
-use perun_common::perun_types::ChannelStateBuilder;
-use perun_common::perun_types::ChannelStatusBuilder;
-use perun_common::perun_types::Participant;
-use perun_common::perun_types::VirtualChannelStatusBuilder;
+use ckb_types::core::ScriptHashType;
 use perun_common::perun_types::{
-    self, ChannelStatus, ChannelToken, ParentsVec, VirtualChannelStatus,
+    self, ChannelStateBuilder, ChannelStatus, ChannelStatusBuilder, ChannelToken, ParentsVec,
+    Participant, VirtualChannelStatus, VirtualChannelStatusBuilder,
 };
 use perun_common::{cfalse, ctrue};
 
@@ -42,6 +40,7 @@ pub struct Env {
     vcls_script: Script,
     vcts_script: Script,
     pfls_script: Script,
+
     pub pcls_script_dep: CellDep,
     pub pcts_script_dep: CellDep,
     pub vcls_script_dep: CellDep,
@@ -64,13 +63,11 @@ impl Env {
     // prepare_env prepares the given context to be used for running Perun
     // tests.
     pub fn new(
-        context: Rc<Mutex<RefCell<Context>>>,
+        ctx: Rc<Mutex<RefCell<Context>>>,
         max_cycles: u64,
         challenge_duration: u64,
     ) -> Result<Env, perun::error::Error> {
-        // borrow the context
-        let ctx = context.lock().unwrap();
-
+        let context = ctx.lock().unwrap();
         // Perun contracts.
         let pcls: Bytes = Loader::default().load_binary("perun-channel-lockscript");
         let pcts: Bytes = Loader::default().load_binary("perun-channel-typescript");
@@ -78,48 +75,74 @@ impl Env {
         let vcts: Bytes = Loader::default().load_binary("perun-vchannel-typescript");
         let pfls: Bytes = Loader::default().load_binary("perun-funds-lockscript");
         let sample_udt: Bytes = Loader::default().load_binary("sample-udt");
+        println!("the same? {:?}", pfls == sample_udt);
         // Deploying the contracts returns the cell they are deployed in.
-        let pcls_out_point = ctx.borrow_mut().deploy_cell(pcls);
-        let pcts_out_point = ctx.borrow_mut().deploy_cell(pcts);
-        let vcls_out_point = ctx.borrow_mut().deploy_cell(vcls);
-        let vcts_out_point = ctx.borrow_mut().deploy_cell(vcts);
-        let pfls_out_point = ctx.borrow_mut().deploy_cell(pfls);
-        let sample_udt_out_point = ctx.borrow_mut().deploy_cell(sample_udt);
+        let pcls_out_point = context.borrow_mut().deploy_cell(pcls);
+        let pcts_out_point = context.borrow_mut().deploy_cell(pcts);
+        let vcls_out_point = context.borrow_mut().deploy_cell(vcls);
+        let vcts_out_point = context.borrow_mut().deploy_cell(vcts);
+        let pfls_out_point = context.borrow_mut().deploy_cell(pfls);
+        let sample_udt_out_point = context.borrow_mut().deploy_cell(sample_udt);
         // Auxiliary contracts.
-        let always_success_out_point = ctx.borrow_mut().deploy_cell(ALWAYS_SUCCESS.clone());
+        let always_success_out_point = context.borrow_mut().deploy_cell(ALWAYS_SUCCESS.clone());
 
         // Prepare scripts.
         // Perun scripts.
-        let pcls_script = ctx
+        let pcls_script = context
             .borrow_mut()
-            .build_script(&pcls_out_point, Default::default())
+            .build_script_with_hash_type(&pcls_out_point, ScriptHashType::Data1, Default::default())
             .ok_or("perun-channel-lockscript")?;
-        let pcts_script = ctx
+        println!(
+            "Built pcls_script: code_hash = {:?}, hash_type = {:?}",
+            pcls_script.code_hash(),
+            pcls_script.hash_type()
+        );
+        let pcts_script = context
             .borrow_mut()
-            .build_script(
+            .build_script_with_hash_type(
                 &pcts_out_point,
+                ScriptHashType::Data1,
                 perun_types::ChannelConstants::default().as_bytes(),
             )
             .ok_or("perun-channel-typescript")?;
-        let vcls_script = ctx
+        println!(
+            "Built pcts_script: code_hash = {:?}, hash_type = {:?}",
+            pcts_script.code_hash(),
+            pcts_script.hash_type()
+        );
+        let vcls_script = context
             .borrow_mut()
             .build_script(&vcls_out_point, Default::default())
             .ok_or("perun-virtual-channel-lockscript")?;
-        let vcts_script = ctx
+        let vcts_script = context
             .borrow_mut()
             .build_script(
                 &vcts_out_point,
                 perun_types::ChannelConstants::default().as_bytes(),
             )
             .ok_or("perun-virtual-channel-typescript")?;
-        let pfls_script = ctx
+        let pfls_script = context
             .borrow_mut()
-            .build_script(&pfls_out_point, Default::default())
+            .build_script_with_hash_type(&pfls_out_point, ScriptHashType::Data1, Default::default())
             .ok_or("perun-funds-lockscript")?;
-        let sample_udt_script = ctx
+        println!(
+            "Built pfls_script: code_hash = {:?}, hash_type = {:?}",
+            pfls_script.code_hash(),
+            pfls_script.hash_type()
+        );
+        let sample_udt_script = context
             .borrow_mut()
-            .build_script(&sample_udt_out_point, Default::default())
+            .build_script_with_hash_type(
+                &sample_udt_out_point,
+                ScriptHashType::Data1,
+                Default::default(),
+            )
             .ok_or("sample-udt")?;
+        println!(
+            "Built sample_udt_script: code_hash = {:?}, hash_type = {:?}",
+            sample_udt_script.code_hash(),
+            sample_udt_script.hash_type()
+        );
         let pcls_script_dep = CellDep::new_builder()
             .out_point(pcls_out_point.clone())
             .build();
@@ -142,7 +165,7 @@ impl Env {
             .occupied_capacity()?
             .safe_mul(Capacity::shannons(10))?;
         // Auxiliary scripts.
-        let always_success_script = ctx
+        let always_success_script = context
             .borrow_mut()
             .build_script(&always_success_out_point, Bytes::from(vec![0]))
             .expect("always_success");
@@ -168,8 +191,6 @@ impl Env {
         println!("asset code hash: {}", sample_udt_script.code_hash());
         println!("pcts code hash: {}", pcts_script.code_hash());
         println!("pcls code hash: {}", pcls_script.code_hash());
-        println!("vcts code hash: {}", vcts_script.code_hash());
-        println!("vcls code hash: {}", vcls_script.code_hash());
         println!(
             "always_success code hash: {}",
             always_success_script.code_hash()
@@ -207,15 +228,15 @@ impl Env {
     pub fn build_pcls(&self, context: &mut Context, args: Bytes) -> Script {
         let pcls_out_point = &self.pcls_out_point;
         context
-            .build_script(pcls_out_point, args)
+            .build_script_with_hash_type(pcls_out_point, ScriptHashType::Data1, args)
             .expect("perun-channel-lockscript")
     }
 
     pub fn build_pcts(&self, context: &mut Context, args: Bytes) -> Script {
         let pcts_out_point = &self.pcts_out_point;
-        let result = context.build_script(pcts_out_point, args);
-        let _script_hash = result.clone().unwrap().calc_script_hash();
-        result.expect("Cannot build pcts")
+        context
+            .build_script_with_hash_type(pcts_out_point, ScriptHashType::Data1, args)
+            .expect("perun-channel-typescript")
     }
 
     pub fn build_vcls(&self, context: &mut Context, args: Bytes) -> Script {
@@ -236,14 +257,15 @@ impl Env {
     pub fn build_pfls(&self, context: &mut Context, args: Bytes) -> Script {
         let pfls_out_point = &self.pfls_out_point;
         context
-            .build_script(pfls_out_point, args)
+            .build_script_with_hash_type(pfls_out_point, ScriptHashType::Data1, args)
             .expect("perun-funds-lockscript")
     }
 
     pub fn build_lock_script(&self, context: &mut Context, args: Bytes) -> Script {
         let always_success_out_point = &self.always_success_out_point;
-        let result = context.build_script(always_success_out_point, args);
-        result.expect("This is failing!")
+        context
+            .build_script(always_success_out_point, args)
+            .expect("always_success")
     }
 
     pub fn min_capacity_for_channel(&self, cs: ChannelStatus) -> Result<Capacity, perun::Error> {
@@ -370,7 +392,7 @@ impl Env {
     pub fn build_initial_channel_state(
         &self,
         channel_id: ChannelId,
-        _client_index: u8,
+        client_index: u8,
         funding_agreement: &FundingAgreement,
     ) -> Result<ChannelStatus, perun::Error> {
         let all_indices = funding_agreement

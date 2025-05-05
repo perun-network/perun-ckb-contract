@@ -1,5 +1,3 @@
-// use std::cell::Cell;
-
 use crate::perun::{self, harness, test::transaction::common::channel_witness};
 use ckb_testtool::{
     ckb_types::{

@@ -13,16 +13,6 @@ name = "pfls"
 enable_type_id = false
 location = { file = "build/release/perun-funds-lockscript" }
 
-[[cells]]
-name = "vcts"
-enable_type_id = false
-location = { file = "build/release/perun-vchannel-typescript" }
-
-[[cells]]
-name = "vcls"
-enable_type_id = false
-location = { file = "build/release/perun-vchannel-lockscript" }
-
 #
 # # reference to on-chain cells
 # [[cells]]

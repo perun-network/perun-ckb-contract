@@ -27,28 +27,60 @@ Basically a NFT script with extra functionality.
 This script handle access rights to all funds belonging to a Perun channel.
 It ensures that only channel participants are able to consume said funds.
 
-## perun-vchannel-lockscript
-This script is used to handle access-rights to the live Perun virtual channel cell.
+## Prerequisites
+Update the rustc version to 1.85.0 and install the following:
+```
+sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf \
+libc6-dev-riscv64-cross libc6-riscv64-cross linux-libc-dev-riscv64-cross
+```
+```
+wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18 && rm llvm.sh
+```
+```
+cargo install cargo-generate
+```
+Add the target:
+```
+rustup target add riscv64imac-unknown-none-elf
+```
 
-## perun-vchannel-typescript
-This script is used to handle a Perun virtual channel's state progression on-chain.
-
-## Developement
-Require: `capsule` with version `0.9.2`, `ckb` with version `0.109.0+`
-
+## Build and Test
 Build contracts:
 
 ``` sh
-capsule build
+chmod +x ./setup_env.sh
+```
+
+``` sh
+make prepare
+```
+
+``` sh
+source ./setup_env.sh build && make build
 ```
 
 Run tests:
 
 ``` sh
-capsule test
+source ./setup_env.sh test && make test
 ```
+or run them using the IDE
 
 ## perun-common
-Additionally to the available contracts we extracted common functionality into
+Additionally, to the available contracts we extracted common functionality into
 its own `perun-common` crate which gives some additional helpers and
 convenience functions when interacting with types used in Perun contracts.
+
+## Problems
+### 1. Missing file gnu/stubs-lp64.h
+A common issue when compiling for RISC-V is the missing file: `gnu/stubs-lp64.h`
+
+If the necessary packages are already installed, the file `/usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h`
+should exist instead. This is due to the toolchain using the lp64d ABI (which includes double-precision floating point support) rather than plain lp64.
+
+To resolve this, simply create a symbolic link:
+```
+sudo ln -s /usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h /usr/riscv64-linux-gnu/include/gnu/stubs-lp64.h
+```
+
+Then try compiling again.

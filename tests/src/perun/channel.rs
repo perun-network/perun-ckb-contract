@@ -20,6 +20,7 @@ use crate::perun::{
     test::{keys, transaction, Client},
 };
 use crate::perun::{harness, test};
+use ckb_testtool::ckb_types::prelude::IntoHeaderView;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -87,13 +88,12 @@ macro_rules! call_action {
                 ActionValidity::Invalid => {
                     let res = $self.active_part.$action(&mut ctx.borrow_mut(), $self.env, $($x),*);
                     match res {
-                        Ok(_) => Err(perun::Error::new("action should have failed")),
+                        Ok(_) => Err(perun::Error::new("action should have failedaction should have failed")),
                         Err(_) => Ok(Default::default()),
                     }
                 }
             };
             $self.validity = ActionValidity::Valid;
-            drop(ctx);
             res
         }
 )
@@ -253,8 +253,8 @@ where
 
     /// send a payment using the currently active participant set by `with(..)`
     /// to the given `to` participant.
-    pub fn send<P: perun::Account>(&mut self, to: &P, _amount: u64) -> Result<(), perun::Error> {
-        let _to = self.parts.get(&to.name()).expect("part not found");
+    pub fn send<P: perun::Account>(&mut self, to: &P, amount: u64) -> Result<(), perun::Error> {
+        let to = self.parts.get(&to.name()).expect("part not found");
         self.active_part.send(self.ctx.clone(), self.env)
     }
 
@@ -286,6 +286,7 @@ where
         self.push_header_with_cell(res.channel_cell);
         Ok(())
     }
+
     //register dispute for second lc parent without update on vc
     pub fn vc_progress_no_update(&mut self, vc: &mut VirtualChannel) -> Result<(), perun::Error> {
         let vcts = vc.vcts();

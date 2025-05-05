@@ -1,5 +1,11 @@
-// Import from `core` instead of from `std` since we are in no-std mode
-use core::result::Result;
+#![cfg_attr(not(feature = "library"), no_std)]
+#![allow(special_module_name)]
+#![allow(unused_attributes)]
+
+use ckb_std::default_alloc;
+
+ckb_std::entry!(program_entry);
+default_alloc!();
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
@@ -11,6 +17,16 @@ use ckb_std::{
 };
 use perun_common::error::Error;
 
+/// **Main entry point for contract**
+pub fn program_entry() -> i8 {
+    match main() {
+        Ok(_) => 0,   // Success
+        Err(_) => -1, // Failure
+    }
+}
+
+// The Perun Funds Lock Script can be unlocked by including an input cell with the pcts script hash
+// that is specified in the args of the pfls.
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
