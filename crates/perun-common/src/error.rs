@@ -127,6 +127,7 @@ pub enum Error {
     VCStatusNotEqual,
     NoVCRentPayoutCell,
     InvalidVCRentPayoutCell,
+    LedgerChannelHasLockedFunds,
 }
 
 impl From<SysError> for Error {

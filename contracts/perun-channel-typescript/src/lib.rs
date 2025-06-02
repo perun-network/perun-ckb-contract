@@ -254,14 +254,16 @@ pub fn check_valid_progress(
     }
 }
 
+//VC-Start-Tx for PCTS
 pub fn check_vc_dispute(
     old_status: &ChannelStatus,
     new_status: &ChannelStatus,
 ) -> Result<(), Error> {
     debug!("check_vc_dispute");
-
     //A vc cell can only be created once by this channel cell
-    if !(!old_status.disputed().to_bool() && new_status.disputed().to_bool()) {
+    verify_status_disputed(new_status)?;
+
+    if !(!old_status.vc_disputed().to_bool() && new_status.vc_disputed().to_bool()) {
         return Err(Error::InvalidVCTxStart);
     }
     debug!("Verified that vc cell can only be created once by this lc cell");
@@ -310,13 +312,18 @@ pub fn check_normal_dispute(
     // In case of vc disputes, we allow version number to be non-decreasing
     debug!("check_normal_dispute");
     if !old_status.vc_disputed().to_bool() {
-        debug!("verify_channel_state_progression");
+        debug!("normal dispute registered");
+        if !new_status.vc_disputed().to_bool() {
+            verify_no_locked_funds(&new_status)?;
+            debug!("verify_no_locked_funds passed");
+        }
         verify_channel_state_progression(old_status, &new_status.state())?;
+        debug!("verify_channel_state_progression passed");
     } else {
-        debug!("verify_vc_parent_state_progression");
+        debug!("vc dispute registered");
         verify_vc_parent_state_progression(old_status, &new_status.state())?;
+        debug!("verify_vc_parent_state_progression passed");
     }
-    debug!("verify_channel_state_progression passed");
 
     // One cannot dispute if funding is not complete.
     verify_status_funded(old_status)?;
@@ -426,6 +433,8 @@ pub fn check_valid_close(
             debug!("check_valid_close: Status funded verified");
             verify_state_finalized(&c.state())?;
             debug!("check_valid_close: State finalized verified");
+            verify_no_locked_funds(&old_status)?;
+            debug!("check_valid_close: no locked funds exist");
             verify_valid_state_sigs(
                 &c.sig_a().unpack(),
                 &c.sig_b().unpack(),
@@ -447,6 +456,13 @@ pub fn check_valid_close(
         ChannelWitnessUnion::Dispute(_) => Err(Error::ChannelDisputeWithoutChannelOutput),
         ChannelWitnessUnion::VCDispute(_) => Err(Error::VCDisputeWithoutChannelOutput),
     }
+}
+
+pub fn verify_no_locked_funds(channel_status: &ChannelStatus) -> Result<(), Error> {
+    if !channel_status.state().balances().locked().is_empty() {
+        return Err(Error::LedgerChannelHasLockedFunds);
+    }
+    Ok(())
 }
 
 pub fn check_vc_force_close(
@@ -491,6 +507,8 @@ pub fn check_normal_force_close(
     // expired. Upon force close, each party is paid according to the balance distribution in the
     // latest state.
 
+    verify_no_locked_funds(&old_status)?;
+    debug!("verify_no_locked_funds passed");
     verify_status_funded(old_status)?;
     debug!("verify_status_funded passed");
     verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;

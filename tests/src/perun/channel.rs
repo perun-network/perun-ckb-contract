@@ -7,7 +7,7 @@ use ckb_testtool::{
 };
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
-    ctrue,
+    cfalse, ctrue,
     perun_types::{ChannelConstants, ChannelState, ChannelStatus},
 };
 
@@ -444,6 +444,16 @@ where
             .clone()
             .as_builder()
             .state(new_state)
+            .build();
+        self
+    }
+
+    pub fn unset_vc_flag(&mut self) -> &mut Self {
+        self.channel_state = self
+            .channel_state
+            .clone()
+            .as_builder()
+            .vc_disputed(cfalse!())
             .build();
         self
     }
