@@ -34,13 +34,15 @@ use perun_common::{
         verify_time_lock_expired, PChannelAction,
     },
     error::Error,
-    helpers::blake2b256,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
         ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, VCChannelConstants,
         VirtualChannelStatus,
     },
-    sig::verify_signature,
+    sig::{
+        verify_signature,
+        ethereum_message_hash,
+    },
 };
 
 const SUDT_MIN_LEN: usize = 16;
@@ -781,7 +783,7 @@ pub fn verify_valid_state_sigs(
     pub_key_a: &SEC1EncodedPubKey,
     pub_key_b: &SEC1EncodedPubKey,
 ) -> Result<(), Error> {
-    let msg_hash = blake2b256(state.as_slice());
+    let msg_hash = ethereum_message_hash(state.as_slice());
     verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
     debug!("verify_valid_state_sigs: Signature A verified");
     verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;

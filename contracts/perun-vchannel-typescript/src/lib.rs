@@ -32,6 +32,7 @@ use perun_common::{
     },
     sig::verify_signature,
 };
+use perun_common::sig::ethereum_message_hash;
 
 pub fn program_entry() -> i8 {
     match main() {
@@ -535,7 +536,7 @@ pub fn verify_valid_state_sigs(
     pub_key_a: &SEC1EncodedPubKey,
     pub_key_b: &SEC1EncodedPubKey,
 ) -> Result<(), Error> {
-    let msg_hash = blake2b256(state.as_slice());
+    let msg_hash = ethereum_message_hash(state.as_slice());
     verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
     debug!("verify_valid_state_sigs: Signature A verified");
     verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;

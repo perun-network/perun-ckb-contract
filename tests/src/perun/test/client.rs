@@ -159,7 +159,7 @@ impl Client {
     pub fn sign(&self, state: ChannelState) -> Result<Vec<u8>, perun::Error> {
         let s: Signature = self
             .signing_key
-            .sign_prehash(&blake2b256(state.as_slice()))?;
+            .sign_prehash(&perun_common::sig::ethereum_message_hash(state.as_slice()))?;
         Ok(Vec::from(s.to_der().as_bytes()))
     }
 
