@@ -3,6 +3,8 @@ import blockchain;
 /* Perun Types */
 array SEC1EncodedPubKey [byte; 33];
 
+array EthAddress [byte; 20];
+
 array CKByteDistribution [Uint64; 2];
 
 array SUDTDistribution [Uint128; 2];
@@ -75,6 +77,8 @@ table Participant {
   unlock_script_hash:   Byte32,
 
   pub_key: SEC1EncodedPubKey,
+  // Ethereum address of the participant.
+  eth_address: EthAddress,
 }
 table ChannelParameters {
   party_a: Participant,

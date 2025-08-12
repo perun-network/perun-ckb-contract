@@ -21,4 +21,6 @@ pub mod random;
 mod account;
 pub use account::*;
 
+mod sol;
+
 pub mod virtual_channel;
