@@ -77,7 +77,15 @@ impl Client {
             .expect("pfls hash");
 
         let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
+        for (i, party) in parties.iter().enumerate() {
+            println!("Party {}: {:?}", i, party);
+            println!("Party {}: Field Count = {}", i, party.field_count());
+            println!("EthAddress: {:?}", party.eth_address());
 
+            let eth_address = party.eth_address();
+            let eth_addr_bytes = eth_address.as_slice();
+            println!("EthAddress (hex): 0x{}", hex::encode(eth_addr_bytes));
+        }
         let chan_params = perun_types::ChannelParametersBuilder::default()
             .party_a(parties[0].clone())
             .party_b(parties[1].clone())

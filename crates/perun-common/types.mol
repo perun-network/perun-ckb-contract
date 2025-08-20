@@ -9,7 +9,11 @@ array CKByteDistribution [Uint64; 2];
 
 array SUDTDistribution [Uint128; 2];
 
+array ETHDistribution [Uint128; 2];
+
 vector SUDTAllocation <SUDTBalances>;
+
+vector ETHAllocation <ETHBalances>;
 
 vector Locked_balances <SubAlloc>;
 
@@ -31,14 +35,24 @@ table SUDTAsset {
   max_capacity: Uint64,
 }
 
+table ETHAsset {
+  max_capacity: Uint64,
+}
+
 table SUDTBalances {
   asset: SUDTAsset,
   distribution: SUDTDistribution,
 }
 
+table ETHBalances {
+  asset: ETHAsset,
+  distribution: ETHDistribution,
+}
+
 table Balances {
   ckbytes: CKByteDistribution,
   sudts: SUDTAllocation,
+  eth_assets: ETHAllocation,
   locked: Locked_balances,
 }
 

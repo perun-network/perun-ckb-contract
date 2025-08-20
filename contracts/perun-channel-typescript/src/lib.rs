@@ -36,13 +36,10 @@ use perun_common::{
     error::Error,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
-        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, VCChannelConstants,
-        VirtualChannelStatus,
+        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, Participant, SEC1EncodedPubKey,
+        VCChannelConstants, VirtualChannelStatus,
     },
-    sig::{
-        verify_signature,
-        ethereum_message_hash,
-    },
+    sig::{ethereum_message_hash, verify_signature},
 };
 
 const SUDT_MIN_LEN: usize = 16;
@@ -58,7 +55,6 @@ pub fn main() -> Result<(), Error> {
     debug!("PCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-
     // return an error if args is empty
     if args.is_empty() {
         return Err(Error::NoArgs);

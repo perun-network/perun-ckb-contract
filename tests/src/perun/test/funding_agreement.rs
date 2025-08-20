@@ -6,10 +6,12 @@ use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 use perun_common::perun_types::{
-    self, Balances, CKByteDistribution, LockedBalances, ParticipantBuilder,
+    self, Balances, CKByteDistribution, EthAddress, LockedBalances, ParticipantBuilder,
     SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc,
     SubBalances,
 };
+use sha3::Digest;
+use sha3::Keccak256;
 
 use crate::perun;
 use crate::perun::test::ChannelId;
@@ -38,6 +40,7 @@ impl FundingAgreement {
                     sudts: Vec::new(),
                     index: i as u8,
                     pub_key: acc.public_key(),
+                    eth_pubkey: acc.eth_pub_key(),
                 })
                 .collect(),
             register: AssetRegister::new(),
@@ -66,6 +69,7 @@ impl FundingAgreement {
                     sudts: vec![(a, asset_amt.get(i).unwrap().1)],
                     index: i as u8,
                     pub_key: acc.public_key(),
+                    eth_pubkey: acc.eth_pub_key(),
                 })
                 .collect(),
             register: r,
@@ -107,6 +111,12 @@ impl FundingAgreement {
                     )
                     .expect("script");
                 let unlock_script_hash = unlock_script.calc_script_hash();
+                let eth_address = {
+                    let hash = Keccak256::digest(&entry.eth_pubkey);
+                    let addr_bytes = &hash[12..]; // last 20 bytes
+                    let bytes = Bytes::from(addr_bytes.to_vec());
+                    EthAddress::new_unchecked(bytes)
+                };
                 ParticipantBuilder::default()
                     // The payment script hash used to lock the funds after a channel close for
                     // this party.
@@ -119,6 +129,7 @@ impl FundingAgreement {
                     // party index.
                     .unlock_script_hash(unlock_script_hash.clone())
                     .pub_key(sec1_pub_key)
+                    .eth_address(eth_address)
                     .build()
             })
             .collect()
@@ -265,6 +276,7 @@ pub struct FundingAgreementEntry {
     pub sudts: Vec<(Asset, u128)>,
     pub index: u8,
     pub pub_key: PublicKey,
+    pub eth_pubkey: Vec<u8>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
