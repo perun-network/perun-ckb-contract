@@ -8,7 +8,6 @@ use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
 use perun::{test, virtual_channel};
-use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{
     Balances, Bool, CKByteDistribution, ChannelState, LockedBalances, SEC1EncodedPubKey, SubAlloc,
 };
@@ -68,15 +67,49 @@ fn test_signature() {
     verify_signature(&msg_hash, &sig_bytes, pubkey.as_slice()).expect("valid signature");
 }
 
+mod ckb_keys {
+    use crate::perun::Account;
+    use crate::perun::TestAccount;
+    use k256::ecdsa::SigningKey;
+    use k256::elliptic_curve::sec1::ToEncodedPoint;
+    use k256::PublicKey;
+    pub fn generate_ckb_keypair() -> (SigningKey, PublicKey) {
+        let acc_name = "alice".to_string();
+        let account = TestAccount::new_with_random_key(acc_name);
+        let pubkey = account.public_key();
+        let signing_key = account.sk.clone();
+        (signing_key, pubkey)
+    }
+
+    pub fn print_ckb_keypair() {
+        let (signing_key, public_key) = generate_ckb_keypair();
+        println!(
+            "CKB Private Key (hex): 0x{}",
+            hex::encode(signing_key.to_bytes())
+        );
+        println!(
+            "CKB Public Key  (hex): 0x{}",
+            hex::encode(public_key.to_encoded_point(false).as_bytes())
+        );
+    }
+}
+
+#[test]
+fn test_generate_ckb_keys() {
+    ckb_keys::print_ckb_keypair();
+}
+
 #[test]
 // TODO: Add mutator to channel state that can be passed to dispute, and close.
 fn channel_test_bench() -> Result<(), perun::Error> {
     let res = [
+        test_successful_funding_with_udt_and_eth,
         test_funding_abort,
         test_successful_funding_with_udt,
         test_successful_funding_without_udt,
         test_early_force_close,
         test_close,
+        test_close_with_eth,
         test_force_close,
         test_multiple_disputes,
         test_multiple_disputes_same_version,
@@ -300,6 +333,61 @@ fn test_close(
     let funding_agreement = test::FundingAgreement::new_with_capacities(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
     );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(alice)
+            .finalize()
+            .close()
+            .expect("closing channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
+fn test_close_with_eth(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+
+    let asset_funding = [20u128, 30u128]; // UDT amounts
+    let eth_funding = [5u128, 10u128]; // ETH amounts
+
+    // Calculate ETH max capacity (sum of eth_funding amounts as u64)
+    let eth_max_capacity = eth_funding.iter().cloned().sum::<u128>() as u64;
+
+    // Construct FundingAgreement with both UDT and ETH assets
+    let funding_agreement = test::FundingAgreement::new_with_capacities_and_assets(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
+        eth_max_capacity,
+        parts
+            .iter()
+            .cloned()
+            .zip(eth_funding.iter().cloned())
+            .collect(),
+    );
+
     create_channel_test(context, env, &parts, |chan| {
         chan.with(alice)
             .open(&funding_agreement)

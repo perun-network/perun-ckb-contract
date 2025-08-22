@@ -7,7 +7,6 @@ use ckb_std::default_alloc;
 ckb_std::entry!(program_entry);
 default_alloc!();
 use alloc::vec;
-use core::iter::IntoIterator;
 use core::{result::Result, usize};
 
 use ckb_std::{
@@ -21,6 +20,7 @@ use ckb_std::{
     syscalls::SysError,
 };
 
+use perun_common::sig::ethereum_message_hash;
 use perun_common::{
     channels::{find_cell_by_type_hash, unpack_byte32, VChannelAction},
     error::Error,
@@ -32,7 +32,6 @@ use perun_common::{
     },
     sig::verify_signature,
 };
-use perun_common::sig::ethereum_message_hash;
 
 pub fn program_entry() -> i8 {
     match main() {
@@ -118,7 +117,7 @@ pub fn check_valid_vc_start(
     //channel_id is the hash of channel parameters
     let vc_chanid = new_vc_status.vcstate().channel_id();
     verify_vchannel_id_integrity(&vc_chanid, &vc_channel_constants.params())?;
-    debug!("verify_channel_id_integrity passed");
+    debug!("verify_channel_id_cross_integrity passed");
 
     //validate newly created vc state
     verify_vc_sigs_start(&new_vc_status, &vc_channel_constants.params())?;

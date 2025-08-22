@@ -18,12 +18,12 @@ use alloy_sol_types::sol;
 use ckb_std::ckb_types::packed::Byte32;
 use molecule::prelude::*;
 
-use alloy_sol_types::SolValue;
-use ckb_types::prelude::Entity;
-use perun_common::{
+use crate::{
     helpers::blake2b256,
     perun_types::{ChannelParameters, Participant},
 };
+use alloy_sol_types::SolValue;
+// use ckb_types::prelude::Entity;
 
 sol! {
     struct ParticipantSol {
@@ -130,11 +130,12 @@ pub fn convert_params(params: &ChannelParameters) -> ParamsSol {
 
     let chall_duration_native = params.challenge_duration();
     let chall_duration_slice = chall_duration_native.as_slice();
-    let chall_duration_array: [u8; 32] = chall_duration_slice
+    let chall_duration_array: [u8; 8] = chall_duration_slice
         .try_into()
-        .expect("nonce must be exactly 32 bytes");
-    let chall_duration = U256::from_be_bytes(chall_duration_array);
-
+        .expect("challenge duration must be exactly 64 bytes");
+    // let chall_duration = U256::from_be_bytes(chall_duration_array);
+    let chall_duration_u64 = u64::from_be_bytes(chall_duration_array);
+    let chall_duration = U256::from(chall_duration_u64);
     let app_alloy = Address::from_slice(&[0u8; 20]);
 
     ParamsSol {
@@ -183,12 +184,6 @@ mod tests {
         }
         participant.ccIdentity = cc_addr_fb.into();
 
-        println!("Participant ethAddress: {:?}", participant.ethAddress);
-        println!(
-            "Participant ccIdentity (FixedBytes): {:?}",
-            participant.ccIdentity
-        );
-
         // Initialize ParamsSol
         let mut params = ParamsSol {
             challengeDuration: U256::from(100u64),
@@ -203,51 +198,10 @@ mod tests {
         params.challengeDuration = U256::from(200u64);
         params.ledgerChannel = true;
 
-        println!("Params challengeDuration: {:?}", params.challengeDuration);
-        println!("Params ledgerChannel: {:?}", params.ledgerChannel);
-
         // Initialize FixedBytes directly and modify
         let mut fb = FixedBytes::<16>::default();
         for j in 0..16 {
             fb[j] = (j * 2) as u8;
         }
-
-        println!("FixedBytes 16 content: {:?}", fb);
     }
-}
-mod ckb_keys {
-    use crate::perun::account::Account;
-    use crate::perun::TestAccount;
-    use hex;
-    use k256::{ecdsa::SigningKey, elliptic_curve::sec1::ToEncodedPoint, PublicKey};
-
-    pub fn generate_ckb_keypair() -> (SigningKey, PublicKey) {
-        let acc_name = "alice".to_string();
-
-        let account = TestAccount::new_with_random_key(acc_name);
-
-        let pubkey = account.public_key();
-
-        let signing_key = account.sk.clone();
-
-        (signing_key, pubkey)
-    }
-
-    pub fn print_ckb_keypair() {
-        let (signing_key, public_key) = generate_ckb_keypair();
-
-        println!(
-            "CKB Private Key (hex): 0x{}",
-            hex::encode(signing_key.to_bytes())
-        );
-        println!(
-            "CKB Public Key  (hex): 0x{}",
-            hex::encode(public_key.to_encoded_point(false).as_bytes())
-        );
-    }
-}
-
-#[test]
-fn test_generate_ckb_keys() {
-    ckb_keys::print_ckb_keypair();
 }

@@ -30,14 +30,14 @@ use ckb_std::{
 use perun_common::{
     channels::{
         find_cell_by_type_hash, get_channel_action, unpack_byte32, unpack_u64,
-        verify_channel_id_integrity, verify_max_one_channel, verify_thread_token_integrity,
+        verify_channel_id_cross_integrity, verify_max_one_channel, verify_thread_token_integrity,
         verify_time_lock_expired, PChannelAction,
     },
     error::Error,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
-        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, Participant, SEC1EncodedPubKey,
-        VCChannelConstants, VirtualChannelStatus,
+        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, VCChannelConstants,
+        VirtualChannelStatus,
     },
     sig::{ethereum_message_hash, verify_signature},
 };
@@ -125,11 +125,11 @@ pub fn check_valid_start(
     debug!("verify_thread_token_integrity passed");
 
     // We verify that the channel id is the hash of the channel parameters.
-    verify_channel_id_integrity(
+    verify_channel_id_cross_integrity(
         &new_status.state().channel_id(),
         &channel_constants.params(),
     )?;
-    debug!("verify_channel_id_integrity passed");
+    debug!("verify_channel_id_cross_integrity passed");
 
     // We verify that the pcts is guarded by the pcls script specified in the channel constants
     verify_valid_lock_script(channel_constants)?;

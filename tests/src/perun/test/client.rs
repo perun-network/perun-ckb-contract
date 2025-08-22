@@ -1,10 +1,10 @@
 use ckb_testtool::ckb_traits::CellDataProvider;
 
+use alloy_sol_types::SolValue;
 use ckb_testtool::ckb_types::core::ScriptHashType;
 use ckb_testtool::ckb_types::packed::{OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
-
 use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
 
@@ -95,7 +95,9 @@ impl Client {
             .is_ledger_channel(ctrue!())
             .is_virtual_channel(cfalse!())
             .build();
-        let cid_raw = blake2b256(chan_params.as_slice());
+        let params_sol = perun_common::sol::convert_params(&chan_params);
+        let cid_raw_sol = params_sol.abi_encode();
+        let cid_raw = blake2b256(&cid_raw_sol);
         let cid = ChannelId::from(cid_raw);
         let chan_const = perun_types::ChannelConstantsBuilder::default()
             .params(chan_params)
