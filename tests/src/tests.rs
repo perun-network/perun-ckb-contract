@@ -205,6 +205,53 @@ fn test_successful_funding_without_udt(
     })
 }
 
+fn test_successful_funding_with_udt_and_eth(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+
+    let asset_funding = [20u128, 30u128];
+    let eth_funding = [5u128, 10u128]; // ETH amounts
+    let eth_max_capacity = eth_funding.iter().cloned().sum::<u128>() as u64;
+    // FundingAgreement with both UDT and ETH assets
+    let funding_agreement = test::FundingAgreement::new_with_capacities_and_assets(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
+        eth_max_capacity,
+        parts
+            .iter()
+            .cloned()
+            .zip(eth_funding.iter().cloned())
+            .collect(),
+    );
+
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
 fn test_successful_funding_with_udt(
     context: Rc<Mutex<RefCell<Context>>>,
     env: &perun::harness::Env,
