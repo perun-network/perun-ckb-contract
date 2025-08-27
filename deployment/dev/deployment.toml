@@ -1,21 +1,21 @@
 [[cells]]
 name = "sudt"
-enable_type_id = false
+enable_type_id = true
 location = { file = "build/release/sample-udt" }
 
 [[cells]]
 name = "pcts"
-enable_type_id = false
+enable_type_id = true
 location = { file = "build/release/perun-channel-typescript" }
 
 [[cells]]
 name = "pcls"
-enable_type_id = false
+enable_type_id = true
 location = { file = "build/release/perun-channel-lockscript" }
 
 [[cells]]
 name = "pfls"
-enable_type_id = false
+enable_type_id = true
 location = { file = "build/release/perun-funds-lockscript" }
 
 #
