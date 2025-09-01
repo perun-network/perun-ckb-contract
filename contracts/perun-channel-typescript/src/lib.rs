@@ -37,13 +37,14 @@ use perun_common::{
     helpers::blake2b256,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
-        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, VCChannelConstants,
-        VirtualChannelStatus,
+        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, SubAlloc,
+        VCChannelConstants, VirtualChannelStatus,
     },
     sig::verify_signature,
 };
 
 const SUDT_MIN_LEN: usize = 16;
+const DUMMY_LOCKED_FUNDS_ID: [u8; 32] = [0u8; 32];
 
 pub fn program_entry() -> i8 {
     match main() {
@@ -459,8 +460,45 @@ pub fn check_valid_close(
 }
 
 pub fn verify_no_locked_funds(channel_status: &ChannelStatus) -> Result<(), Error> {
-    if !channel_status.state().balances().locked().is_empty() {
+    let locked_balances = channel_status.state().balances().locked();
+
+    if locked_balances.is_empty() {
+        return Ok(());
+    }
+
+    if locked_balances.len() > 1 {
+        debug!("More than one locked fund entry found");
         return Err(Error::LedgerChannelHasLockedFunds);
+    }
+
+    let dummy_sub_alloc = locked_balances.get(0).ok_or(Error::UnexpectedSysError)?;
+
+    verify_dummy_locked_funds(&dummy_sub_alloc)
+}
+
+fn verify_dummy_locked_funds(locked_funds: &SubAlloc) -> Result<(), Error> {
+    // Check ID
+    if locked_funds.id().as_slice() != DUMMY_LOCKED_FUNDS_ID {
+        debug!("Locked funds ID {:?} is not dummy ID", locked_funds.id());
+        return Err(Error::InvalidDummyEntry);
+    }
+    // Check CKBytes are zero
+    let party_a_ckbytes = locked_funds.balances().ckbytes().get(0)?;
+    let party_b_ckbytes = locked_funds.balances().ckbytes().get(1)?;
+    if party_a_ckbytes != 0 || party_b_ckbytes != 0 {
+        debug!(
+            "Dummy has non-zero ckbytes: party_a={}, party_b={}",
+            party_a_ckbytes, party_b_ckbytes
+        );
+        return Err(Error::InvalidDummyEntry);
+    }
+    // Check no SUDTs
+    if !locked_funds.balances().sudts().is_empty() {
+        debug!(
+            "Dummy has {} SUDT entries",
+            locked_funds.balances().sudts().len()
+        );
+        return Err(Error::InvalidDummyEntry);
     }
     Ok(())
 }
