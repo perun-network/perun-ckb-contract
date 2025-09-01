@@ -128,6 +128,7 @@ pub enum Error {
     NoVCRentPayoutCell,
     InvalidVCRentPayoutCell,
     LedgerChannelHasLockedFunds,
+    InvalidDummyEntry,
 }
 
 impl From<SysError> for Error {
