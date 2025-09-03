@@ -154,12 +154,6 @@ impl FundingAgreement {
                     )
                     .expect("script");
                 let unlock_script_hash = unlock_script.calc_script_hash();
-                let eth_address = {
-                    let hash = Keccak256::digest(&entry.eth_pubkey);
-                    let addr_bytes = &hash[12..]; // last 20 bytes
-                    let bytes = Bytes::from(addr_bytes.to_vec());
-                    EthAddress::new_unchecked(bytes)
-                };
                 ParticipantBuilder::default()
                     // The payment script hash used to lock the funds after a channel close for
                     // this party.
@@ -172,7 +166,6 @@ impl FundingAgreement {
                     // party index.
                     .unlock_script_hash(unlock_script_hash.clone())
                     .pub_key(sec1_pub_key)
-                    .eth_address(eth_address)
                     .build()
             })
             .collect()

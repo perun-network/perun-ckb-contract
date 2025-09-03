@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 
 // limitations under the License.
-
 use alloy_primitives::{Address, Bytes as PrimBytes, U256};
 use alloy_sol_types::sol;
 use ckb_std::ckb_types::packed::Byte32;
+use k256::{ecdsa::VerifyingKey, elliptic_curve::sec1::EncodedPoint, Secp256k1};
+use sha3::{Digest, Keccak256};
+
 use molecule::prelude::*;
 
 use crate::{
@@ -81,7 +83,6 @@ sol! {
 
 pub fn convert_participant(participant: Participant) -> ParticipantSol {
     let ckb_pubkey = participant.pub_key();
-    let ckb_pubkey_bytes = ckb_pubkey.as_slice();
     let ckb_pay_min_capacity = participant.payment_min_capacity();
     let ckb_pay_min_capacity_bytes = ckb_pay_min_capacity.as_slice();
     let ckb_pay_script_hash = participant.payment_script_hash();
@@ -90,8 +91,24 @@ pub fn convert_participant(participant: Participant) -> ParticipantSol {
     let ckb_unlock_script_hash = participant.unlock_script_hash();
     let ckb_unlock_script_hash_bytes = ckb_unlock_script_hash.as_slice();
 
-    let cc_eth_addr = participant.eth_address();
-    let cc_eth_addr_bytes = cc_eth_addr.as_slice();
+    let ckb_pubkey_bytes = ckb_pubkey.as_slice();
+    let e = EncodedPoint::<Secp256k1>::from_bytes(ckb_pubkey_bytes)
+        .expect("unable to decode public key");
+    let ecdsa_pubkey = VerifyingKey::from_encoded_point(&e).expect("unable to parse public key");
+    let pubkey_uncompressed = ecdsa_pubkey.to_encoded_point(false); //to_encoded_point(false); // uncompressed with prefix 0x04
+    let pubkey_bytes = pubkey_uncompressed.as_bytes();
+
+    // Remove the 0x04 prefix byte
+    let pubkey_no_prefix = &pubkey_bytes[1..];
+
+    // Keccak256 hash of the public key bytes without prefix
+    let mut hasher = Keccak256::new();
+    hasher.update(pubkey_no_prefix);
+    let output = hasher.finalize();
+
+    // Last 20 bytes are the Ethereum address
+    let cc_eth_addr = &output[12..32];
+    let cc_eth_addr_bytes = cc_eth_addr.as_ref();
 
     let total_len = ckb_pubkey_bytes.len()
         + ckb_pay_min_capacity_bytes.len()
@@ -204,4 +221,26 @@ mod tests {
             fb[j] = (j * 2) as u8;
         }
     }
+}
+pub fn eth_address_from_sec1_pubkey(sec1_pubkey: &[u8]) -> Result<Address, &'static str> {
+    let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(sec1_pubkey)
+        .map_err(|_| "Invalid sec1 encoded public key")?;
+
+    let verifying_key =
+        VerifyingKey::from_encoded_point(&encoded_point).map_err(|_| "Invalid encoded point")?;
+
+    let uncompressed = verifying_key.to_encoded_point(false);
+    let pubkey_bytes = uncompressed.as_bytes();
+
+    let pubkey_no_prefix = &pubkey_bytes[1..];
+
+    let mut hasher = Keccak256::new();
+    hasher.update(pubkey_no_prefix);
+    let hash = hasher.finalize();
+
+    // Create Address directly from last 20 bytes slice
+    let eth_addr_bytes = &hash[12..];
+    let eth_address = Address::from_slice(eth_addr_bytes);
+
+    Ok(eth_address)
 }

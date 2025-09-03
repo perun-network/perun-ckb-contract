@@ -91,8 +91,6 @@ table Participant {
   unlock_script_hash:   Byte32,
 
   pub_key: SEC1EncodedPubKey,
-  // Ethereum address of the participant.
-  eth_address: EthAddress,
 }
 table ChannelParameters {
   party_a: Participant,
