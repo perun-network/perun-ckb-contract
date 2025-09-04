@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 
 // limitations under the License.
+use crate::perun_types::ParticipantBuilder;
+use crate::perun_types::SEC1EncodedPubKey;
 use alloy_primitives::{Address, Bytes as PrimBytes, U256};
 use alloy_sol_types::sol;
 use ckb_std::ckb_types::packed::Byte32;
@@ -82,49 +84,44 @@ sol! {
 }
 
 pub fn convert_participant(participant: Participant) -> ParticipantSol {
-    let ckb_pubkey = participant.pub_key();
-    let ckb_pay_min_capacity = participant.payment_min_capacity();
-    let ckb_pay_min_capacity_bytes = ckb_pay_min_capacity.as_slice();
-    let ckb_pay_script_hash = participant.payment_script_hash();
-    let ckb_pay_script_hash_bytes = ckb_pay_script_hash.as_slice();
+    let payment_script_hash: Byte32 = participant.payment_script_hash();
+    let payment_min_capacity = participant.payment_min_capacity();
+    let unlock_script_hash: Byte32 = participant.unlock_script_hash();
+    let sec1_encoded_pubkey: SEC1EncodedPubKey = participant.pub_key();
 
-    let ckb_unlock_script_hash = participant.unlock_script_hash();
-    let ckb_unlock_script_hash_bytes = ckb_unlock_script_hash.as_slice();
+    let pubkey_bytes = sec1_encoded_pubkey.as_slice();
 
-    let ckb_pubkey_bytes = ckb_pubkey.as_slice();
-    let e = EncodedPoint::<Secp256k1>::from_bytes(ckb_pubkey_bytes)
-        .expect("unable to decode public key");
-    let ecdsa_pubkey = VerifyingKey::from_encoded_point(&e).expect("unable to parse public key");
-    let pubkey_uncompressed = ecdsa_pubkey.to_encoded_point(false); //to_encoded_point(false); // uncompressed with prefix 0x04
-    let pubkey_bytes = pubkey_uncompressed.as_bytes();
+    let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(pubkey_bytes)
+        .expect("unable to decode SEC1EncodedPubKey bytes");
 
-    // Remove the 0x04 prefix byte
-    let pubkey_no_prefix = &pubkey_bytes[1..];
+    let ecdsa_pubkey =
+        VerifyingKey::from_encoded_point(&encoded_point).expect("unable to parse public key");
 
-    // Keccak256 hash of the public key bytes without prefix
+    let pubkey_uncompressed = ecdsa_pubkey.to_encoded_point(false);
+    let pubkey_uncompressed_bytes = pubkey_uncompressed.as_bytes();
+
+    let pubkey_no_prefix = &pubkey_uncompressed_bytes[1..];
+
     let mut hasher = Keccak256::new();
     hasher.update(pubkey_no_prefix);
-    let output = hasher.finalize();
+    let eth_hash = hasher.finalize();
+    let eth_address_bytes = &eth_hash[12..32];
 
-    // Last 20 bytes are the Ethereum address
-    let cc_eth_addr = &output[12..32];
-    let cc_eth_addr_bytes = cc_eth_addr.as_ref();
+    // Build a fresh OffChain Participant using the builder (molecule) API instead of manual bytes concat
+    let new_participant = ParticipantBuilder::default()
+        .payment_script_hash(payment_script_hash)
+        .payment_min_capacity(payment_min_capacity)
+        .unlock_script_hash(unlock_script_hash)
+        .pub_key(sec1_encoded_pubkey)
+        .build();
 
-    let total_len = ckb_pubkey_bytes.len()
-        + ckb_pay_min_capacity_bytes.len()
-        + ckb_pay_script_hash_bytes.len()
-        + ckb_unlock_script_hash_bytes.len();
-    let mut cc_identity_bytes = Vec::with_capacity(total_len);
-    cc_identity_bytes.extend_from_slice(ckb_pubkey_bytes);
-    cc_identity_bytes.extend_from_slice(ckb_pay_min_capacity_bytes);
-    cc_identity_bytes.extend_from_slice(ckb_pay_script_hash_bytes);
-    cc_identity_bytes.extend_from_slice(ckb_unlock_script_hash_bytes);
+    let cc_identity_bytes = new_participant.as_slice();
 
-    let ethaddr = Address::from_slice(cc_eth_addr_bytes);
+    let eth_address = Address::from_slice(eth_address_bytes);
 
     ParticipantSol {
-        ethAddress: ethaddr,
-        ccIdentity: PrimBytes::copy_from_slice(&cc_identity_bytes),
+        ethAddress: eth_address,
+        ccIdentity: PrimBytes::copy_from_slice(cc_identity_bytes),
     }
 }
 
