@@ -37,6 +37,7 @@ table SUDTAsset {
 
 table ETHAsset {
   max_capacity: Uint64,
+  asset_address: EthAddress,
 }
 
 table SUDTBalances {

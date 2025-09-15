@@ -6,19 +6,19 @@ use {
     ckb_types::prelude::*, std::vec::Vec,
 };
 
-#[cfg(not(feature = "std"))]
-use {
-    ckb_gen_types::packed::*,
-    ckb_gen_types::prelude::*,
-    molecule::prelude::{vec, Vec},
-};
-
 use crate::perun_types::{
     Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances,
 };
 use crate::{
     error::Error,
     perun_types::{CKByteDistribution, SUDTAllocation, SUDTBalances, SUDTDistribution},
+};
+use alloy_primitives::U256;
+#[cfg(not(feature = "std"))]
+use {
+    ckb_gen_types::packed::*,
+    ckb_gen_types::prelude::*,
+    molecule::prelude::{vec, Vec},
 };
 
 impl Bool {
@@ -665,4 +665,19 @@ impl SEC1EncodedPubKey {
     pub fn to_vec(&self) -> Vec<u8> {
         self.as_bytes().to_vec()
     }
+}
+
+pub fn bytes_to_u256(bytes: &[u8]) -> U256 {
+    assert_eq!(bytes.len(), 16, "Expected 16 bytes for Uint128 conversion");
+    let arr: [u8; 16] = bytes
+        .try_into()
+        .expect("Failed to convert to 16-byte array");
+    let val_u128 = u128::from_le_bytes(arr);
+    U256::from(val_u128)
+}
+
+pub fn bytes_to_u64(bytes: &[u8]) -> u64 {
+    assert_eq!(bytes.len(), 8, "Expected 8 bytes for u64 conversion");
+    let arr: [u8; 8] = bytes.try_into().expect("Failed to convert to 8-byte array");
+    u64::from_le_bytes(arr)
 }

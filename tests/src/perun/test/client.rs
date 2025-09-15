@@ -20,6 +20,7 @@ use crate::perun::test::transaction::{
     OpenResult, VCLCUpdateArgs, VCMergeArgs, VCProgressNoUpdateArgs, VCStartArgs, VCUpdateOnlyArgs,
 };
 use crate::perun::test::{keys, transaction};
+use perun_common::sol::convert_ckb_state;
 
 use k256::ecdsa::{Signature, SigningKey};
 
@@ -168,9 +169,14 @@ impl Client {
     }
 
     pub fn sign(&self, state: ChannelState) -> Result<Vec<u8>, perun::Error> {
-        let s: Signature = self
-            .signing_key
-            .sign_prehash(&perun_common::sig::ethereum_message_hash(state.as_slice()))?;
+        let state_eth = convert_ckb_state(&state);
+        let state_abi_encoded = state_eth.abi_encode();
+
+        let s: Signature =
+            self.signing_key
+                .sign_prehash(&perun_common::sig::ethereum_message_hash(
+                    state_abi_encoded.as_slice(),
+                ))?;
         Ok(Vec::from(s.to_der().as_bytes()))
     }
 

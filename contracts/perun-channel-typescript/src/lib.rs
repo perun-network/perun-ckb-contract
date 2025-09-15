@@ -3,11 +3,13 @@
 #![allow(unused_attributes)]
 
 use ckb_std::default_alloc;
-
+use perun_common::sol::convert_ckb_state;
 ckb_std::entry!(program_entry);
 default_alloc!();
 // Import from `core` instead of from `std` since we are in no-std mode
+use alloy_sol_types::SolValue;
 use core::result::Result;
+
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::vec;
@@ -779,7 +781,9 @@ pub fn verify_valid_state_sigs(
     pub_key_a: &SEC1EncodedPubKey,
     pub_key_b: &SEC1EncodedPubKey,
 ) -> Result<(), Error> {
-    let msg_hash = ethereum_message_hash(state.as_slice());
+    let state_eth = convert_ckb_state(state);
+    let state_abi_encoded = state_eth.abi_encode();
+    let msg_hash = ethereum_message_hash(&state_abi_encoded);
     verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
     debug!("verify_valid_state_sigs: Signature A verified");
     verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;
