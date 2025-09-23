@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::helpers::blake2b256;
 use crate::perun_types::{ChannelParameters, ChannelStatus, ChannelToken, VirtualChannelStatus};
 use crate::sol::convert_params;
+use sha3::{Digest, Keccak256};
 extern crate alloc;
 use alloy_sol_types::SolValue;
 use ckb_std::{
@@ -156,8 +157,8 @@ pub fn verify_channel_id_cross_integrity(
     params: &ChannelParameters,
 ) -> Result<(), Error> {
     let params_sol = convert_params(params);
-
-    let digest = blake2b256(&params_sol.abi_encode());
+    let encoded = params_sol.abi_encode();
+    let digest = Keccak256::digest(&encoded);
 
     let channel_id_bytes: [u8; 32] = channel_id.unpack();
     if digest[..] != channel_id_bytes[..] {

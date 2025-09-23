@@ -25,11 +25,9 @@ use sha3::{Digest, Keccak256};
 use molecule::prelude::*;
 
 use crate::{
-    helpers::{blake2b256, bytes_to_u256, bytes_to_u64},
+    helpers::{bytes_to_u256, bytes_to_u64},
     perun_types::{ChannelParameters, Participant},
 };
-use alloy_sol_types::SolValue;
-
 const BACKEND_ID_CKB: u64 = 3;
 const BACKEND_ID_ETH: u64 = 1;
 
@@ -267,17 +265,6 @@ pub fn convert_params(params: &ChannelParameters) -> ParamsSol {
         ledgerChannel: true,
         virtualChannel: false,
     }
-}
-
-pub fn get_channel_id_cross(params: &ChannelParameters) -> Byte32 {
-    let params_sol = convert_params(params);
-
-    let encoded_data = params_sol.abi_encode();
-
-    let digest = blake2b256(&encoded_data);
-    let byte32_digest =
-        Byte32::from_slice(&digest).expect("Failed to create Byte32 from digest slice");
-    return byte32_digest;
 }
 
 #[cfg(test)]

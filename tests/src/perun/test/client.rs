@@ -7,8 +7,8 @@ use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
 use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
+use sha3::{Digest, Keccak256};
 
-use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{ChannelState, ChannelStatus, VirtualChannelStatus};
 
 use crate::perun;
@@ -99,8 +99,12 @@ impl Client {
             .build();
         let params_sol = perun_common::sol::convert_params(&chan_params);
         let cid_raw_sol = params_sol.abi_encode();
-        let cid_raw = blake2b256(&cid_raw_sol);
-        let cid = ChannelId::from(cid_raw);
+        let cid_raw = Keccak256::digest(&cid_raw_sol);
+        let cid_raw_array: [u8; 32] = cid_raw
+            .as_slice()
+            .try_into()
+            .expect("Keccak256 hash must be 32 bytes");
+        let cid = ChannelId::from(cid_raw_array);
         let chan_const = perun_types::ChannelConstantsBuilder::default()
             .params(chan_params)
             .pfls_code_hash(pfls_code_hash.clone())
