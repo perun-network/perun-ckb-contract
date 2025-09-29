@@ -10,15 +10,11 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-
 // limitations under the License.
 use crate::perun_types::ChannelState;
-use crate::perun_types::ParticipantBuilder;
-use crate::perun_types::SEC1EncodedPubKey;
 use alloy_primitives::{Address, Bytes as PrimBytes, FixedBytes, U256};
 use alloy_sol_types::sol;
 use ckb_std::ckb_types::bytes;
-use ckb_std::ckb_types::packed::Byte32;
 use k256::{ecdsa::VerifyingKey, elliptic_curve::sec1::EncodedPoint, Secp256k1};
 use sha3::{Digest, Keccak256};
 
@@ -30,11 +26,12 @@ use crate::{
 };
 const BACKEND_ID_CKB: u64 = 3;
 const BACKEND_ID_ETH: u64 = 1;
-
+const CKBYTE_MAGIC: u8 = 0x00;
+const SUDT_MAGIC: u8 = 0x01;
 sol! {
     struct ParticipantSol {
         address ethAddress;
-        bytes ccIdentity;
+        bytes ccAddress;
     }
 
     struct ParamsSol {
@@ -98,24 +95,23 @@ impl Chain {
 }
 
 pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
-    let channel_id_alloy = FixedBytes::from_slice(state.channel_id().as_slice());
+    let channel_id_alloy: FixedBytes<32> = FixedBytes::from_slice(state.channel_id().as_slice());
 
     let version_alloy = bytes_to_u64(state.version().as_slice());
 
     let balances = state.balances();
     let mut assets = vec![];
     let mut backends = vec![];
-    let mut balances_sol: Vec<Vec<U256>> = vec![];
+    let mut balances_sol = vec![];
 
     // outer dimension are assets, inner dimension are participants
+    let ckbytes = balances.ckbytes();
 
-    let ckbytes = balances.ckbytes(); // gives distribution
     assets.push(AssetSol {
         chainID: U256::from(BACKEND_ID_CKB),
         ethHolder: Address::from_slice(&[0u8; 20]),
-        ccHolder: PrimBytes::copy_from_slice(&"CKBytes".as_bytes()),
+        ccHolder: PrimBytes::copy_from_slice(&[CKBYTE_MAGIC]),
     });
-    backends.push(U256::from(BACKEND_ID_CKB));
 
     let ckb_user0 = ckbytes.nth0();
 
@@ -136,17 +132,20 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
     );
     let ckb_user1_u256 = U256::from(u64::from_le_bytes(ckb_user1_bytes.try_into().unwrap()));
 
+    backends.push(U256::from(BACKEND_ID_CKB));
     balances_sol.push(vec![ckb_user0_u256, ckb_user1_u256]);
 
     for sudt_balance in balances.sudts().clone() {
         let asset_bytes = bytes::Bytes::from(sudt_balance.asset().as_bytes());
+        let mut encoded_bytes = Vec::with_capacity(asset_bytes.len() + 1);
+        encoded_bytes.push(SUDT_MAGIC);
+        encoded_bytes.extend_from_slice(&asset_bytes);
         assets.push(AssetSol {
             chainID: U256::from(BACKEND_ID_CKB),
             ethHolder: Address::from_slice(&[0u8; 20]),
-            ccHolder: PrimBytes::copy_from_slice(&asset_bytes),
+            ccHolder: PrimBytes::copy_from_slice(&encoded_bytes),
         });
         backends.push(U256::from(BACKEND_ID_CKB));
-
         balances_sol.push(vec![
             bytes_to_u256(sudt_balance.distribution().nth0().as_slice()),
             bytes_to_u256(sudt_balance.distribution().nth1().as_slice()),
@@ -157,9 +156,8 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
         assets.push(AssetSol {
             chainID: U256::from(BACKEND_ID_ETH),
             ethHolder: Address::from_slice(eth.asset().asset_address().as_slice()),
-            ccHolder: PrimBytes::copy_from_slice(&[]),
+            ccHolder: PrimBytes::default(),
         });
-        backends.push(U256::from(BACKEND_ID_ETH));
 
         balances_sol.push(vec![
             bytes_to_u256(eth.distribution().nth0().as_slice()),
@@ -170,8 +168,8 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
     let locked = vec![];
 
     let outcome = AllocationSol {
-        assets,
-        backends,
+        assets: assets,
+        backends: backends,
         balances: balances_sol,
         locked,
     };
@@ -190,13 +188,8 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
 }
 
 pub fn convert_participant(participant: Participant) -> ParticipantSol {
-    let payment_script_hash: Byte32 = participant.payment_script_hash();
-    let payment_min_capacity = participant.payment_min_capacity();
-    let unlock_script_hash: Byte32 = participant.unlock_script_hash();
-    let sec1_encoded_pubkey: SEC1EncodedPubKey = participant.pub_key();
-
+    let sec1_encoded_pubkey = participant.pub_key();
     let pubkey_bytes = sec1_encoded_pubkey.as_slice();
-
     let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(pubkey_bytes)
         .expect("unable to decode SEC1EncodedPubKey bytes");
 
@@ -207,27 +200,16 @@ pub fn convert_participant(participant: Participant) -> ParticipantSol {
     let pubkey_uncompressed_bytes = pubkey_uncompressed.as_bytes();
 
     let pubkey_no_prefix = &pubkey_uncompressed_bytes[1..];
-
     let mut hasher = Keccak256::new();
     hasher.update(pubkey_no_prefix);
     let eth_hash = hasher.finalize();
     let eth_address_bytes = &eth_hash[12..32];
-
-    // Build a fresh OffChain Participant using the builder (molecule) API instead of manual bytes concat
-    let new_participant = ParticipantBuilder::default()
-        .payment_script_hash(payment_script_hash)
-        .payment_min_capacity(payment_min_capacity)
-        .unlock_script_hash(unlock_script_hash)
-        .pub_key(sec1_encoded_pubkey)
-        .build();
-
-    let cc_identity_bytes = new_participant.as_slice();
-
-    let eth_address = Address::from_slice(eth_address_bytes);
+    let eth_address = Address::from_slice(&eth_address_bytes);
+    let cc_identity_bytes = participant.as_slice();
 
     ParticipantSol {
         ethAddress: eth_address,
-        ccIdentity: PrimBytes::copy_from_slice(cc_identity_bytes),
+        ccAddress: PrimBytes::copy_from_slice(cc_identity_bytes),
     }
 }
 
@@ -246,7 +228,7 @@ pub fn convert_params(params: &ChannelParameters) -> ParamsSol {
         .try_into()
         .expect("nonce must be exactly 32 bytes");
 
-    let nonce_alloy = U256::from_le_bytes(nonce_array);
+    let nonce_alloy = U256::from_be_bytes(nonce_array);
 
     let chall_duration_native = params.challenge_duration();
     let chall_duration_slice = chall_duration_native.as_slice();
@@ -277,7 +259,7 @@ mod tests {
         // Initialize ParticipantSol
         let mut participant = ParticipantSol {
             ethAddress: Address::default(),
-            ccIdentity: PrimBytes::default(),
+            ccAddress: PrimBytes::default(),
         };
 
         // Modify ParticipantSol fields
@@ -290,7 +272,7 @@ mod tests {
         for i in 0..32 {
             cc_addr_fb[i] = i as u8;
         }
-        participant.ccIdentity = cc_addr_fb.into();
+        participant.ccAddress = cc_addr_fb.into();
 
         // Initialize ParamsSol
         let mut params = ParamsSol {

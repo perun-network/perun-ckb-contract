@@ -1,5 +1,17 @@
+// Copyright 2025 - See NOTICE file for copyright holders.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use crate::error::Error;
-use crate::helpers::blake2b256;
 use crate::perun_types::{ChannelParameters, ChannelStatus, ChannelToken, VirtualChannelStatus};
 use crate::sol::convert_params;
 use sha3::{Digest, Keccak256};
@@ -137,19 +149,6 @@ pub fn find_cell_by_type_hash(
         }
     }
     Ok(None)
-}
-
-// we can deprecate this function in the future or rename verify_channel_id_cross_integrity to verify_channel_id_integrity
-pub fn verify_channel_id_integrity(
-    channel_id: &Byte32,
-    params: &ChannelParameters,
-) -> Result<(), Error> {
-    let digest = blake2b256(params.as_slice());
-    let channel_id_bytes: [u8; 32] = channel_id.unpack();
-    if digest[..] != channel_id_bytes[..] {
-        return Err(Error::InvalidChannelId);
-    }
-    Ok(())
 }
 
 pub fn verify_channel_id_cross_integrity(
