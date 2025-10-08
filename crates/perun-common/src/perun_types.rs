@@ -3591,7 +3591,7 @@ impl ::core::fmt::Debug for ETHAsset {
 impl ::core::fmt::Display for ETHAsset {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "max_capacity", self.max_capacity())?;
+        write!(f, "{}: {}", "chain_id", self.chain_id())?;
         write!(f, ", {}: {}", "asset_address", self.asset_address())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -3607,9 +3607,9 @@ impl ::core::default::Default for ETHAsset {
     }
 }
 impl ETHAsset {
-    const DEFAULT_VALUE: [u8; 40] = [
-        40, 0, 0, 0, 12, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    const DEFAULT_VALUE: [u8; 48] = [
+        48, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
     pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {
@@ -3628,11 +3628,11 @@ impl ETHAsset {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn max_capacity(&self) -> Uint64 {
+    pub fn chain_id(&self) -> Uint128 {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint64::new_unchecked(self.0.slice(start..end))
+        Uint128::new_unchecked(self.0.slice(start..end))
     }
     pub fn asset_address(&self) -> EthAddress {
         let slice = self.as_slice();
@@ -3671,7 +3671,7 @@ impl molecule::prelude::Entity for ETHAsset {
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .max_capacity(self.max_capacity())
+            .chain_id(self.chain_id())
             .asset_address(self.asset_address())
     }
 }
@@ -3694,7 +3694,7 @@ impl<'r> ::core::fmt::Debug for ETHAssetReader<'r> {
 impl<'r> ::core::fmt::Display for ETHAssetReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "max_capacity", self.max_capacity())?;
+        write!(f, "{}: {}", "chain_id", self.chain_id())?;
         write!(f, ", {}: {}", "asset_address", self.asset_address())?;
         let extra_count = self.count_extra_fields();
         if extra_count != 0 {
@@ -3721,11 +3721,11 @@ impl<'r> ETHAssetReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn max_capacity(&self) -> Uint64Reader<'r> {
+    pub fn chain_id(&self) -> Uint128Reader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
-        Uint64Reader::new_unchecked(&self.as_slice()[start..end])
+        Uint128Reader::new_unchecked(&self.as_slice()[start..end])
     }
     pub fn asset_address(&self) -> EthAddressReader<'r> {
         let slice = self.as_slice();
@@ -3784,20 +3784,20 @@ impl<'r> molecule::prelude::Reader<'r> for ETHAssetReader<'r> {
         if offsets.windows(2).any(|i| i[0] > i[1]) {
             return ve!(Self, OffsetsNotMatch);
         }
-        Uint64Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        Uint128Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
         EthAddressReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
         Ok(())
     }
 }
 #[derive(Clone, Debug, Default)]
 pub struct ETHAssetBuilder {
-    pub(crate) max_capacity: Uint64,
+    pub(crate) chain_id: Uint128,
     pub(crate) asset_address: EthAddress,
 }
 impl ETHAssetBuilder {
     pub const FIELD_COUNT: usize = 2;
-    pub fn max_capacity(mut self, v: Uint64) -> Self {
-        self.max_capacity = v;
+    pub fn chain_id(mut self, v: Uint128) -> Self {
+        self.chain_id = v;
         self
     }
     pub fn asset_address(mut self, v: EthAddress) -> Self {
@@ -3810,21 +3810,21 @@ impl molecule::prelude::Builder for ETHAssetBuilder {
     const NAME: &'static str = "ETHAssetBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.max_capacity.as_slice().len()
+            + self.chain_id.as_slice().len()
             + self.asset_address.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.max_capacity.as_slice().len();
+        total_size += self.chain_id.as_slice().len();
         offsets.push(total_size);
         total_size += self.asset_address.as_slice().len();
         writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.max_capacity.as_slice())?;
+        writer.write_all(self.chain_id.as_slice())?;
         writer.write_all(self.asset_address.as_slice())?;
         Ok(())
     }
@@ -4135,10 +4135,11 @@ impl ::core::default::Default for ETHBalances {
     }
 }
 impl ETHBalances {
-    const DEFAULT_VALUE: [u8; 84] = [
-        84, 0, 0, 0, 12, 0, 0, 0, 52, 0, 0, 0, 40, 0, 0, 0, 12, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0,
+    const DEFAULT_VALUE: [u8; 92] = [
+        92, 0, 0, 0, 12, 0, 0, 0, 60, 0, 0, 0, 48, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0,
     ];
     pub const FIELD_COUNT: usize = 2;
     pub fn total_size(&self) -> usize {

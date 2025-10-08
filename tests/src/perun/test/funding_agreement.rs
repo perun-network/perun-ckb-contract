@@ -35,7 +35,7 @@ impl FundingAgreement {
         sudt_script: &Script,
         sudt_max_cap: u64,
         sudt_asset_amt: Vec<(P, u128)>,
-        eth_max_cap: u64,
+        eth_chain_id: u128,
         eth_asset_amt: Vec<(P, u128)>,
     ) -> Self {
         let mut r = AssetRegister::new();
@@ -51,7 +51,7 @@ impl FundingAgreement {
         // Register ETH asset
         let eth_index = r.register_eth_asset(
             ETHAsset::new_builder()
-                .max_capacity(eth_max_cap.pack())
+                .chain_id(eth_chain_id.pack())
                 .build(),
         );
 

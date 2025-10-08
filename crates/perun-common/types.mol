@@ -36,7 +36,7 @@ table SUDTAsset {
 }
 
 table ETHAsset {
-  max_capacity: Uint64,
+  chain_id: Uint128,
   asset_address: EthAddress,
 }
 

@@ -156,8 +156,14 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
     }
 
     for eth in balances.eth_assets().clone() {
+        let chain_id = U256::from(u128::from_le_bytes({
+            let cid = eth.asset().chain_id();
+            let mut le = [0u8; 16];
+            le.copy_from_slice(cid.as_slice());
+            le
+        }));
         assets.push(AssetSol {
-            chainID: U256::from(BACKEND_ID_ETH),
+            chainID: chain_id,
             ethHolder: Address::from_slice(eth.asset().asset_address().as_slice()),
             ccHolder: PrimBytes::copy_from_slice(&[]),
         });

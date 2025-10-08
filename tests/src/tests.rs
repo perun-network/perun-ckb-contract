@@ -252,7 +252,7 @@ fn test_successful_funding_with_udt_and_eth(
 
     let asset_funding = [20u128, 30u128];
     let eth_funding = [5u128, 10u128]; // ETH amounts
-    let eth_max_capacity = eth_funding.iter().cloned().sum::<u128>() as u64;
+    let eth_chain_id = eth_funding.iter().cloned().sum::<u128>();
     // FundingAgreement with both UDT and ETH assets
     let funding_agreement = test::FundingAgreement::new_with_capacities_and_assets(
         parts.iter().cloned().zip(funding.iter().cloned()).collect(),
@@ -263,7 +263,7 @@ fn test_successful_funding_with_udt_and_eth(
             .cloned()
             .zip(asset_funding.iter().cloned())
             .collect(),
-        eth_max_capacity,
+        eth_chain_id,
         parts
             .iter()
             .cloned()
@@ -368,7 +368,7 @@ fn test_close_with_eth(
     let eth_funding = [5u128, 10u128]; // ETH amounts
 
     // Calculate ETH max capacity (sum of eth_funding amounts as u64)
-    let eth_max_capacity = eth_funding.iter().cloned().sum::<u128>() as u64;
+    let eth_chain_id = eth_funding.iter().cloned().sum::<u128>();
 
     // Construct FundingAgreement with both UDT and ETH assets
     let funding_agreement = test::FundingAgreement::new_with_capacities_and_assets(
@@ -380,7 +380,7 @@ fn test_close_with_eth(
             .cloned()
             .zip(asset_funding.iter().cloned())
             .collect(),
-        eth_max_capacity,
+        eth_chain_id,
         parts
             .iter()
             .cloned()
