@@ -162,9 +162,9 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
         assets.push(AssetSol {
             chainID: chain_id,
             ethHolder: Address::from_slice(eth.asset().asset_address().as_slice()),
-            ccHolder: PrimBytes::default(),
+            ccHolder: PrimBytes::copy_from_slice(&[0u8; 32]),
         });
-
+        backends.push(U256::from(BACKEND_ID_ETH));
         balances_sol.push(vec![
             bytes_to_u256(eth.distribution().nth0().as_slice()),
             bytes_to_u256(eth.distribution().nth1().as_slice()),

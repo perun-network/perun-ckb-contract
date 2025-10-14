@@ -49,7 +49,7 @@ const SUDT_MIN_LEN: usize = 16;
 pub fn program_entry() -> i8 {
     match main() {
         Ok(_) => 0,   // Success
-        Err(_) => -1, // Failure
+        Err(e) => e.into(), // Failure
     }
 }
 
