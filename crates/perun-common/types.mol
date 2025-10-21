@@ -17,6 +17,14 @@ vector ETHAllocation <ETHBalances>;
 
 vector Locked_balances <SubAlloc>;
 
+table AnyBalances {
+  ckb: CKByteDistribution,
+  sudt: SUDTBalances,
+  eth: ETHBalances,
+}
+
+vector Allocation <AnyBalances>;
+
 table SubAlloc{
   id: Byte32, //subchannel/virtual channel id
   balances: SubBalances,
@@ -51,9 +59,7 @@ table ETHBalances {
 }
 
 table Balances {
-  ckbytes: CKByteDistribution,
-  sudts: SUDTAllocation,
-  eth_assets: ETHAllocation,
+  assets: Allocation,
   locked: Locked_balances,
 }
 

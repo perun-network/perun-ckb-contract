@@ -22,7 +22,7 @@ use molecule::prelude::*;
 
 use crate::{
     helpers::{bytes_to_u256, bytes_to_u64},
-    perun_types::{ChannelParameters, Participant},
+    perun_types::{ChannelParameters, Participant, SUDTBalances, ETHBalances, CKByteDistribution},
 };
 const BACKEND_ID_CKB: u64 = 3;
 const BACKEND_ID_ETH: u64 = 1;
@@ -104,71 +104,81 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
     let mut backends = vec![];
     let mut balances_sol = vec![];
 
-    // outer dimension are assets, inner dimension are participants
-    let ckbytes = balances.ckbytes();
+    for row in state.balances().assets().clone().into_iter() {
+        let is_ckb = row.is_ckb_row();
+        let is_sudt = row.is_sudt_row();
+        let is_eth = row.ckb().as_slice()  == CKByteDistribution::default().as_slice()
+            && row.sudt().as_slice() == SUDTBalances::default().as_slice();
 
-    assets.push(AssetSol {
-        chainID: U256::from(BACKEND_ID_CKB),
-        ethHolder: Address::from_slice(&[0u8; 20]),
-        ccHolder: PrimBytes::copy_from_slice(&[CKBYTE_MAGIC]),
-    });
+        if is_ckb {
+            let ckbytes = row.ckb();
+            assets.push(AssetSol {
+                chainID: U256::from(BACKEND_ID_CKB),
+                ethHolder: Address::from_slice(&[0u8; 20]),
+                ccHolder: PrimBytes::copy_from_slice(&[CKBYTE_MAGIC]),
+            });
 
-    let ckb_user0 = ckbytes.nth0();
+            let ckb_user0 = ckbytes.nth0();
 
-    let ckb_user0_bytes = ckb_user0.as_slice();
-    assert_eq!(
-        ckb_user0_bytes.len(),
-        8,
-        "CKBytes distribution must be exactly 8 bytes"
-    );
-    let ckb_user0_u256 = U256::from(u64::from_le_bytes(ckb_user0_bytes.try_into().unwrap()));
+            let ckb_user0_bytes = ckb_user0.as_slice();
+            assert_eq!(
+                ckb_user0_bytes.len(),
+                8,
+                "CKBytes distribution must be exactly 8 bytes"
+            );
+            let ckb_user0_u256 = U256::from(u64::from_le_bytes(ckb_user0_bytes.try_into().unwrap()));
 
-    let ckb_user1 = ckbytes.nth1();
-    let ckb_user1_bytes = ckb_user1.as_slice();
-    assert_eq!(
-        ckb_user1_bytes.len(),
-        8,
-        "CKBytes distribution must be exactly 8 bytes"
-    );
-    let ckb_user1_u256 = U256::from(u64::from_le_bytes(ckb_user1_bytes.try_into().unwrap()));
+            let ckb_user1 = ckbytes.nth1();
+            let ckb_user1_bytes = ckb_user1.as_slice();
+            assert_eq!(
+                ckb_user1_bytes.len(),
+                8,
+                "CKBytes distribution must be exactly 8 bytes"
+            );
+            let ckb_user1_u256 = U256::from(u64::from_le_bytes(ckb_user1_bytes.try_into().unwrap()));
 
-    backends.push(U256::from(BACKEND_ID_CKB));
-    balances_sol.push(vec![ckb_user0_u256, ckb_user1_u256]);
+            backends.push(U256::from(BACKEND_ID_CKB));
+            balances_sol.push(vec![ckb_user0_u256, ckb_user1_u256]);
 
-    for sudt_balance in balances.sudts().clone() {
-        let asset_bytes = bytes::Bytes::from(sudt_balance.asset().as_bytes());
-        let mut encoded_bytes = Vec::with_capacity(asset_bytes.len() + 1);
-        encoded_bytes.push(SUDT_MAGIC);
-        encoded_bytes.extend_from_slice(&asset_bytes);
-        assets.push(AssetSol {
-            chainID: U256::from(BACKEND_ID_CKB),
-            ethHolder: Address::from_slice(&[0u8; 20]),
-            ccHolder: PrimBytes::copy_from_slice(&encoded_bytes),
-        });
-        backends.push(U256::from(BACKEND_ID_CKB));
-        balances_sol.push(vec![
-            bytes_to_u256(sudt_balance.distribution().nth0().as_slice()),
-            bytes_to_u256(sudt_balance.distribution().nth1().as_slice()),
-        ]);
-    }
+        } else if is_sudt {
+            let sudt = row.sudt();
+            let asset_bytes = bytes::Bytes::from(sudt.asset().as_bytes());
+            let mut encoded_bytes = Vec::with_capacity(asset_bytes.len() + 1);
+            encoded_bytes.push(SUDT_MAGIC);
+            encoded_bytes.extend_from_slice(&asset_bytes);
+            assets.push(AssetSol {
+                chainID: U256::from(BACKEND_ID_CKB),
+                ethHolder: Address::from_slice(&[0u8; 20]),
+                ccHolder: PrimBytes::copy_from_slice(&encoded_bytes),
+            });
+            backends.push(U256::from(BACKEND_ID_CKB));
+            balances_sol.push(vec![
+                bytes_to_u256(sudt.distribution().nth0().as_slice()),
+                bytes_to_u256(sudt.distribution().nth1().as_slice()),
+            ]);
 
-    for eth in balances.eth_assets().clone() {
-        let chain_id = U256::from(u128::from_le_bytes({
-            let cid = eth.asset().chain_id();
-            let mut le = [0u8; 16];
-            le.copy_from_slice(cid.as_slice());
-            le
-        }));
-        assets.push(AssetSol {
-            chainID: chain_id,
-            ethHolder: Address::from_slice(eth.asset().asset_address().as_slice()),
-            ccHolder: PrimBytes::copy_from_slice(&[0u8; 32]),
-        });
-        backends.push(U256::from(BACKEND_ID_ETH));
-        balances_sol.push(vec![
-            bytes_to_u256(eth.distribution().nth0().as_slice()),
-            bytes_to_u256(eth.distribution().nth1().as_slice()),
-        ]);
+        } else if is_eth {
+            let eth = row.eth();
+            let chain_id = U256::from(u128::from_le_bytes({
+                let cid = eth.asset().chain_id();
+                let mut le = [0u8; 16];
+                le.copy_from_slice(cid.as_slice());
+                le
+            }));
+            assets.push(AssetSol {
+                chainID: chain_id,
+                ethHolder: Address::from_slice(eth.asset().asset_address().as_slice()),
+                ccHolder: PrimBytes::copy_from_slice(&[0u8; 32]),
+            });
+            backends.push(U256::from(BACKEND_ID_ETH));
+            balances_sol.push(vec![
+                bytes_to_u256(eth.distribution().nth0().as_slice()),
+                bytes_to_u256(eth.distribution().nth1().as_slice()),
+            ]);
+
+        } else {
+            continue;
+        }
     }
 
     let locked = vec![];

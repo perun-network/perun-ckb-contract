@@ -8,10 +8,7 @@ use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
 use perun::{test, virtual_channel};
-use perun_common::perun_types::{
-    Balances, Bool, CKByteDistribution, ChannelState, ETHAllocation, ETHAsset, ETHBalances,
-    ETHDistribution, EthAddress, LockedBalances, SEC1EncodedPubKey, SubAlloc,
-};
+use perun_common::perun_types::{Balances, Bool, CKByteDistribution, ChannelState, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, SEC1EncodedPubKey, SubAlloc, Allocation, AnyBalances};
 use perun_common::sig::{ethereum_message_hash, verify_signature};
 use perun_common::sol::convert_ckb_state;
 use std::cell::RefCell;
@@ -49,9 +46,16 @@ fn test_signature() {
 
     let balances_array: [Uint64; 2] = [10u64.pack(), 11u64.pack()];
     let balances = Balances::new_builder()
-        .ckbytes(
-            CKByteDistribution::new_builder()
-                .set(balances_array)
+        .assets(
+            Allocation::new_builder()
+                .push(
+                    AnyBalances::new_builder()
+                        .ckb(
+                            CKByteDistribution::new_builder()
+                                .set(balances_array)
+                                .build()
+                        ).build()
+                )
                 .build(),
         )
         .locked(
@@ -149,19 +153,29 @@ fn test_cross_signature() {
         .distribution(eth_dist)
         .build();
 
-    let eth_alloc = ETHAllocation::new_builder()
-        .push(eth_balances)
-        .build();
-
     // Locked: push a default SubAlloc (keeps Molecule happy; convert() ignores it)
     let locked = LockedBalances::new_builder()
         .push(SubAlloc::new_builder().build())
         .build();
 
     let balances = Balances::new_builder()
-        .ckbytes(ck_dist)
-        .eth_assets(eth_alloc)
-        .locked(locked)
+        .assets(
+            Allocation::new_builder()
+                .push(
+                    AnyBalances::new_builder()
+                        .ckb(
+                            ck_dist).build()
+                )
+                .push(
+                    AnyBalances::new_builder()
+                        .eth(
+                            eth_balances).build()
+                )
+                .build(),
+        )
+        .locked(
+            locked
+        )
         .build();
 
     let channel_state = ChannelState::new_builder()

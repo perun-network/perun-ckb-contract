@@ -7,7 +7,7 @@ use {
 };
 
 use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances,
+    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances, ETHBalances, AnyBalances, Allocation
 };
 use crate::{
     error::Error,
@@ -166,23 +166,165 @@ impl SUDTDistribution {
     }
 }
 
+impl AnyBalances {
+    pub fn is_ckb_row(&self) -> bool {
+        self.sudt().as_slice() == SUDTBalances::default().as_slice()
+            && self.eth().as_slice() == ETHBalances::default().as_slice()
+    }
+    pub fn is_sudt_row(&self) -> bool {
+        self.ckb().as_slice() == CKByteDistribution::default().as_slice()
+            && self.eth().as_slice() == ETHBalances::default().as_slice()
+    }
+    fn is_eth_row(&self) -> bool {
+        self.ckb().as_slice() == CKByteDistribution::default().as_slice()
+            && self.sudt().as_slice() == SUDTBalances::default().as_slice()
+    }
+}
+
 impl Balances {
-    pub fn clear_index(&self, idx: usize) -> Result<Balances, Error> {
-        let ckbytes = self.ckbytes().clear_index(idx)?;
-        let mut sudts: Vec<SUDTBalances> = Vec::new();
-        for sb in self.sudts().into_iter() {
-            sudts.push(
-                sb.clone()
-                    .as_builder()
-                    .distribution(sb.distribution().clear_index(idx)?)
+
+    pub fn sudts(&self) -> SUDTAllocation {
+        let mut v: Vec<SUDTBalances> = Vec::new();
+        for row in self.assets().into_iter() {
+            if row.is_sudt_row() {
+                v.push(row.sudt());
+            }
+        }
+        SUDTAllocation::new_builder().set(v).build()
+    }
+
+    pub fn ckbytes(&self) -> CKByteDistribution {
+        for row in self.assets().clone().into_iter() {
+            if row.is_ckb_row() {
+                return row.ckb();
+            }
+        }
+        CKByteDistribution::default()
+    }
+
+    pub fn with_ckbytes(&self, new_ckb: CKByteDistribution) -> Balances {
+        let mut rows = Vec::new();
+        let mut replaced = false;
+
+        for row in self.assets().clone().into_iter() {
+            if row.is_ckb_row() {
+                rows.push(
+                    AnyBalances::new_builder()
+                        .ckb(new_ckb.clone())
+                        .sudt(SUDTBalances::default())
+                        .eth(ETHBalances::default())
+                        .build(),
+                );
+                replaced = true;
+            } else {
+                rows.push(row);
+            }
+        }
+
+        if !replaced {
+            rows.insert(
+                0,
+                AnyBalances::new_builder()
+                    .ckb(new_ckb)
+                    .sudt(SUDTBalances::default())
+                    .eth(ETHBalances::default())
                     .build(),
             );
         }
+
+        self.clone()
+            .as_builder()
+            .assets(Allocation::new_builder().set(rows).build())
+            .locked(self.locked())
+            .build()
+    }
+
+    pub fn with_sudts(&self, new_sudts: SUDTAllocation) -> Balances {
+        let mut out = Vec::new();
+        let mut repl_iter = new_sudts.clone().into_iter();
+
+        for row in self.assets().clone().into_iter() {
+            if row.is_sudt_row() {
+                if let Some(next) = repl_iter.next() {
+                    out.push(
+                        AnyBalances::new_builder()
+                            .ckb(CKByteDistribution::default())
+                            .sudt(next)
+                            .eth(ETHBalances::default())
+                            .build(),
+                    );
+                } else {
+                    out.push(row);
+                }
+            } else {
+                out.push(row);
+            }
+        }
+
+        for rest in repl_iter {
+            out.push(
+                AnyBalances::new_builder()
+                    .ckb(CKByteDistribution::default())
+                    .sudt(rest)
+                    .eth(ETHBalances::default())
+                    .build(),
+            );
+        }
+
+        self.clone()
+            .as_builder()
+            .assets(Allocation::new_builder().set(out).build())
+            .locked(self.locked())
+            .build()
+    }
+
+    #[allow(dead_code)]
+    fn eth_rows(&self) -> Vec<ETHBalances> {
+        let mut v = Vec::new();
+        for row in self.assets().into_iter() {
+            if row.is_eth_row() {
+                v.push(row.eth());
+            }
+        }
+        v
+    }
+}
+
+impl Balances {
+    pub fn clear_index(&self, idx: usize) -> Result<Balances, Error> {
+        // map over assets, update the active field
+        let mut new_rows: Vec<AnyBalances> = Vec::new();
+        for row in self.assets().into_iter() {
+            if row.is_ckb_row() {
+                let new_ckb = row.ckb().clear_index(idx)?;
+                new_rows.push(
+                    row.clone()
+                        .as_builder()
+                        .ckb(new_ckb)
+                        .sudt(SUDTBalances::default())
+                        .eth(ETHBalances::default())
+                        .build(),
+                );
+            } else if row.is_sudt_row() {
+                let sd = row.sudt().distribution().clear_index(idx)?;
+                let new_sudt = row.sudt().clone().as_builder().distribution(sd).build();
+                new_rows.push(
+                    row.clone()
+                        .as_builder()
+                        .ckb(CKByteDistribution::default())
+                        .sudt(new_sudt)
+                        .eth(ETHBalances::default())
+                        .build(),
+                );
+            } else {
+                new_rows.push(row);
+            }
+        }
+
         Ok(self
             .clone()
             .as_builder()
-            .ckbytes(ckbytes)
-            .sudts(SUDTAllocation::new_builder().set(sudts).build())
+            .assets(Allocation::new_builder().set(new_rows).build())
             .build())
     }
 
@@ -195,26 +337,29 @@ impl Balances {
                 return Ok(false);
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 
     pub fn equal_at_index(&self, other: &Balances, idx: usize) -> Result<bool, Error> {
+        // CKB
         if self.ckbytes().get(idx)? != other.ckbytes().get(idx)? {
             return Ok(false);
         }
-        if self.sudts().len() != other.sudts().len() {
+        let self_s = self.sudts();
+        let other_s = other.sudts();
+        if self_s.len() != other_s.len() {
             return Ok(false);
         }
-        for (i, sb) in self.sudts().into_iter().enumerate() {
-            let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
-            if sb.asset().as_slice() != other_sb.as_slice() {
+        for (i, sb) in self_s.into_iter().enumerate() {
+            let other_sb = other_s.get(i).ok_or(Error::IndexOutOfBound)?;
+            if sb.asset().as_slice() != other_sb.asset().as_slice() {
                 return Ok(false);
             }
             if sb.distribution().get(idx)? != other_sb.distribution().get(idx)? {
                 return Ok(false);
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 
     pub fn equal_in_sum(&self, other: &Balances) -> Result<bool, Error> {
@@ -222,48 +367,49 @@ impl Balances {
             + self
                 .locked()
                 .into_iter()
-                .map(|sub_alloc| sub_alloc.balances().ckbytes().sum())
+                .map(|sa| sa.balances().ckbytes().sum())
                 .sum::<u64>();
         let other_total_ckbytes = other.ckbytes().sum()
             + other
                 .locked()
                 .into_iter()
-                .map(|sub_alloc| sub_alloc.balances().ckbytes().sum())
+                .map(|sa| sa.balances().ckbytes().sum())
                 .sum::<u64>();
-
         if self_total_ckbytes != other_total_ckbytes {
             return Ok(false);
         }
-        if self.sudts().len() != other.sudts().len() {
+
+        let self_s = self.sudts();
+        let other_s = other.sudts();
+        if self_s.len() != other_s.len() {
             return Ok(false);
         }
-        for (i, sb) in self.sudts().into_iter().enumerate() {
-            let other_sb = other.sudts().get(i).ok_or(Error::IndexOutOfBound)?;
+
+        for (i, sb) in self_s.clone().into_iter().enumerate() {
+            let other_sb = other_s.get(i).ok_or(Error::IndexOutOfBound)?;
             if sb.asset().as_slice() != other_sb.asset().as_slice() {
                 return Ok(false);
             }
 
-            // Sum `sudts` including locked balances
-            let mut self_total_amount = sb.distribution().sum();
-            let mut other_total_amount = other_sb.distribution().sum();
+            let mut self_total = sb.distribution().sum();
+            let mut other_total = other_sb.distribution().sum();
 
-            for sub_alloc in self.locked().into_iter() {
-                for sub_sb in sub_alloc.balances().sudts().into_iter() {
-                    if sub_sb.asset().as_slice() == sb.asset().as_slice() {
-                        self_total_amount += sub_sb.distribution().sum();
+            for sub in self.locked().into_iter() {
+                for s in sub.balances().sudts().into_iter() {
+                    if s.asset().as_slice() == sb.asset().as_slice() {
+                        self_total += s.distribution().sum();
+                    }
+                }
+            }
+            for sub in other.locked().into_iter() {
+                for s in sub.balances().sudts().into_iter() {
+                    if s.asset().as_slice() == other_sb.asset().as_slice() {
+                        other_total += s.distribution().sum();
                     }
                 }
             }
 
-            for sub_alloc in other.locked().into_iter() {
-                for sub_sb in sub_alloc.balances().sudts().into_iter() {
-                    if sub_sb.asset().as_slice() == other_sb.asset().as_slice() {
-                        other_total_amount += sub_sb.distribution().sum();
-                    }
-                }
-            }
-
-            if self_total_amount != other_total_amount {
+            if self_total != other_total {
                 return Ok(false);
             }
         }
@@ -271,7 +417,7 @@ impl Balances {
     }
 
     pub fn equal(&self, other: &Balances) -> bool {
-        self.as_slice()[..] == other.as_slice()[..]
+        self.as_slice() == other.as_slice()
     }
 }
 
@@ -427,12 +573,14 @@ impl Balances {
         mut mk_lock_script: impl FnMut(u8) -> Script,
         indices: Vec<u8>,
     ) -> Vec<(CellOutput, bytes::Bytes)> {
-        let mut ckbytes = self
-            .ckbytes()
-            .mk_outputs(&mut mk_lock_script, indices.clone());
-        let mut sudts = self.sudts().mk_outputs(mk_lock_script, indices);
-        ckbytes.append(&mut sudts);
-        return ckbytes;
+        let mut out: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
+
+        let ckb = self.ckbytes();
+        out.extend(ckb.mk_outputs(&mut mk_lock_script, indices.clone()));
+
+        out.extend(self.sudts().mk_outputs(mk_lock_script, indices));
+
+        out
     }
 
     pub fn mk_unlocked_outputs(
@@ -442,33 +590,29 @@ impl Balances {
         lc_to_vc_idx_map: &[u8; 2],
         vc_balances: &Balances,
     ) -> Vec<(CellOutput, bytes::Bytes)> {
-        let mut ckbytes = self.ckbytes().mk_unlocked_outputs(
+        let mut out: Vec<(CellOutput, bytes::Bytes)> = Vec::new();
+
+        out.extend(self.ckbytes().mk_unlocked_outputs(
             &mut mk_lock_script,
             indices.clone(),
             lc_to_vc_idx_map,
             &vc_balances.ckbytes().clone(),
-        );
+        ));
 
-        let mut sudts = self.sudts().mk_unlocked_outputs(
+        out.extend(self.sudts().mk_unlocked_outputs(
             mk_lock_script,
             indices,
             lc_to_vc_idx_map,
             vc_balances.sudts(),
-        );
-        ckbytes.append(&mut sudts);
-        return ckbytes;
+        ));
+
+        out
     }
 }
 
 impl SubBalances {
-    /// Compares the sum of balances for each asset in SubBalances to the same in Balances(locked funds)
-    /// Returns true if the sum of balances for each asset in SubBalances is equal to the sum of balances for each asset in Balances
-    /// Returns false otherwise
     pub fn equal_in_sum(&self, vc_balances: &Balances) -> Result<bool, Error> {
-        let self_total_ckbytes = self.ckbytes().sum();
-        let vc_ckbytes = vc_balances.ckbytes().sum();
-
-        if self_total_ckbytes != vc_ckbytes {
+        if self.ckbytes().sum() != vc_balances.ckbytes().sum() {
             return Ok(false);
         }
 

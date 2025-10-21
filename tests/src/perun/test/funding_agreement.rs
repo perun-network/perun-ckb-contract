@@ -6,11 +6,7 @@ use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 
-use perun_common::perun_types::{
-    self, Balances, CKByteDistribution, ETHAllocation, ETHAsset, ETHBalances, ETHDistribution,
-    EthAddress, LockedBalances, ParticipantBuilder, SEC1EncodedPubKeyBuilder, SUDTAllocation,
-    SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances,
-};
+use perun_common::perun_types::{self, Balances, CKByteDistribution, ETHAllocation, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, ParticipantBuilder, SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances, Allocation, AnyBalances};
 use sha3::Digest;
 use sha3::Keccak256;
 
@@ -193,47 +189,50 @@ impl FundingAgreement {
             }
         }
 
-        // Prepare SUDTBalances
-        let mut sudt_alloc: Vec<SUDTBalances> = Vec::new();
+        let ckb_dist = CKByteDistribution::new_builder()
+            .nth0(ckbytes[0].pack())
+            .nth1(ckbytes[1].pack())
+            .build();
+
+        let mut alloc_builder = Allocation::new_builder()
+            .push(AnyBalances::new_builder().ckb(ckb_dist).build());
+
         for (i, asset) in sudts.iter().enumerate() {
-            sudt_alloc.push(
-                SUDTBalances::new_builder()
-                    .asset(asset.clone())
-                    .distribution(
-                        SUDTDistribution::new_builder()
-                            .nth0(sudt_dist[i][0].pack())
-                            .nth1(sudt_dist[i][1].pack())
-                            .build(),
-                    )
-                    .build(),
+            let dist = SUDTDistribution::new_builder()
+                .nth0(sudt_dist[i][0].pack())
+                .nth1(sudt_dist[i][1].pack())
+                .build();
+
+            let sudt_bal = SUDTBalances::new_builder()
+                .asset(asset.clone())
+                .distribution(dist)
+                .build();
+
+            alloc_builder = alloc_builder.push(
+                AnyBalances::new_builder().sudt(sudt_bal).build()
             );
         }
 
-        // Prepare ETH balances similarly (if your Balances struct supports ETH assets analogously)
-        let mut eth_alloc: Vec<ETHBalances> = Vec::new();
         for (i, asset) in eth_assets.iter().enumerate() {
-            eth_alloc.push(
-                ETHBalances::new_builder()
-                    .asset(asset.clone())
-                    .distribution(
-                        ETHDistribution::new_builder()
-                            .nth0(eth_dist[i][0].pack())
-                            .nth1(eth_dist[i][1].pack())
-                            .build(),
-                    )
-                    .build(),
+            let dist = ETHDistribution::new_builder()
+                .nth0(eth_dist[i][0].pack())
+                .nth1(eth_dist[i][1].pack())
+                .build();
+
+            let eth_bal = ETHBalances::new_builder()
+                .asset(asset.clone())
+                .distribution(dist)
+                .build();
+
+            alloc_builder = alloc_builder.push(
+                AnyBalances::new_builder().eth(eth_bal).build()
             );
         }
+
+        let assets = alloc_builder.build();
 
         Ok(Balances::new_builder()
-            .ckbytes(
-                CKByteDistribution::new_builder()
-                    .nth0(ckbytes[0].pack())
-                    .nth1(ckbytes[1].pack())
-                    .build(),
-            )
-            .sudts(SUDTAllocation::new_builder().set(sudt_alloc).build())
-            .eth_assets(ETHAllocation::new_builder().set(eth_alloc).build()) // Assuming ETHAllocation exists
+            .assets(assets)
             .build())
     }
 
