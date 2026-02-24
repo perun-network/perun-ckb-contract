@@ -126,12 +126,41 @@ macro_rules! vc_dispute {
 }
 
 impl ETHDistribution {
+    pub fn sum(&self) -> u128 {
+        let a: u128 = self.nth0().unpack();
+        let b: u128 = self.nth1().unpack();
+        a + b
+    }
+
+    pub fn equal(&self, other: &ETHDistribution) -> bool {
+        self.as_slice()[..] == other.as_slice()[..]
+    }
+
+    pub fn get(&self, i: usize) -> Result<u128, Error> {
+        match i {
+            0 => Ok(self.nth0().unpack()),
+            1 => Ok(self.nth1().unpack()),
+            _ => Err(Error::IndexOutOfBound),
+        }
+    }
+
     pub fn clear_index(&self, idx: usize) -> Result<ETHDistribution, Error> {
         match idx {
             0 => Ok(self.clone().as_builder().nth0(0u128.pack()).build()),
             1 => Ok(self.clone().as_builder().nth1(0u128.pack()).build()),
             _ => Err(Error::IndexOutOfBound),
         }
+    }
+
+    pub fn from_array(a: [u128; 2]) -> Self {
+        ETHDistribution::new_builder()
+            .nth0(a[0].pack())
+            .nth1(a[1].pack())
+            .build()
+    }
+
+    pub fn to_array(&self) -> [u128; 2] {
+        [self.nth0().unpack(), self.nth1().unpack()]
     }
 }
 impl SUDTDistribution {
@@ -141,7 +170,7 @@ impl SUDTDistribution {
         a + b
     }
 
-    pub fn equal(&self, other: &Balances) -> bool {
+    pub fn equal(&self, other: &SUDTDistribution) -> bool {
         self.as_slice()[..] == other.as_slice()[..]
     }
 
@@ -369,11 +398,15 @@ impl Balances {
                 return Ok(false);
             }
         }
+        for eb in self.eth_rows().into_iter() {
+            if eb.distribution().get(idx)? != 0u128 {
+                return Ok(false);
+            }
+        }
         Ok(true)
     }
 
     pub fn equal_at_index(&self, other: &Balances, idx: usize) -> Result<bool, Error> {
-        // CKB
         if self.ckbytes().get(idx)? != other.ckbytes().get(idx)? {
             return Ok(false);
         }
@@ -391,6 +424,26 @@ impl Balances {
                 return Ok(false);
             }
         }
+
+        let self_e = self.eth_rows();
+        let other_e = other.eth_rows();
+
+        if self_e.len() != other_e.len() {
+            return Ok(false);
+        }
+
+        for (i, eb) in self_e.into_iter().enumerate() {
+            let other_eb = other_e.get(i).ok_or(Error::IndexOutOfBound)?;
+
+            if eb.asset().as_slice() != other_eb.asset().as_slice() {
+                return Ok(false);
+            }
+
+            if eb.distribution().get(idx)? != other_eb.distribution().get(idx)? {
+                return Ok(false);
+            }
+        }
+
         Ok(true)
     }
 
@@ -440,6 +493,28 @@ impl Balances {
                     }
                 }
             }
+
+            if self_total != other_total {
+                return Ok(false);
+            }
+        }
+
+        let self_e = self.eth_rows();
+        let other_e = other.eth_rows();
+
+        if self_e.len() != other_e.len() {
+            return Ok(false);
+        }
+
+        for (i, eb) in self_e.clone().into_iter().enumerate() {
+            let other_eb = other_e.get(i).ok_or(Error::IndexOutOfBound)?;
+
+            if eb.asset().as_slice() != other_eb.asset().as_slice() {
+                return Ok(false);
+            }
+
+            let self_total = eb.distribution().sum();
+            let other_total = other_eb.distribution().sum();
 
             if self_total != other_total {
                 return Ok(false);
