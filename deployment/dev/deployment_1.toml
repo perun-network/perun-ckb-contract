@@ -1,6 +1,6 @@
 [[cells]]
 name = "pcts"
-enable_type_id = false
+enable_type_id = true
 location = { file = "build/release/perun-channel-typescript" }
 
 #
