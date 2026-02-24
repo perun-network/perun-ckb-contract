@@ -3,12 +3,11 @@ use ckb_testtool::{
     bytes,
     ckb_types::{
         packed::{Byte32, CellOutput, OutPoint},
-        prelude::{Pack, Unpack},
     },
     context::Context,
 };
 use molecule::prelude::{Builder, Entity};
-use perun_common::perun_types::{Balances, AnyBalances, SUDTBalances, CKByteDistribution, ETHBalances, Allocation};
+use perun_common::perun_types::{Balances, AnyBalances, CKByteDistribution, Allocation, AnyBalancesUnion};
 
 use crate::perun;
 
@@ -41,7 +40,7 @@ pub fn add_cap_to_a(balances: &Balances, cap: Capacity) -> Balances {
     dist[0] = dist[0]
         .checked_add(cap.as_u64())
         .expect("capacity overflow");
-    let updated_ckb = CKByteDistribution::from_array(dist);
+    let updated_ckb_union = AnyBalancesUnion::CKByteDistribution(CKByteDistribution::from_array(dist));
 
     let mut rows = Vec::new();
     let mut replaced = false;
@@ -50,9 +49,7 @@ pub fn add_cap_to_a(balances: &Balances, cap: Capacity) -> Balances {
         if row.is_ckb_row() {
             rows.push(
                 AnyBalances::new_builder()
-                    .ckb(updated_ckb.clone())
-                    .sudt(SUDTBalances::default())
-                    .eth(ETHBalances::default())
+                    .set(updated_ckb_union.clone())
                     .build(),
             );
             replaced = true;
@@ -65,9 +62,7 @@ pub fn add_cap_to_a(balances: &Balances, cap: Capacity) -> Balances {
         rows.insert(
             0,
             AnyBalances::new_builder()
-                .ckb(updated_ckb)
-                .sudt(SUDTBalances::default())
-                .eth(ETHBalances::default())
+                .set(updated_ckb_union)
                 .build(),
         );
     }

@@ -1,7 +1,7 @@
 use crate::perun;
 use ckb_testtool::ckb_types::prelude::{Pack, Unpack};
 use molecule::prelude::{Builder, Entity};
-use perun_common::perun_types::{CKByteDistribution, ChannelState, SUDTDistribution,SUDTBalances, ETHBalances, AnyBalances, Allocation};
+use perun_common::perun_types::{CKByteDistribution, ChannelState, SUDTDistribution};
 
 pub enum Direction {
     AtoB,

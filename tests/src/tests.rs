@@ -8,7 +8,7 @@ use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
 use perun::{test, virtual_channel};
-use perun_common::perun_types::{Balances, Bool, CKByteDistribution, ChannelState, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, SEC1EncodedPubKey, SubAlloc, Allocation, AnyBalances};
+use perun_common::perun_types::{Balances, Bool, CKByteDistribution, ChannelState, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, SEC1EncodedPubKey, SubAlloc, Allocation, AnyBalances, AnyBalancesUnion};
 use perun_common::sig::{ethereum_message_hash, verify_signature};
 use perun_common::sol::convert_ckb_state;
 use std::cell::RefCell;
@@ -50,10 +50,10 @@ fn test_signature() {
             Allocation::new_builder()
                 .push(
                     AnyBalances::new_builder()
-                        .ckb(
-                            CKByteDistribution::new_builder()
+                        .set(
+                            AnyBalancesUnion::CKByteDistribution(CKByteDistribution::new_builder()
                                 .set(balances_array)
-                                .build()
+                                .build())
                         ).build()
                 )
                 .build(),
@@ -131,9 +131,9 @@ fn test_cross_signature() {
         .unwrap();
     SEC1EncodedPubKey::new_builder().set(pubkey_bytes).build();
 
-    let ck_dist = CKByteDistribution::new_builder()
+    let ck_dist = AnyBalancesUnion::CKByteDistribution(CKByteDistribution::new_builder()
         .set([ck_a.pack(), ck_b.pack()])
-        .build();
+        .build());
 
     // ETH asset & distribution
     let chain_id_u128 = u128_le_as_uint128(eth_chain_id);
@@ -148,10 +148,10 @@ fn test_cross_signature() {
         .nth1(u128_le_as_uint128(eth_b))
         .build();
 
-    let eth_balances = ETHBalances::new_builder()
+    let eth_balances = AnyBalancesUnion::ETHBalances(ETHBalances::new_builder()
         .asset(eth_asset)
         .distribution(eth_dist)
-        .build();
+        .build());
 
     // Locked: push a default SubAlloc (keeps Molecule happy; convert() ignores it)
     let locked = LockedBalances::new_builder()
@@ -163,12 +163,12 @@ fn test_cross_signature() {
             Allocation::new_builder()
                 .push(
                     AnyBalances::new_builder()
-                        .ckb(
+                        .set(
                             ck_dist).build()
                 )
                 .push(
                     AnyBalances::new_builder()
-                        .eth(
+                        .set(
                             eth_balances).build()
                 )
                 .build(),

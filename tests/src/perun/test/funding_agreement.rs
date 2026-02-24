@@ -6,9 +6,8 @@ use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 
-use perun_common::perun_types::{self, Balances, CKByteDistribution, ETHAllocation, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, ParticipantBuilder, SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances, Allocation, AnyBalances};
+use perun_common::perun_types::{self, Balances, CKByteDistribution, ETHAsset, ETHBalances, ETHDistribution, LockedBalances, ParticipantBuilder, SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances, Allocation, AnyBalances, AnyBalancesUnion};
 use sha3::Digest;
-use sha3::Keccak256;
 
 use crate::perun;
 use crate::perun::test::ChannelId;
@@ -189,13 +188,13 @@ impl FundingAgreement {
             }
         }
 
-        let ckb_dist = CKByteDistribution::new_builder()
+        let ckb_dist = AnyBalancesUnion::CKByteDistribution(CKByteDistribution::new_builder()
             .nth0(ckbytes[0].pack())
             .nth1(ckbytes[1].pack())
-            .build();
+            .build());
 
         let mut alloc_builder = Allocation::new_builder()
-            .push(AnyBalances::new_builder().ckb(ckb_dist).build());
+            .push(AnyBalances::new_builder().set(ckb_dist).build());
 
         for (i, asset) in sudts.iter().enumerate() {
             let dist = SUDTDistribution::new_builder()
@@ -203,13 +202,13 @@ impl FundingAgreement {
                 .nth1(sudt_dist[i][1].pack())
                 .build();
 
-            let sudt_bal = SUDTBalances::new_builder()
+            let sudt_bal = AnyBalancesUnion::SUDTBalances(SUDTBalances::new_builder()
                 .asset(asset.clone())
                 .distribution(dist)
-                .build();
+                .build());
 
             alloc_builder = alloc_builder.push(
-                AnyBalances::new_builder().sudt(sudt_bal).build()
+                AnyBalances::new_builder().set(sudt_bal).build()
             );
         }
 
@@ -219,13 +218,13 @@ impl FundingAgreement {
                 .nth1(eth_dist[i][1].pack())
                 .build();
 
-            let eth_bal = ETHBalances::new_builder()
+            let eth_bal = AnyBalancesUnion::ETHBalances(ETHBalances::new_builder()
                 .asset(asset.clone())
                 .distribution(dist)
-                .build();
+                .build());
 
             alloc_builder = alloc_builder.push(
-                AnyBalances::new_builder().eth(eth_bal).build()
+                AnyBalances::new_builder().set(eth_bal).build()
             );
         }
 

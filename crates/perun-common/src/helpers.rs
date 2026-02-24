@@ -6,9 +6,7 @@ use {
     ckb_types::prelude::*, std::vec::Vec,
 };
 
-use crate::perun_types::{
-    Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances, ETHBalances, AnyBalances, Allocation
-};
+use crate::perun_types::{Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances, ETHBalances, AnyBalances, Allocation, AnyBalancesUnion, ETHDistribution};
 use crate::{
     error::Error,
     perun_types::{CKByteDistribution, SUDTAllocation, SUDTBalances, SUDTDistribution},
@@ -127,6 +125,15 @@ macro_rules! vc_dispute {
     };
 }
 
+impl ETHDistribution {
+    pub fn clear_index(&self, idx: usize) -> Result<ETHDistribution, Error> {
+        match idx {
+            0 => Ok(self.clone().as_builder().nth0(0u128.pack()).build()),
+            1 => Ok(self.clone().as_builder().nth1(0u128.pack()).build()),
+            _ => Err(Error::IndexOutOfBound),
+        }
+    }
+}
 impl SUDTDistribution {
     pub fn sum(&self) -> u128 {
         let a: u128 = self.nth0().unpack();
@@ -167,19 +174,46 @@ impl SUDTDistribution {
 }
 
 impl AnyBalances {
+    fn as_union(&self) -> AnyBalancesUnion {
+        // Re-parse the packed union into the helper enum
+        AnyBalances::from_slice(self.as_slice())
+            .expect("valid AnyBalances")
+            .to_enum()
+    }
     pub fn is_ckb_row(&self) -> bool {
-        self.sudt().as_slice() == SUDTBalances::default().as_slice()
-            && self.eth().as_slice() == ETHBalances::default().as_slice()
+        self.item_id() == 0 // CKByteDistribution
     }
+
     pub fn is_sudt_row(&self) -> bool {
-        self.ckb().as_slice() == CKByteDistribution::default().as_slice()
-            && self.eth().as_slice() == ETHBalances::default().as_slice()
+        self.item_id() == 1 // SUDTBalances
     }
-    fn is_eth_row(&self) -> bool {
-        self.ckb().as_slice() == CKByteDistribution::default().as_slice()
-            && self.sudt().as_slice() == SUDTBalances::default().as_slice()
+
+    pub fn is_eth_row(&self) -> bool {
+        self.item_id() == 2 // ETHBalances
+    }
+
+    pub fn as_ckb(&self) -> Option<CKByteDistribution> {
+        match self.as_union() {
+            AnyBalancesUnion::CKByteDistribution(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn as_sudt(&self) -> Option<SUDTBalances> {
+        match self.as_union() {
+            AnyBalancesUnion::SUDTBalances(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn as_eth(&self) -> Option<ETHBalances> {
+        match self.as_union() {
+            AnyBalancesUnion::ETHBalances(v) => Some(v),
+            _ => None,
+        }
     }
 }
+
 
 impl Balances {
 
@@ -187,7 +221,7 @@ impl Balances {
         let mut v: Vec<SUDTBalances> = Vec::new();
         for row in self.assets().into_iter() {
             if row.is_sudt_row() {
-                v.push(row.sudt());
+                v.push(row.as_sudt().unwrap());
             }
         }
         SUDTAllocation::new_builder().set(v).build()
@@ -196,7 +230,7 @@ impl Balances {
     pub fn ckbytes(&self) -> CKByteDistribution {
         for row in self.assets().clone().into_iter() {
             if row.is_ckb_row() {
-                return row.ckb();
+                return row.as_ckb().expect("is_ckb_row guarantees Some");
             }
         }
         CKByteDistribution::default()
@@ -210,9 +244,7 @@ impl Balances {
             if row.is_ckb_row() {
                 rows.push(
                     AnyBalances::new_builder()
-                        .ckb(new_ckb.clone())
-                        .sudt(SUDTBalances::default())
-                        .eth(ETHBalances::default())
+                        .set(AnyBalancesUnion::CKByteDistribution(new_ckb.clone()))
                         .build(),
                 );
                 replaced = true;
@@ -225,9 +257,7 @@ impl Balances {
             rows.insert(
                 0,
                 AnyBalances::new_builder()
-                    .ckb(new_ckb)
-                    .sudt(SUDTBalances::default())
-                    .eth(ETHBalances::default())
+                    .set(AnyBalancesUnion::CKByteDistribution(new_ckb))
                     .build(),
             );
         }
@@ -239,6 +269,7 @@ impl Balances {
             .build()
     }
 
+
     pub fn with_sudts(&self, new_sudts: SUDTAllocation) -> Balances {
         let mut out = Vec::new();
         let mut repl_iter = new_sudts.clone().into_iter();
@@ -246,11 +277,10 @@ impl Balances {
         for row in self.assets().clone().into_iter() {
             if row.is_sudt_row() {
                 if let Some(next) = repl_iter.next() {
+                    let next_dist = AnyBalancesUnion::SUDTBalances(next);
                     out.push(
                         AnyBalances::new_builder()
-                            .ckb(CKByteDistribution::default())
-                            .sudt(next)
-                            .eth(ETHBalances::default())
+                            .set(next_dist)
                             .build(),
                     );
                 } else {
@@ -262,11 +292,10 @@ impl Balances {
         }
 
         for rest in repl_iter {
+            let rest_dist = AnyBalancesUnion::SUDTBalances(rest);
             out.push(
                 AnyBalances::new_builder()
-                    .ckb(CKByteDistribution::default())
-                    .sudt(rest)
-                    .eth(ETHBalances::default())
+                    .set(rest_dist)
                     .build(),
             );
         }
@@ -283,7 +312,7 @@ impl Balances {
         let mut v = Vec::new();
         for row in self.assets().into_iter() {
             if row.is_eth_row() {
-                v.push(row.eth());
+                v.push(row.as_eth().unwrap());
             }
         }
         v
@@ -296,28 +325,31 @@ impl Balances {
         let mut new_rows: Vec<AnyBalances> = Vec::new();
         for row in self.assets().into_iter() {
             if row.is_ckb_row() {
-                let new_ckb = row.ckb().clear_index(idx)?;
+                let new_ckb = row.as_ckb().unwrap().clear_index(idx)?;
                 new_rows.push(
                     row.clone()
                         .as_builder()
-                        .ckb(new_ckb)
-                        .sudt(SUDTBalances::default())
-                        .eth(ETHBalances::default())
+                        .set(new_ckb)
                         .build(),
                 );
             } else if row.is_sudt_row() {
-                let sd = row.sudt().distribution().clear_index(idx)?;
-                let new_sudt = row.sudt().clone().as_builder().distribution(sd).build();
+                let sd = row.as_sudt().unwrap().distribution().clear_index(idx)?;
+                let new_sudt = row.as_sudt().unwrap().clone().as_builder().distribution(sd).build();
                 new_rows.push(
                     row.clone()
                         .as_builder()
-                        .ckb(CKByteDistribution::default())
-                        .sudt(new_sudt)
-                        .eth(ETHBalances::default())
+                        .set(new_sudt)
                         .build(),
                 );
-            } else {
-                new_rows.push(row);
+            } else if row.is_eth_row() {
+                let ed = row.as_eth().unwrap().distribution().clear_index(idx)?;
+                let new_eth = row.as_eth().unwrap().clone().as_builder().distribution(ed).build();
+                new_rows.push(
+                    row.clone()
+                        .as_builder()
+                        .set(new_eth)
+                        .build(),
+                );
             }
         }
 
@@ -811,13 +843,10 @@ impl SEC1EncodedPubKey {
     }
 }
 
-pub fn bytes_to_u256(bytes: &[u8]) -> U256 {
-    assert_eq!(bytes.len(), 16, "Expected 16 bytes for Uint128 conversion");
-    let arr: [u8; 16] = bytes
-        .try_into()
-        .expect("Failed to convert to 16-byte array");
-    let val_u128 = u128::from_le_bytes(arr);
-    U256::from(val_u128)
+pub fn bytes_to_u128(bytes: &[u8]) -> u128 {
+    assert_eq!(bytes.len(), 16, "Expected 16 bytes for u128 conversion");
+    let arr: [u8; 16] = bytes.try_into().expect("Failed to convert to 16-byte array");
+    u128::from_le_bytes(arr)
 }
 
 pub fn bytes_to_u64(bytes: &[u8]) -> u64 {

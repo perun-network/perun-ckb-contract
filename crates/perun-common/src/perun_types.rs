@@ -2094,351 +2094,6 @@ impl ::core::iter::FromIterator<SUDTBalances> for SUDTAllocation {
     }
 }
 #[derive(Clone)]
-pub struct ETHAllocation(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for ETHAllocation {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl ::core::fmt::Debug for ETHAllocation {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl ::core::fmt::Display for ETHAllocation {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl ::core::default::Default for ETHAllocation {
-    fn default() -> Self {
-        let v = molecule::bytes::Bytes::from_static(&Self::DEFAULT_VALUE);
-        ETHAllocation::new_unchecked(v)
-    }
-}
-impl ETHAllocation {
-    const DEFAULT_VALUE: [u8; 4] = [4, 0, 0, 0];
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<ETHBalances> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> ETHBalances {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            ETHBalances::new_unchecked(self.0.slice(start..))
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            ETHBalances::new_unchecked(self.0.slice(start..end))
-        }
-    }
-    pub fn as_reader<'r>(&'r self) -> ETHAllocationReader<'r> {
-        ETHAllocationReader::new_unchecked(self.as_slice())
-    }
-}
-impl molecule::prelude::Entity for ETHAllocation {
-    type Builder = ETHAllocationBuilder;
-    const NAME: &'static str = "ETHAllocation";
-    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        ETHAllocation(data)
-    }
-    fn as_bytes(&self) -> molecule::bytes::Bytes {
-        self.0.clone()
-    }
-    fn as_slice(&self) -> &[u8] {
-        &self.0[..]
-    }
-    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ETHAllocationReader::from_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ETHAllocationReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
-    }
-    fn new_builder() -> Self::Builder {
-        ::core::default::Default::default()
-    }
-    fn as_builder(self) -> Self::Builder {
-        Self::new_builder().extend(self.into_iter())
-    }
-}
-#[derive(Clone, Copy)]
-pub struct ETHAllocationReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for ETHAllocationReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        use molecule::hex_string;
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", hex_string(self.as_slice()))
-    }
-}
-impl<'r> ::core::fmt::Debug for ETHAllocationReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{}({:#x})", Self::NAME, self)
-    }
-}
-impl<'r> ::core::fmt::Display for ETHAllocationReader<'r> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} [", Self::NAME)?;
-        for i in 0..self.len() {
-            if i == 0 {
-                write!(f, "{}", self.get_unchecked(i))?;
-            } else {
-                write!(f, ", {}", self.get_unchecked(i))?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-impl<'r> ETHAllocationReader<'r> {
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn item_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.item_count()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    pub fn get(&self, idx: usize) -> Option<ETHBalancesReader<'r>> {
-        if idx >= self.len() {
-            None
-        } else {
-            Some(self.get_unchecked(idx))
-        }
-    }
-    pub fn get_unchecked(&self, idx: usize) -> ETHBalancesReader<'r> {
-        let slice = self.as_slice();
-        let start_idx = molecule::NUMBER_SIZE * (1 + idx);
-        let start = molecule::unpack_number(&slice[start_idx..]) as usize;
-        if idx == self.len() - 1 {
-            ETHBalancesReader::new_unchecked(&self.as_slice()[start..])
-        } else {
-            let end_idx = start_idx + molecule::NUMBER_SIZE;
-            let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            ETHBalancesReader::new_unchecked(&self.as_slice()[start..end])
-        }
-    }
-}
-impl<'r> molecule::prelude::Reader<'r> for ETHAllocationReader<'r> {
-    type Entity = ETHAllocation;
-    const NAME: &'static str = "ETHAllocationReader";
-    fn to_entity(&self) -> Self::Entity {
-        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
-    }
-    fn new_unchecked(slice: &'r [u8]) -> Self {
-        ETHAllocationReader(slice)
-    }
-    fn as_slice(&self) -> &'r [u8] {
-        self.0
-    }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
-        use molecule::verification_error as ve;
-        let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
-        }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len == molecule::NUMBER_SIZE {
-            return Ok(());
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(
-                Self,
-                TotalSizeNotMatch,
-                molecule::NUMBER_SIZE * 2,
-                slice_len
-            );
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        for pair in offsets.windows(2) {
-            let start = pair[0];
-            let end = pair[1];
-            ETHBalancesReader::verify(&slice[start..end], compatible)?;
-        }
-        Ok(())
-    }
-}
-#[derive(Clone, Debug, Default)]
-pub struct ETHAllocationBuilder(pub(crate) Vec<ETHBalances>);
-impl ETHAllocationBuilder {
-    pub fn set(mut self, v: Vec<ETHBalances>) -> Self {
-        self.0 = v;
-        self
-    }
-    pub fn push(mut self, v: ETHBalances) -> Self {
-        self.0.push(v);
-        self
-    }
-    pub fn extend<T: ::core::iter::IntoIterator<Item = ETHBalances>>(mut self, iter: T) -> Self {
-        for elem in iter {
-            self.0.push(elem);
-        }
-        self
-    }
-    pub fn replace(&mut self, index: usize, v: ETHBalances) -> Option<ETHBalances> {
-        self.0
-            .get_mut(index)
-            .map(|item| ::core::mem::replace(item, v))
-    }
-}
-impl molecule::prelude::Builder for ETHAllocationBuilder {
-    type Entity = ETHAllocation;
-    const NAME: &'static str = "ETHAllocationBuilder";
-    fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (self.0.len() + 1)
-            + self
-                .0
-                .iter()
-                .map(|inner| inner.as_slice().len())
-                .sum::<usize>()
-    }
-    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let item_count = self.0.len();
-        if item_count == 0 {
-            writer.write_all(&molecule::pack_number(
-                molecule::NUMBER_SIZE as molecule::Number,
-            ))?;
-        } else {
-            let (total_size, offsets) = self.0.iter().fold(
-                (
-                    molecule::NUMBER_SIZE * (item_count + 1),
-                    Vec::with_capacity(item_count),
-                ),
-                |(start, mut offsets), inner| {
-                    offsets.push(start);
-                    (start + inner.as_slice().len(), offsets)
-                },
-            );
-            writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-            for offset in offsets.into_iter() {
-                writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-            }
-            for inner in self.0.iter() {
-                writer.write_all(inner.as_slice())?;
-            }
-        }
-        Ok(())
-    }
-    fn build(&self) -> Self::Entity {
-        let mut inner = Vec::with_capacity(self.expected_length());
-        self.write(&mut inner)
-            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        ETHAllocation::new_unchecked(inner.into())
-    }
-}
-pub struct ETHAllocationIterator(ETHAllocation, usize, usize);
-impl ::core::iter::Iterator for ETHAllocationIterator {
-    type Item = ETHBalances;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl ::core::iter::ExactSizeIterator for ETHAllocationIterator {
-    fn len(&self) -> usize {
-        self.2 - self.1
-    }
-}
-impl ::core::iter::IntoIterator for ETHAllocation {
-    type Item = ETHBalances;
-    type IntoIter = ETHAllocationIterator;
-    fn into_iter(self) -> Self::IntoIter {
-        let len = self.len();
-        ETHAllocationIterator(self, 0, len)
-    }
-}
-impl<'r> ETHAllocationReader<'r> {
-    pub fn iter<'t>(&'t self) -> ETHAllocationReaderIterator<'t, 'r> {
-        ETHAllocationReaderIterator(&self, 0, self.len())
-    }
-}
-pub struct ETHAllocationReaderIterator<'t, 'r>(&'t ETHAllocationReader<'r>, usize, usize);
-impl<'t: 'r, 'r> ::core::iter::Iterator for ETHAllocationReaderIterator<'t, 'r> {
-    type Item = ETHBalancesReader<'t>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.1 >= self.2 {
-            None
-        } else {
-            let ret = self.0.get_unchecked(self.1);
-            self.1 += 1;
-            Some(ret)
-        }
-    }
-}
-impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for ETHAllocationReaderIterator<'t, 'r> {
-    fn len(&self) -> usize {
-        self.2 - self.1
-    }
-}
-impl ::core::iter::FromIterator<ETHBalances> for ETHAllocation {
-    fn from_iter<T: IntoIterator<Item = ETHBalances>>(iter: T) -> Self {
-        Self::new_builder().extend(iter).build()
-    }
-}
-#[derive(Clone)]
 pub struct LockedBalances(molecule::bytes::Bytes);
 impl ::core::fmt::LowerHex for LockedBalances {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -2801,15 +2456,9 @@ impl ::core::fmt::Debug for AnyBalances {
 }
 impl ::core::fmt::Display for AnyBalances {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "ckb", self.ckb())?;
-        write!(f, ", {}: {}", "sudt", self.sudt())?;
-        write!(f, ", {}: {}", "eth", self.eth())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
+        write!(f, "{}(", Self::NAME)?;
+        self.to_enum().display_inner(f)?;
+        write!(f, ")")
     }
 }
 impl ::core::default::Default for AnyBalances {
@@ -2819,54 +2468,18 @@ impl ::core::default::Default for AnyBalances {
     }
 }
 impl AnyBalances {
-    const DEFAULT_VALUE: [u8; 241] = [
-        241, 0, 0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 149, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 117, 0, 0, 0, 12, 0, 0, 0, 85, 0, 0, 0, 73, 0, 0, 0, 12, 0, 0, 0, 65, 0, 0, 0,
-        53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 92, 0, 0, 0, 12, 0, 0, 0, 60, 0, 0, 0, 48, 0, 0, 0, 12, 0, 0, 0, 28, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-    ];
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
+    const DEFAULT_VALUE: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    pub const ITEMS_COUNT: usize = 3;
+    pub fn item_id(&self) -> molecule::Number {
+        molecule::unpack_number(self.as_slice())
     }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn ckb(&self) -> CKByteDistribution {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        CKByteDistribution::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn sudt(&self) -> SUDTBalances {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        SUDTBalances::new_unchecked(self.0.slice(start..end))
-    }
-    pub fn eth(&self) -> ETHBalances {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            ETHBalances::new_unchecked(self.0.slice(start..end))
-        } else {
-            ETHBalances::new_unchecked(self.0.slice(start..))
+    pub fn to_enum(&self) -> AnyBalancesUnion {
+        let inner = self.0.slice(molecule::NUMBER_SIZE..);
+        match self.item_id() {
+            0 => CKByteDistribution::new_unchecked(inner).into(),
+            1 => SUDTBalances::new_unchecked(inner).into(),
+            2 => ETHBalances::new_unchecked(inner).into(),
+            _ => panic!("{}: invalid data", Self::NAME),
         }
     }
     pub fn as_reader<'r>(&'r self) -> AnyBalancesReader<'r> {
@@ -2895,10 +2508,7 @@ impl molecule::prelude::Entity for AnyBalances {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
-        Self::new_builder()
-            .ckb(self.ckb())
-            .sudt(self.sudt())
-            .eth(self.eth())
+        Self::new_builder().set(self.to_enum())
     }
 }
 #[derive(Clone, Copy)]
@@ -2919,55 +2529,23 @@ impl<'r> ::core::fmt::Debug for AnyBalancesReader<'r> {
 }
 impl<'r> ::core::fmt::Display for AnyBalancesReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "ckb", self.ckb())?;
-        write!(f, ", {}: {}", "sudt", self.sudt())?;
-        write!(f, ", {}: {}", "eth", self.eth())?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
-        write!(f, " }}")
+        write!(f, "{}(", Self::NAME)?;
+        self.to_enum().display_inner(f)?;
+        write!(f, ")")
     }
 }
 impl<'r> AnyBalancesReader<'r> {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
+    pub const ITEMS_COUNT: usize = 3;
+    pub fn item_id(&self) -> molecule::Number {
+        molecule::unpack_number(self.as_slice())
     }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
-    pub fn ckb(&self) -> CKByteDistributionReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        CKByteDistributionReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn sudt(&self) -> SUDTBalancesReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        SUDTBalancesReader::new_unchecked(&self.as_slice()[start..end])
-    }
-    pub fn eth(&self) -> ETHBalancesReader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[16..]) as usize;
-            ETHBalancesReader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            ETHBalancesReader::new_unchecked(&self.as_slice()[start..])
+    pub fn to_enum(&self) -> AnyBalancesUnionReader<'r> {
+        let inner = &self.as_slice()[molecule::NUMBER_SIZE..];
+        match self.item_id() {
+            0 => CKByteDistributionReader::new_unchecked(inner).into(),
+            1 => SUDTBalancesReader::new_unchecked(inner).into(),
+            2 => ETHBalancesReader::new_unchecked(inner).into(),
+            _ => panic!("{}: invalid data", Self::NAME),
         }
     }
 }
@@ -2989,58 +2567,26 @@ impl<'r> molecule::prelude::Reader<'r> for AnyBalancesReader<'r> {
         if slice_len < molecule::NUMBER_SIZE {
             return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
         }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        CKByteDistributionReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        SUDTBalancesReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        ETHBalancesReader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
+        let item_id = molecule::unpack_number(slice);
+        let inner_slice = &slice[molecule::NUMBER_SIZE..];
+        match item_id {
+            0 => CKByteDistributionReader::verify(inner_slice, compatible),
+            1 => SUDTBalancesReader::verify(inner_slice, compatible),
+            2 => ETHBalancesReader::verify(inner_slice, compatible),
+            _ => ve!(Self, UnknownItem, Self::ITEMS_COUNT, item_id),
+        }?;
         Ok(())
     }
 }
 #[derive(Clone, Debug, Default)]
-pub struct AnyBalancesBuilder {
-    pub(crate) ckb: CKByteDistribution,
-    pub(crate) sudt: SUDTBalances,
-    pub(crate) eth: ETHBalances,
-}
+pub struct AnyBalancesBuilder(pub(crate) AnyBalancesUnion);
 impl AnyBalancesBuilder {
-    pub const FIELD_COUNT: usize = 3;
-    pub fn ckb(mut self, v: CKByteDistribution) -> Self {
-        self.ckb = v;
-        self
-    }
-    pub fn sudt(mut self, v: SUDTBalances) -> Self {
-        self.sudt = v;
-        self
-    }
-    pub fn eth(mut self, v: ETHBalances) -> Self {
-        self.eth = v;
+    pub const ITEMS_COUNT: usize = 3;
+    pub fn set<I>(mut self, v: I) -> Self
+    where
+        I: ::core::convert::Into<AnyBalancesUnion>,
+    {
+        self.0 = v.into();
         self
     }
 }
@@ -3048,34 +2594,189 @@ impl molecule::prelude::Builder for AnyBalancesBuilder {
     type Entity = AnyBalances;
     const NAME: &'static str = "AnyBalancesBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.ckb.as_slice().len()
-            + self.sudt.as_slice().len()
-            + self.eth.as_slice().len()
+        molecule::NUMBER_SIZE + self.0.as_slice().len()
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.ckb.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.sudt.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.eth.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
-        writer.write_all(self.ckb.as_slice())?;
-        writer.write_all(self.sudt.as_slice())?;
-        writer.write_all(self.eth.as_slice())?;
-        Ok(())
+        writer.write_all(&molecule::pack_number(self.0.item_id()))?;
+        writer.write_all(self.0.as_slice())
     }
     fn build(&self) -> Self::Entity {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
         AnyBalances::new_unchecked(inner.into())
+    }
+}
+#[derive(Debug, Clone)]
+pub enum AnyBalancesUnion {
+    CKByteDistribution(CKByteDistribution),
+    SUDTBalances(SUDTBalances),
+    ETHBalances(ETHBalances),
+}
+#[derive(Debug, Clone, Copy)]
+pub enum AnyBalancesUnionReader<'r> {
+    CKByteDistribution(CKByteDistributionReader<'r>),
+    SUDTBalances(SUDTBalancesReader<'r>),
+    ETHBalances(ETHBalancesReader<'r>),
+}
+impl ::core::default::Default for AnyBalancesUnion {
+    fn default() -> Self {
+        AnyBalancesUnion::CKByteDistribution(::core::default::Default::default())
+    }
+}
+impl ::core::fmt::Display for AnyBalancesUnion {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            AnyBalancesUnion::CKByteDistribution(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, CKByteDistribution::NAME, item)
+            }
+            AnyBalancesUnion::SUDTBalances(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, SUDTBalances::NAME, item)
+            }
+            AnyBalancesUnion::ETHBalances(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, ETHBalances::NAME, item)
+            }
+        }
+    }
+}
+impl<'r> ::core::fmt::Display for AnyBalancesUnionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            AnyBalancesUnionReader::CKByteDistribution(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, CKByteDistribution::NAME, item)
+            }
+            AnyBalancesUnionReader::SUDTBalances(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, SUDTBalances::NAME, item)
+            }
+            AnyBalancesUnionReader::ETHBalances(ref item) => {
+                write!(f, "{}::{}({})", Self::NAME, ETHBalances::NAME, item)
+            }
+        }
+    }
+}
+impl AnyBalancesUnion {
+    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            AnyBalancesUnion::CKByteDistribution(ref item) => write!(f, "{}", item),
+            AnyBalancesUnion::SUDTBalances(ref item) => write!(f, "{}", item),
+            AnyBalancesUnion::ETHBalances(ref item) => write!(f, "{}", item),
+        }
+    }
+}
+impl<'r> AnyBalancesUnionReader<'r> {
+    pub(crate) fn display_inner(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            AnyBalancesUnionReader::CKByteDistribution(ref item) => write!(f, "{}", item),
+            AnyBalancesUnionReader::SUDTBalances(ref item) => write!(f, "{}", item),
+            AnyBalancesUnionReader::ETHBalances(ref item) => write!(f, "{}", item),
+        }
+    }
+}
+impl ::core::convert::From<CKByteDistribution> for AnyBalancesUnion {
+    fn from(item: CKByteDistribution) -> Self {
+        AnyBalancesUnion::CKByteDistribution(item)
+    }
+}
+impl ::core::convert::From<SUDTBalances> for AnyBalancesUnion {
+    fn from(item: SUDTBalances) -> Self {
+        AnyBalancesUnion::SUDTBalances(item)
+    }
+}
+impl ::core::convert::From<ETHBalances> for AnyBalancesUnion {
+    fn from(item: ETHBalances) -> Self {
+        AnyBalancesUnion::ETHBalances(item)
+    }
+}
+impl<'r> ::core::convert::From<CKByteDistributionReader<'r>> for AnyBalancesUnionReader<'r> {
+    fn from(item: CKByteDistributionReader<'r>) -> Self {
+        AnyBalancesUnionReader::CKByteDistribution(item)
+    }
+}
+impl<'r> ::core::convert::From<SUDTBalancesReader<'r>> for AnyBalancesUnionReader<'r> {
+    fn from(item: SUDTBalancesReader<'r>) -> Self {
+        AnyBalancesUnionReader::SUDTBalances(item)
+    }
+}
+impl<'r> ::core::convert::From<ETHBalancesReader<'r>> for AnyBalancesUnionReader<'r> {
+    fn from(item: ETHBalancesReader<'r>) -> Self {
+        AnyBalancesUnionReader::ETHBalances(item)
+    }
+}
+impl AnyBalancesUnion {
+    pub const NAME: &'static str = "AnyBalancesUnion";
+    pub fn as_bytes(&self) -> molecule::bytes::Bytes {
+        match self {
+            AnyBalancesUnion::CKByteDistribution(item) => item.as_bytes(),
+            AnyBalancesUnion::SUDTBalances(item) => item.as_bytes(),
+            AnyBalancesUnion::ETHBalances(item) => item.as_bytes(),
+        }
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            AnyBalancesUnion::CKByteDistribution(item) => item.as_slice(),
+            AnyBalancesUnion::SUDTBalances(item) => item.as_slice(),
+            AnyBalancesUnion::ETHBalances(item) => item.as_slice(),
+        }
+    }
+    pub fn item_id(&self) -> molecule::Number {
+        match self {
+            AnyBalancesUnion::CKByteDistribution(_) => 0,
+            AnyBalancesUnion::SUDTBalances(_) => 1,
+            AnyBalancesUnion::ETHBalances(_) => 2,
+        }
+    }
+    pub fn item_name(&self) -> &str {
+        match self {
+            AnyBalancesUnion::CKByteDistribution(_) => "CKByteDistribution",
+            AnyBalancesUnion::SUDTBalances(_) => "SUDTBalances",
+            AnyBalancesUnion::ETHBalances(_) => "ETHBalances",
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> AnyBalancesUnionReader<'r> {
+        match self {
+            AnyBalancesUnion::CKByteDistribution(item) => item.as_reader().into(),
+            AnyBalancesUnion::SUDTBalances(item) => item.as_reader().into(),
+            AnyBalancesUnion::ETHBalances(item) => item.as_reader().into(),
+        }
+    }
+}
+impl<'r> AnyBalancesUnionReader<'r> {
+    pub const NAME: &'r str = "AnyBalancesUnionReader";
+    pub fn as_slice(&self) -> &'r [u8] {
+        match self {
+            AnyBalancesUnionReader::CKByteDistribution(item) => item.as_slice(),
+            AnyBalancesUnionReader::SUDTBalances(item) => item.as_slice(),
+            AnyBalancesUnionReader::ETHBalances(item) => item.as_slice(),
+        }
+    }
+    pub fn item_id(&self) -> molecule::Number {
+        match self {
+            AnyBalancesUnionReader::CKByteDistribution(_) => 0,
+            AnyBalancesUnionReader::SUDTBalances(_) => 1,
+            AnyBalancesUnionReader::ETHBalances(_) => 2,
+        }
+    }
+    pub fn item_name(&self) -> &str {
+        match self {
+            AnyBalancesUnionReader::CKByteDistribution(_) => "CKByteDistribution",
+            AnyBalancesUnionReader::SUDTBalances(_) => "SUDTBalances",
+            AnyBalancesUnionReader::ETHBalances(_) => "ETHBalances",
+        }
+    }
+}
+impl From<CKByteDistribution> for AnyBalances {
+    fn from(value: CKByteDistribution) -> Self {
+        Self::new_builder().set(value).build()
+    }
+}
+impl From<SUDTBalances> for AnyBalances {
+    fn from(value: SUDTBalances) -> Self {
+        Self::new_builder().set(value).build()
+    }
+}
+impl From<ETHBalances> for AnyBalances {
+    fn from(value: ETHBalances) -> Self {
+        Self::new_builder().set(value).build()
     }
 }
 #[derive(Clone)]
