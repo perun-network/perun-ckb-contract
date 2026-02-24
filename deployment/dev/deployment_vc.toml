@@ -1,11 +1,11 @@
 [[cells]]
 name = "vcts"
-enable_type_id = false
+enable_type_id = true
 location = { file = "build/release/perun-vchannel-typescript" }
 
 [[cells]]
 name = "vcls"
-enable_type_id = false
+enable_type_id = true
 location = { file = "build/release/perun-vchannel-lockscript" }
 
 #

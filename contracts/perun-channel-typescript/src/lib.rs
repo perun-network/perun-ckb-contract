@@ -38,13 +38,14 @@ use perun_common::{
     error::Error,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
-        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, VCChannelConstants,
-        VirtualChannelStatus,
+        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, SubAlloc,
+        VCChannelConstants, VirtualChannelStatus,
     },
     sig::{ethereum_message_hash, verify_signature},
 };
 
 const SUDT_MIN_LEN: usize = 16;
+const DUMMY_LOCKED_FUNDS_ID: [u8; 32] = [0u8; 32];
 
 pub fn program_entry() -> i8 {
     match main() {
@@ -254,14 +255,16 @@ pub fn check_valid_progress(
     }
 }
 
+//VC-Start-Tx for PCTS
 pub fn check_vc_dispute(
     old_status: &ChannelStatus,
     new_status: &ChannelStatus,
 ) -> Result<(), Error> {
     debug!("check_vc_dispute");
-
     //A vc cell can only be created once by this channel cell
-    if !(!old_status.disputed().to_bool() && new_status.disputed().to_bool()) {
+    verify_status_disputed(new_status)?;
+
+    if !(!old_status.vc_disputed().to_bool() && new_status.vc_disputed().to_bool()) {
         return Err(Error::InvalidVCTxStart);
     }
     debug!("Verified that vc cell can only be created once by this lc cell");
@@ -310,13 +313,18 @@ pub fn check_normal_dispute(
     // In case of vc disputes, we allow version number to be non-decreasing
     debug!("check_normal_dispute");
     if !old_status.vc_disputed().to_bool() {
-        debug!("verify_channel_state_progression");
+        debug!("normal dispute registered");
+        if !new_status.vc_disputed().to_bool() {
+            verify_no_locked_funds(&new_status)?;
+            debug!("verify_no_locked_funds passed");
+        }
         verify_channel_state_progression(old_status, &new_status.state())?;
+        debug!("verify_channel_state_progression passed");
     } else {
-        debug!("verify_vc_parent_state_progression");
+        debug!("vc dispute registered");
         verify_vc_parent_state_progression(old_status, &new_status.state())?;
+        debug!("verify_vc_parent_state_progression passed");
     }
-    debug!("verify_channel_state_progression passed");
 
     // One cannot dispute if funding is not complete.
     verify_status_funded(old_status)?;
@@ -426,6 +434,8 @@ pub fn check_valid_close(
             debug!("check_valid_close: Status funded verified");
             verify_state_finalized(&c.state())?;
             debug!("check_valid_close: State finalized verified");
+            verify_no_locked_funds(&old_status)?;
+            debug!("check_valid_close: no locked funds exist");
             verify_valid_state_sigs(
                 &c.sig_a().unpack(),
                 &c.sig_b().unpack(),
@@ -447,6 +457,50 @@ pub fn check_valid_close(
         ChannelWitnessUnion::Dispute(_) => Err(Error::ChannelDisputeWithoutChannelOutput),
         ChannelWitnessUnion::VCDispute(_) => Err(Error::VCDisputeWithoutChannelOutput),
     }
+}
+
+pub fn verify_no_locked_funds(channel_status: &ChannelStatus) -> Result<(), Error> {
+    let locked_balances = channel_status.state().balances().locked();
+
+    if locked_balances.is_empty() {
+        return Ok(());
+    }
+
+    if locked_balances.len() > 1 {
+        debug!("More than one locked fund entry found");
+        return Err(Error::LedgerChannelHasLockedFunds);
+    }
+
+    let dummy_sub_alloc = locked_balances.get(0).ok_or(Error::UnexpectedSysError)?;
+
+    verify_dummy_locked_funds(&dummy_sub_alloc)
+}
+
+fn verify_dummy_locked_funds(locked_funds: &SubAlloc) -> Result<(), Error> {
+    // Check ID
+    if locked_funds.id().as_slice() != DUMMY_LOCKED_FUNDS_ID {
+        debug!("Locked funds ID {:?} is not dummy ID", locked_funds.id());
+        return Err(Error::InvalidDummyEntry);
+    }
+    // Check CKBytes are zero
+    let party_a_ckbytes = locked_funds.balances().ckbytes().get(0)?;
+    let party_b_ckbytes = locked_funds.balances().ckbytes().get(1)?;
+    if party_a_ckbytes != 0 || party_b_ckbytes != 0 {
+        debug!(
+            "Dummy has non-zero ckbytes: party_a={}, party_b={}",
+            party_a_ckbytes, party_b_ckbytes
+        );
+        return Err(Error::InvalidDummyEntry);
+    }
+    // Check no SUDTs
+    if !locked_funds.balances().sudts().is_empty() {
+        debug!(
+            "Dummy has {} SUDT entries",
+            locked_funds.balances().sudts().len()
+        );
+        return Err(Error::InvalidDummyEntry);
+    }
+    Ok(())
 }
 
 pub fn check_vc_force_close(
@@ -491,6 +545,8 @@ pub fn check_normal_force_close(
     // expired. Upon force close, each party is paid according to the balance distribution in the
     // latest state.
 
+    verify_no_locked_funds(&old_status)?;
+    debug!("verify_no_locked_funds passed");
     verify_status_funded(old_status)?;
     debug!("verify_status_funded passed");
     verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;

@@ -127,6 +127,8 @@ pub enum Error {
     VCStatusNotEqual,
     NoVCRentPayoutCell,
     InvalidVCRentPayoutCell,
+    LedgerChannelHasLockedFunds,
+    InvalidDummyEntry,
 }
 impl From<Error> for i8 {
     #[inline]
