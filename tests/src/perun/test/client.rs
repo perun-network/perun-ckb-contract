@@ -1,14 +1,14 @@
 use ckb_testtool::ckb_traits::CellDataProvider;
 
+use alloy_sol_types::SolValue;
 use ckb_testtool::ckb_types::core::ScriptHashType;
 use ckb_testtool::ckb_types::packed::{OutPoint, Script};
 use ckb_testtool::ckb_types::prelude::*;
 use ckb_testtool::context::Context;
-
 use k256::ecdsa::signature::hazmat::PrehashSigner;
 use perun_common::*;
+use sha3::{Digest, Keccak256};
 
-use perun_common::helpers::blake2b256;
 use perun_common::perun_types::{ChannelState, ChannelStatus, VirtualChannelStatus};
 
 use crate::perun;
@@ -20,6 +20,7 @@ use crate::perun::test::transaction::{
     OpenResult, VCLCUpdateArgs, VCMergeArgs, VCProgressNoUpdateArgs, VCStartArgs, VCUpdateOnlyArgs,
 };
 use crate::perun::test::{keys, transaction};
+use perun_common::sol::convert_ckb_state;
 
 use k256::ecdsa::{Signature, SigningKey};
 
@@ -77,7 +78,16 @@ impl Client {
             .expect("pfls hash");
 
         let parties = funding_agreement.mk_participants(ctx, env, env.min_capacity_no_script);
-
+        for (i, party) in parties.iter().enumerate() {
+            println!("Party {}: {:?}", i, party);
+            println!("Party {}: Field Count = {}", i, party.field_count());
+            let pk = party.pub_key();
+            let pk_slice = pk.as_slice();
+            let eth_address = perun_common::sol::eth_address_from_sec1_pubkey(pk_slice)
+                .expect("unable to get eth address from pubkey");
+            let eth_addr_bytes = eth_address.as_slice();
+            println!("EthAddress (hex): 0x{}", hex::encode(eth_addr_bytes));
+        }
         let chan_params = perun_types::ChannelParametersBuilder::default()
             .party_a(parties[0].clone())
             .party_b(parties[1].clone())
@@ -87,8 +97,14 @@ impl Client {
             .is_ledger_channel(ctrue!())
             .is_virtual_channel(cfalse!())
             .build();
-        let cid_raw = blake2b256(chan_params.as_slice());
-        let cid = ChannelId::from(cid_raw);
+        let params_sol = perun_common::sol::convert_params(&chan_params);
+        let cid_raw_sol = params_sol.abi_encode();
+        let cid_raw = Keccak256::digest(&cid_raw_sol);
+        let cid_raw_array: [u8; 32] = cid_raw
+            .as_slice()
+            .try_into()
+            .expect("Keccak256 hash must be 32 bytes");
+        let cid = ChannelId::from(cid_raw_array);
         let chan_const = perun_types::ChannelConstantsBuilder::default()
             .params(chan_params)
             .pfls_code_hash(pfls_code_hash.clone())
@@ -157,9 +173,14 @@ impl Client {
     }
 
     pub fn sign(&self, state: ChannelState) -> Result<Vec<u8>, perun::Error> {
-        let s: Signature = self
-            .signing_key
-            .sign_prehash(&blake2b256(state.as_slice()))?;
+        let state_eth = convert_ckb_state(&state);
+        let state_abi_encoded = state_eth.abi_encode();
+
+        let s: Signature =
+            self.signing_key
+                .sign_prehash(&perun_common::sig::ethereum_message_hash(
+                    state_abi_encoded.as_slice(),
+                ))?;
         Ok(Vec::from(s.to_der().as_bytes()))
     }
 

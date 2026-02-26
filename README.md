@@ -11,21 +11,31 @@
 
 # [Perun](https://perun.network/) CKB contracts
 
-This repository contains the scripts used to realize Perun channels on CKB.
-There are three scripts available:
+This repository contains the smart contracts that implement **Perun payment channels on Nervos CKB**, enabling secure and efficient off-chain transactions backed by CKB’s UTXO architecture.
 
-## perun-channel-lockscript
-This script is used to handle access-rights to the live Perun channel cell.
-It ensures that only participants of the Perun channel in question are able to
-consume the live channel cell.
+The design follows the same encoding and verification semantics used in the [**Perun Ethereum contract**](https://github.com/hyperledger-labs/perun-eth-contracts).  
+By applying an **Ethereum-style binary encoding format** for channel identification, and signed updates, the CKB implementation can validate the *same* off-chain messages recognized by Ethereum. This ensures:
 
-## perun-channel-typescript
-This script is used to handle a Perun channel's state progression on-chain.
-Basically a NFT script with extra functionality.
+- a compatible state representation across chains
+- cross-chain verifiability of signed updates
+- interoperability with Ethereum-based Perun backends
+- support for multi-chain Perun channels and swaps
 
-## perun-funds-lockscript
-This script handle access rights to all funds belonging to a Perun channel.
-It ensures that only channel participants are able to consume said funds.
+This shared data model allows Perun channels on CKB combined with Perun channels on Ethereum.
+
+## Scripts Overview
+### **1. `perun-channel-lockscript`**
+Controls access rights to the *live* Perun channel cell.  
+Only channel participants can consume or update the channel.
+
+### **2. `perun-channel-typescript`**
+Implements the on-chain state machine for Perun channels.  
+It validates channel state transitions and enforces correct dispute handling.  
+Functionally similar to a stateful NFT script with Perun-specific logic.
+
+### **3. `perun-funds-lockscript`**
+Manages the channel’s locked assets (CKB or SUDT).  
+Ensures that only the channel’s participants can withdraw or move funds.
 
 ## Prerequisites
 Update the rustc version to 1.85.0 and install the following:

@@ -25,6 +25,7 @@ use crate::perun::{
 use crate::perun::{channel::Channel, test};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use perun_common::perun_types::{Allocation, AnyBalances, AnyBalancesUnion};
 
 #[derive(Debug, Clone)]
 pub struct VirtualChannel {
@@ -272,8 +273,11 @@ pub fn update_virtual_channel<'a>(
             .nth0(updated_ckb.pack())
             .nth1(updated_ckb_2.pack())
             .build();
+        let ckb_dist_union = AnyBalancesUnion::CKByteDistribution(updated_ckb_dist);
 
         let mut sudt_allocation_builder = SUDTAllocation::new_builder();
+        let mut allocation_builder = Allocation::new_builder();
+        allocation_builder = allocation_builder.push(AnyBalances::new_builder().set(ckb_dist_union).build());
 
         for (_, vc_sudt_bals) in vc_alloc.balances().sudts().clone().into_iter().enumerate() {
             for (_, lc_sudt_bals) in s.balances().sudts().clone().into_iter().enumerate() {
@@ -307,7 +311,8 @@ pub fn update_virtual_channel<'a>(
                         .as_builder()
                         .distribution(updated_sudt_dist)
                         .build();
-                    sudt_allocation_builder = sudt_allocation_builder.push(updated_sudt_bals);
+                    let sudt_bals_union = AnyBalancesUnion::SUDTBalances(updated_sudt_bals);
+                    allocation_builder = allocation_builder.push(AnyBalances::new_builder().set(sudt_bals_union).build());
                 }
             }
         }
@@ -319,8 +324,9 @@ pub fn update_virtual_channel<'a>(
                 s.balances()
                     .clone()
                     .as_builder()
-                    .ckbytes(updated_ckb_dist)
-                    .sudts(sudt_alloc)
+                    .assets(
+                        allocation_builder.build()
+                    )
                     .locked(locked)
                     .build(),
             )

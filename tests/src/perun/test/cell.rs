@@ -1,6 +1,6 @@
 use ckb_testtool::ckb_types::{
     packed::{CellOutput, OutPoint},
-    prelude::{Pack, Unpack},
+    prelude::{Unpack},
 };
 use ckb_types::bytes;
 use molecule::prelude::{Builder, Entity};

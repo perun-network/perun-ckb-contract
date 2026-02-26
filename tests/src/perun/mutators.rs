@@ -32,19 +32,17 @@ pub fn pay_ckbytes(
     let (sender_index, receiver_index) = get_indices(direction);
     move |s| {
         let s_bumped = bump_version()(s)?;
-        let mut distribution = s_bumped.balances().ckbytes().to_array();
-        if distribution[sender_index] < amount {
+        let mut dist = s_bumped.balances().ckbytes().to_array();
+        if dist[sender_index] < amount {
             return Err(perun::Error::new("insufficient funds"));
         }
-        distribution[sender_index] -= amount;
-        distribution[receiver_index] += amount;
-        let balances = s_bumped
-            .balances()
-            .clone()
-            .as_builder()
-            .ckbytes(CKByteDistribution::from_array(distribution))
-            .build();
-        Ok(s_bumped.clone().as_builder().balances(balances).build())
+        dist[sender_index] -= amount;
+        dist[receiver_index] += amount;
+
+        let new_ckb = CKByteDistribution::from_array(dist);
+        let new_balances = s_bumped.balances().with_ckbytes(new_ckb);
+
+        Ok(s_bumped.clone().as_builder().balances(new_balances).build())
     }
 }
 
@@ -58,31 +56,32 @@ pub fn pay_sudt(
     let (sender_index, receiver_index) = get_indices(direction);
     move |s| {
         let s_bumped = bump_version()(s)?;
-        let sudts = s_bumped.balances().sudts().clone();
+        let sudts = s_bumped.balances().sudts();
         if asset_index >= sudts.len() {
             return Err(perun::Error::new("asset index out of bounds"));
         }
-        let sudt = sudts.get(asset_index).unwrap();
-        let mut distribution = sudt.distribution().to_array();
-        if distribution[sender_index] < amount {
+        let sudt = sudts.get(asset_index).expect("checked len above");
+
+        let mut d = sudt.distribution().to_array();
+        if d[sender_index] < amount {
             return Err(perun::Error::new("insufficient funds"));
         }
-        distribution[sender_index] -= amount;
-        distribution[receiver_index] += amount;
-        let packed_sudt = sudt
+        d[sender_index] -= amount;
+        d[receiver_index] += amount;
+        let updated_sudt = sudt
             .clone()
             .as_builder()
-            .distribution(SUDTDistribution::from_array(distribution))
+            .distribution(SUDTDistribution::from_array(d))
             .build();
-        let mut new_sudts = sudts.clone().as_builder();
-        new_sudts.replace(asset_index, packed_sudt).unwrap();
-        let balances = s_bumped
-            .balances()
-            .clone()
-            .as_builder()
-            .sudts(new_sudts.build())
-            .build();
-        Ok(s_bumped.clone().as_builder().balances(balances).build())
+
+        let mut sudts_builder = sudts.clone().as_builder();
+        sudts_builder.replace(asset_index, updated_sudt)
+            .expect("valid asset_index");
+        let new_sudts = sudts_builder.build();
+
+        let new_balances = s_bumped.balances().with_sudts(new_sudts);
+
+        Ok(s_bumped.clone().as_builder().balances(new_balances).build())
     }
 }
 

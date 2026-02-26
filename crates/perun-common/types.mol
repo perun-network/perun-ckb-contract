@@ -2,31 +2,41 @@ import blockchain;
 
 /* Perun Types */
 array SEC1EncodedPubKey [byte; 33];
-
+array EthAddress        [byte; 20];
 array CKByteDistribution [Uint64; 2];
-
-array SUDTDistribution [Uint128; 2];
+array SUDTDistribution   [Uint128; 2];
+array ETHDistribution    [Uint128; 2];
 
 vector SUDTAllocation <SUDTBalances>;
+vector Locked_balances  <SubAlloc>;
 
-vector Locked_balances <SubAlloc>;
+union AnyBalances {
+  CKByteDistribution,
+  SUDTBalances,
+  ETHBalances,
+}
 
-table SubAlloc{
-  id: Byte32, //subchannel/virtual channel id
+vector Allocation <AnyBalances>;
+
+table SubAlloc {
+  id: Byte32, // subchannel/virtual channel id
   balances: SubBalances,
 }
 
-table SubBalances{
+table SubBalances {
   ckbytes: CKByteDistribution,
   sudts: SUDTAllocation,
 }
 
 table SUDTAsset {
   type_script: Script,
-  // The max_capacity of an SUDTAsset should always be at least the capacity needed for the SUDT type script + outputs_data
-  // + max(party_a.payment_min_capacity, party_b.payment_min_capacity)
-  // Make sure verify this in the Funding Agreement, as the contract can not verify this upon channel start!
+  // See comments in your original snippet.
   max_capacity: Uint64,
+}
+
+table ETHAsset {
+  chain_id: Uint128,
+  asset_address: EthAddress,
 }
 
 table SUDTBalances {
@@ -34,13 +44,17 @@ table SUDTBalances {
   distribution: SUDTDistribution,
 }
 
+table ETHBalances {
+  asset: ETHAsset,
+  distribution: ETHDistribution,
+}
+
 table Balances {
-  ckbytes: CKByteDistribution,
-  sudts: SUDTAllocation,
+  assets: Allocation,
   locked: Locked_balances,
 }
 
-array True [byte; 1];
+array True  [byte; 1];
 array False [byte; 1];
 
 union Bool {
@@ -51,70 +65,42 @@ union Bool {
 array A [byte; 1];
 array B [byte; 1];
 
-
 option App (Bytes);
 
-// Terminology:
-// - script_hash: By script_hash we mean the results of the syscalls load_cell_lock_hash / load_cell_type_hash
-//                and the sdk function calc_script_hash. This is the hash of the script struct (code_hash, hash_type and args).
-// - code_hash:   By code_hash we mean the member of a script that hold the hash of the executed code (depending on the hash_type).
-//                See: https://docs.nervos.org/docs/reference/script/
-
-
-
 table Participant {
-  // payment_script_hash specifies the script-hash used
-  // to lock payments to this participant (upon channel close)
   payment_script_hash:  Byte32,
-  // payment_min_capacity specifies the minimum capacity of the payment lock script.
   payment_min_capacity: Uint64,
-
-  // unlock_script_hash specifies the script-hash that needs to be present in the inputs
-  // to a transaction to authorize the transaction to interact with the channel as
-  // this channel participant.
   unlock_script_hash:   Byte32,
-
   pub_key: SEC1EncodedPubKey,
 }
+
 table ChannelParameters {
   party_a: Participant,
   party_b: Participant,
-  nonce:        Byte32,
+  nonce: Byte32,
   challenge_duration: Uint64,
-  // The default should be NoApp!
   app: App,
   is_ledger_channel: Bool,
   is_virtual_channel: Bool,
 }
 
-// Important: Upon channel creation, every participant must verify the integrity of the channel.
-// This includes verifying that the correct ChannelConstants are present.
-// If e.g. the payment_min_capacity (inside the participants of the channel parameters) were to be significantly larger than the minimum 
-// capacity of the payment lock script, a party could steal funds from the channel participants with balances smaller than the 
-// payment_min_capacity upon channel closing.
 table ChannelConstants {
   params: ChannelParameters,
-  // pfls__code_hash specifies the code hash of the lock_script that guards funds for this channel.
-  // Specifically, this should be the perun-funds-lockscript.
-  pfls_code_hash:     Byte32,
-  pfls_hash_type:     byte,
+  pfls_code_hash: Byte32,
+  pfls_hash_type: byte,
   pfls_min_capacity: Uint64,
-
-  // pcls_hash specifies the lock_script used for this channel.
-  // Specifically, this should be the perun-channel-lockscript.
-  pcls_code_hash:     Byte32,
-  pcls_hash_type:     byte,
-
+  pcls_code_hash: Byte32,
+  pcls_hash_type: byte,
   thread_token: ChannelToken,
 }
 
-table VCChannelConstants{
+table VCChannelConstants {
   params: ChannelParameters,
   vcls_code_hash: Byte32,
   vcls_hash_type: byte,
 }
-array Fund [byte; 1];
 
+array Fund  [byte; 1];
 array Abort [byte; 1];
 
 table VCDispute {
@@ -127,11 +113,13 @@ table Dispute {
   sig_a: Bytes,
   sig_b: Bytes,
 }
+
 table Close {
   state: ChannelState,
   sig_a: Bytes,
   sig_b: Bytes,
 }
+
 array ForceClose [byte; 1];
 
 union ChannelWitness {
@@ -148,33 +136,32 @@ table ChannelState {
   balances: Balances,
   version: Uint64,
   is_final: Bool,
-} 
+}
 
 table ChannelStatus {
   state: ChannelState,
   funded: Bool,
   disputed: Bool,
   vc_disputed: Bool,
-  vcts_hash: Byte32, 
+  vcts_hash: Byte32,
 }
 
 struct ChannelToken {
   out_point: OutPoint,
 }
 
-vector ParentsVec<ParentData>;
+vector ParentsVec <ParentData>;
 
-array index_map[byte;2];
+array index_map [byte; 2];
 
 table ParentData {
   pcts_hash: Byte32,
   idx_map: index_map,
 }
 
-
 table VirtualChannelStatus {
   vcstate: ChannelState,
-  parents:  ParentsVec,
+  parents: ParentsVec,
   first_force_close: Bool,
   owner: Participant,
 }

@@ -3,11 +3,13 @@
 #![allow(unused_attributes)]
 
 use ckb_std::default_alloc;
-
+use perun_common::sol::convert_ckb_state;
 ckb_std::entry!(program_entry);
 default_alloc!();
 // Import from `core` instead of from `std` since we are in no-std mode
+use alloy_sol_types::SolValue;
 use core::result::Result;
+
 // Import heap related library from `alloc`
 // https://doc.rust-lang.org/alloc/index.html
 use alloc::vec;
@@ -30,17 +32,16 @@ use ckb_std::{
 use perun_common::{
     channels::{
         find_cell_by_type_hash, get_channel_action, unpack_byte32, unpack_u64,
-        verify_channel_id_integrity, verify_max_one_channel, verify_thread_token_integrity,
+        verify_channel_id_cross_integrity, verify_max_one_channel, verify_thread_token_integrity,
         verify_time_lock_expired, PChannelAction,
     },
     error::Error,
-    helpers::blake2b256,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
         ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, SubAlloc,
         VCChannelConstants, VirtualChannelStatus,
     },
-    sig::verify_signature,
+    sig::{ethereum_message_hash, verify_signature},
 };
 
 const SUDT_MIN_LEN: usize = 16;
@@ -49,7 +50,7 @@ const DUMMY_LOCKED_FUNDS_ID: [u8; 32] = [0u8; 32];
 pub fn program_entry() -> i8 {
     match main() {
         Ok(_) => 0,   // Success
-        Err(_) => -1, // Failure
+        Err(e) => e.into(), // Failure
     }
 }
 
@@ -57,7 +58,6 @@ pub fn main() -> Result<(), Error> {
     debug!("PCTS");
     let script = load_script()?;
     let args: Bytes = script.args().unpack();
-
     // return an error if args is empty
     if args.is_empty() {
         return Err(Error::NoArgs);
@@ -128,11 +128,11 @@ pub fn check_valid_start(
     debug!("verify_thread_token_integrity passed");
 
     // We verify that the channel id is the hash of the channel parameters.
-    verify_channel_id_integrity(
+    verify_channel_id_cross_integrity(
         &new_status.state().channel_id(),
         &channel_constants.params(),
     )?;
-    debug!("verify_channel_id_integrity passed");
+    debug!("verify_channel_id_cross_integrity passed");
 
     // We verify that the pcts is guarded by the pcls script specified in the channel constants
     verify_valid_lock_script(channel_constants)?;
@@ -837,7 +837,9 @@ pub fn verify_valid_state_sigs(
     pub_key_a: &SEC1EncodedPubKey,
     pub_key_b: &SEC1EncodedPubKey,
 ) -> Result<(), Error> {
-    let msg_hash = blake2b256(state.as_slice());
+    let state_eth = convert_ckb_state(state);
+    let state_abi_encoded = state_eth.abi_encode();
+    let msg_hash = ethereum_message_hash(&state_abi_encoded);
     verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
     debug!("verify_valid_state_sigs: Signature A verified");
     verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;

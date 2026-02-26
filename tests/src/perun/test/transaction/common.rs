@@ -3,12 +3,11 @@ use ckb_testtool::{
     bytes,
     ckb_types::{
         packed::{Byte32, CellOutput, OutPoint},
-        prelude::{Pack, Unpack},
     },
     context::Context,
 };
 use molecule::prelude::{Builder, Entity};
-use perun_common::perun_types::Balances;
+use perun_common::perun_types::{Balances, AnyBalances, CKByteDistribution, Allocation, AnyBalancesUnion};
 
 use crate::perun;
 
@@ -37,16 +36,43 @@ pub fn create_cells(ctx: &mut Context, hash: Byte32, outputs: Vec<(CellOutput, b
 }
 
 pub fn add_cap_to_a(balances: &Balances, cap: Capacity) -> Balances {
-    let bal_a: u64 = balances.ckbytes().nth0().unpack();
+    let mut dist = balances.ckbytes().to_array();
+    dist[0] = dist[0]
+        .checked_add(cap.as_u64())
+        .expect("capacity overflow");
+    let updated_ckb_union = AnyBalancesUnion::CKByteDistribution(CKByteDistribution::from_array(dist));
+
+    let mut rows = Vec::new();
+    let mut replaced = false;
+
+    for row in balances.assets().clone().into_iter() {
+        if row.is_ckb_row() {
+            rows.push(
+                AnyBalances::new_builder()
+                    .set(updated_ckb_union.clone())
+                    .build(),
+            );
+            replaced = true;
+        } else {
+            rows.push(row);
+        }
+    }
+
+    if !replaced {
+        rows.insert(
+            0,
+            AnyBalances::new_builder()
+                .set(updated_ckb_union)
+                .build(),
+        );
+    }
+
+    let new_assets = Allocation::new_builder().set(rows).build();
+
     balances
         .clone()
         .as_builder()
-        .ckbytes(
-            balances
-                .ckbytes()
-                .as_builder()
-                .nth0((cap.as_u64() + bal_a).pack())
-                .build(),
-        )
+        .assets(new_assets)
+        .locked(balances.locked())
         .build()
 }

@@ -6,12 +6,13 @@ if [ "$1" = "build" ]; then
     echo "🔧 Setting environment for BUILD (RISC-V)..."
     export RUSTFLAGS="-C linker=rust-lld"
     export CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER=rust-lld
+    export SYSROOT=/usr/riscv64-linux-gnu
     export TARGET_CC=riscv64-unknown-elf-gcc
     export TARGET_AR=riscv64-unknown-elf-ar
-    export C_INCLUDE_PATH=/usr/riscv64-linux-gnu/include
-    export CFLAGS="-I/usr/riscv64-linux-gnu/include"
-    export TARGET_CFLAGS="-I/usr/riscv64-linux-gnu/include"
-    export CC=clang-18
+    export CC=riscv64-unknown-elf-gcc
+    export C_INCLUDE_PATH="$SYSROOT/include"
+    export CFLAGS="--sysroot=$SYSROOT -I/usr/lib/gcc/riscv64-unknown-elf/10.2.0/include -I/usr/lib/gcc/riscv64-unknown-elf/10.2.0/include-fixed"
+    export TARGET_CFLAGS="--sysroot=$SYSROOT -I/usr/lib/gcc/riscv64-unknown-elf/10.2.0/include -I/usr/lib/gcc/riscv64-unknown-elf/10.2.0/include-fixed"
 
 elif [ "$1" = "test" ]; then
     echo "🧪 Setting environment for TEST (x86_64)..."

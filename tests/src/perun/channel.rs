@@ -502,6 +502,12 @@ where
             .cloned()
             .map(resolve_client)
             .collect();
+
+        // let sigs_eth: Result<Vec<_>, _> = clients?
+        //     .iter()
+        //     .map(|p| p.sign_eth(self.channel_state.state()))
+        //     .collect();
+
         let sigs: Result<Vec<_>, _> = clients?
             .iter()
             .map(|p| p.sign(self.channel_state.state()))

@@ -130,6 +130,12 @@ pub enum Error {
     LedgerChannelHasLockedFunds,
     InvalidDummyEntry,
 }
+impl From<Error> for i8 {
+    #[inline]
+    fn from(e: Error) -> i8 {
+        e as i8
+    }
+}
 
 impl From<SysError> for Error {
     fn from(err: SysError) -> Self {

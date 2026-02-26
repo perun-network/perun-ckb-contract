@@ -12,7 +12,7 @@ use perun_common::error::Error;
 pub fn program_entry() -> i8 {
     match main() {
         Ok(_) => 0,   // Success
-        Err(_) => -1, // Failure
+        Err(e) => e.into(), // Failure
     }
 }
 
