@@ -1,0 +1,11 @@
+[package]
+name = "liquidity-pool-typescript"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ckb-std = "1.0"
+
+[features]
+library = []
+native-simulator = ["library", "ckb-std/native-simulator"]

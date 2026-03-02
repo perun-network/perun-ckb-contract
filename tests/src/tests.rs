@@ -3,19 +3,22 @@ use crate::perun::random;
 use crate::perun::virtual_channel::*;
 
 use super::*;
+use alloy_sol_types::SolValue;
 use ckb_occupied_capacity::Capacity;
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
 use perun::{test, virtual_channel};
-use perun_common::perun_types::{Balances, Bool, CKByteDistribution, ChannelState, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, SEC1EncodedPubKey, SubAlloc, Allocation, AnyBalances, AnyBalancesUnion};
+use perun_common::perun_types::{
+    Allocation, AnyBalances, AnyBalancesUnion, Balances, Bool, CKByteDistribution, ChannelState,
+    ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, SEC1EncodedPubKey,
+    SubAlloc,
+};
 use perun_common::sig::{ethereum_message_hash, verify_signature};
 use perun_common::sol::convert_ckb_state;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Mutex;
-use alloy_sol_types::SolValue;
-
 
 const MAX_CYCLES: u64 = 100 * 10_000_000;
 const CHALLENGE_DURATION_MS: u64 = 10 * 1000;
@@ -50,11 +53,12 @@ fn test_signature() {
             Allocation::new_builder()
                 .push(
                     AnyBalances::new_builder()
-                        .set(
-                            AnyBalancesUnion::CKByteDistribution(CKByteDistribution::new_builder()
+                        .set(AnyBalancesUnion::CKByteDistribution(
+                            CKByteDistribution::new_builder()
                                 .set(balances_array)
-                                .build())
-                        ).build()
+                                .build(),
+                        ))
+                        .build(),
                 )
                 .build(),
         )
@@ -89,7 +93,12 @@ fn eth_address_from_hex(s: &str) -> EthAddress {
     let s = s.trim_start_matches("0x");
     let raw = hex::decode(s).expect("valid hex address");
     assert_eq!(raw.len(), 20);
-    let arr20: [Byte; 20] = raw.into_iter().map(|b| Byte::from(b)).collect::<Vec<_>>().try_into().unwrap();
+    let arr20: [Byte; 20] = raw
+        .into_iter()
+        .map(|b| Byte::from(b))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
     EthAddress::new_builder().set(arr20).build()
 }
 #[test]
@@ -98,8 +107,8 @@ fn test_cross_signature() {
     // and the key generation & signing in the perun-ckb-backend's wallet.
 
     let channel_id_bytes: [u8; 32] = [
-        44,200,243,93,27,28,68,193,103,206,252,229,221,0,109,14,
-        208,193,32,231,123,54,49,227,99,145,72,1,70,113,99,168
+        44, 200, 243, 93, 27, 28, 68, 193, 103, 206, 252, 229, 221, 0, 109, 14, 208, 193, 32, 231,
+        123, 54, 49, 227, 99, 145, 72, 1, 70, 113, 99, 168,
     ];
 
     // Version
@@ -131,9 +140,11 @@ fn test_cross_signature() {
         .unwrap();
     SEC1EncodedPubKey::new_builder().set(pubkey_bytes).build();
 
-    let ck_dist = AnyBalancesUnion::CKByteDistribution(CKByteDistribution::new_builder()
-        .set([ck_a.pack(), ck_b.pack()])
-        .build());
+    let ck_dist = AnyBalancesUnion::CKByteDistribution(
+        CKByteDistribution::new_builder()
+            .set([ck_a.pack(), ck_b.pack()])
+            .build(),
+    );
 
     // ETH asset & distribution
     let chain_id_u128 = u128_le_as_uint128(eth_chain_id);
@@ -148,10 +159,12 @@ fn test_cross_signature() {
         .nth1(u128_le_as_uint128(eth_b))
         .build();
 
-    let eth_balances = AnyBalancesUnion::ETHBalances(ETHBalances::new_builder()
-        .asset(eth_asset)
-        .distribution(eth_dist)
-        .build());
+    let eth_balances = AnyBalancesUnion::ETHBalances(
+        ETHBalances::new_builder()
+            .asset(eth_asset)
+            .distribution(eth_dist)
+            .build(),
+    );
 
     // Locked: push a default SubAlloc (keeps Molecule happy; convert() ignores it)
     let locked = LockedBalances::new_builder()
@@ -161,21 +174,11 @@ fn test_cross_signature() {
     let balances = Balances::new_builder()
         .assets(
             Allocation::new_builder()
-                .push(
-                    AnyBalances::new_builder()
-                        .set(
-                            ck_dist).build()
-                )
-                .push(
-                    AnyBalances::new_builder()
-                        .set(
-                            eth_balances).build()
-                )
+                .push(AnyBalances::new_builder().set(ck_dist).build())
+                .push(AnyBalances::new_builder().set(eth_balances).build())
                 .build(),
         )
-        .locked(
-            locked
-        )
+        .locked(locked)
         .build();
 
     let channel_state = ChannelState::new_builder()
@@ -2933,4 +2936,106 @@ fn test_vc_happy_multi_asset_with_merge(
             Ok(())
         },
     )
+}
+
+// generated unit test for contract liquidity-pool-typescript
+#[test]
+fn test_liquidity_pool_typescript() {
+    // deploy contract
+    let mut context = Context::default();
+    let out_point = context.deploy_cell_by_name("liquidity-pool-typescript");
+
+    // prepare scripts
+    let lock_script = context
+        .build_script(&out_point, Bytes::from(vec![42]))
+        .expect("script");
+
+    // prepare cells
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+    let outputs = vec![
+        CellOutput::new_builder()
+            .capacity(500u64.pack())
+            .lock(lock_script.clone())
+            .build(),
+        CellOutput::new_builder()
+            .capacity(500u64.pack())
+            .lock(lock_script)
+            .build(),
+    ];
+
+    let outputs_data = vec![Bytes::new(); 2];
+
+    // build transaction
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .build();
+    let tx = context.complete_tx(tx);
+
+    // run
+    let cycles = context
+        .verify_tx(&tx, 10_000_000)
+        .expect("pass verification");
+    println!("consume cycles: {}", cycles);
+}
+
+// generated unit test for contract liquidity-pool-lockscript
+#[test]
+fn test_liquidity_pool_lockscript() {
+    // deploy contract
+    let mut context = Context::default();
+    let out_point = context.deploy_cell_by_name("liquidity-pool-lockscript");
+
+    // prepare scripts
+    let lock_script = context
+        .build_script(&out_point, Bytes::from(vec![42]))
+        .expect("script");
+
+    // prepare cells
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+    let outputs = vec![
+        CellOutput::new_builder()
+            .capacity(500u64.pack())
+            .lock(lock_script.clone())
+            .build(),
+        CellOutput::new_builder()
+            .capacity(500u64.pack())
+            .lock(lock_script)
+            .build(),
+    ];
+
+    let outputs_data = vec![Bytes::new(); 2];
+
+    // build transaction
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .build();
+    let tx = context.complete_tx(tx);
+
+    // run
+    let cycles = context
+        .verify_tx(&tx, 10_000_000)
+        .expect("pass verification");
+    println!("consume cycles: {}", cycles);
 }
