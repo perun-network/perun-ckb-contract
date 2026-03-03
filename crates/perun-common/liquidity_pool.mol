@@ -1,0 +1,235 @@
+import blockchain;
+
+/* ── Liquidity Pool Types ────────────────────────────────────────────── */
+
+/*
+ * A 32-byte unique identifier for a pool instance.
+ * Derived from the first input outpoint's hash at pool-creation time.
+ */
+array PoolId [byte; 32];
+
+/*
+ * ChannelReservation – stored in a separate cell per active Perun channel.
+ * Mirrors the ETH-side HubReservation mapping entry.
+ *
+ * Wire layout (magic b"CHRV"):
+ *   [0..4]   magic  "CHRV"
+ *   [4..36]  pool_id       (32 bytes)
+ *   [36..68] channel_id    (32 bytes)
+ *   [68..76] ckb_reserved  (u64 LE)
+ *   [76..92] eth_reserved  (u128 LE)
+ *   [92..100] timestamp    (u64 LE) – block-number at reservation time
+ *   [100]    active        (byte: 0x00 = cancelled, 0x01 = active)
+ */
+table ChannelReservation {
+    pool_id:      PoolId,
+    channel_id:   Byte32,
+    ckb_reserved: Uint64,
+    eth_reserved: Uint128,
+    timestamp:    Uint64,
+    active:       byte,
+}
+
+/*
+ * Pool state – stored as the cell data of the pool-state cell.
+ * Mirrors ETH-side PoolState + running reservation totals.
+ *
+ * Wire layout (magic b"PLST"):
+ *   [0..4]    magic              "PLST"
+ *   [4..36]   operator_lock_hash (32 bytes)
+ *   [36..68]  pool_id            (32 bytes)
+ *   [68..76]  ckb_reserve        (u64 LE) – total CKB deposited by LPs
+ *   [76..92]  eth_reserve        (u128 LE) – mirrored ETH reserve
+ *   [92..108] lp_token_supply    (u128 LE) – total LP tokens outstanding
+ *   [108..112] swap_fee_bps      (u32 LE) – fee in basis-points
+ *   [112..120] ckb_reserved      (u64 LE) – CKB locked in active channels
+ *   [120..136] eth_reserved      (u128 LE) – ETH locked in active channels
+ *   [136..144] accumulated_fee_ckb (u64 LE) – undistributed CKB fees
+ *   [144..160] accumulated_fee_eth (u128 LE) – undistributed ETH fees
+ *   [160..168] swap_count        (u64 LE) – total recorded swaps
+ */
+table PoolState {
+    pool_id:              PoolId,
+    operator_lock_hash:   Byte32,
+    ckb_reserve:          Uint64,
+    eth_reserve:          Uint128,
+    lp_token_supply:      Uint128,
+    swap_fee_bps:         Uint32,
+    /* Dual-yield / channel-reservation fields (mirrors LiquidityPool.sol) */
+    ckb_reserved:         Uint64,
+    eth_reserved:         Uint128,
+    accumulated_fee_ckb:  Uint64,
+    accumulated_fee_eth:  Uint128,
+    swap_count:           Uint64,
+}
+
+/*
+ * LP position – stored as cell data of an LP-position cell.
+ * Mirrors ETH-side LPPosition mapping entry.
+ *
+ * Wire layout (magic b"LPPS"):
+ *   [0..4]    magic              "LPPS"
+ *   [4..36]   pool_id            (32 bytes)
+ *   [36..68]  owner_lock_hash    (32 bytes)
+ *   [68..84]  lp_amount          (u128 LE)
+ *   [84..92]  ckb_amount         (u64 LE) – CKB principal deposited
+ *   [92..108] eth_amount         (u128 LE) – ETH-side principal
+ *   [108..116] accumulated_fees_ckb (u64 LE)
+ *   [116..132] accumulated_fees_eth (u128 LE)
+ *   [132..140] entry_timestamp   (u64 LE)
+ *   [140]     active             (byte: 0x00 = removed, 0x01 = active)
+ */
+table LPPosition {
+    pool_id:              PoolId,
+    owner_lock_hash:      Byte32,
+    lp_amount:            Uint128,
+    ckb_amount:           Uint64,
+    eth_amount:           Uint128,
+    accumulated_fees_ckb: Uint64,
+    accumulated_fees_eth: Uint128,
+    entry_timestamp:      Uint64,
+    active:               byte,
+}
+
+/* ── Pool Witnesses ──────────────────────────────────────────────────── */
+
+/*
+ * InitPool (0x01) – Operator creates the pool state cell.
+ */
+table InitPoolWitness {
+    initial_eth_reserve: Uint128,
+    swap_fee_bps:        Uint32,
+}
+
+/*
+ * AddLiquidity (0x02) – LP deposits CKB + ETH-side, receives LP tokens.
+ * Mirrors addLiquidity() in LiquidityPool.sol.
+ *
+ * lp_minted = min(ckb_in/ckb_reserve, eth_in/eth_reserve) * lp_supply
+ *           = sqrt(ckb_in * eth_in) for initial deposit
+ */
+table AddLiquidityWitness {
+    eth_in:     Uint128,
+    min_lp_out: Uint128,
+}
+
+/*
+ * RemoveLiquidity (0x03) – LP burns LP tokens, receives CKB + ETH share.
+ * Mirrors removeLiquidity() in LiquidityPool.sol.
+ * Uses *available* reserves (total – reserved) so channel-locked funds
+ * cannot be withdrawn until channel settlement.
+ */
+table RemoveLiquidityWitness {
+    min_ckb_out: Uint64,
+    min_eth_out: Uint128,
+}
+
+/*
+ * OperatorUpdate (0x04) – Operator updates ETH reserve mirror and/or fee.
+ * No CKB moves.  Mirrors updateFeeRate() + ETH-side sync.
+ */
+table OperatorUpdateWitness {
+    new_eth_reserve: Uint128,
+    new_fee_bps:     Uint32,
+}
+
+/*
+ * OperatorCKBOut (0x05) – CKB leaves pool (CKB→ETH swap, ETH paid on ETH).
+ */
+table OperatorCKBOutWitness {
+    ckb_out:         Uint64,
+    new_eth_reserve: Uint128,
+}
+
+/*
+ * OperatorCKBIn (0x06) – CKB enters pool (ETH→CKB swap, ETH received).
+ */
+table OperatorCKBInWitness {
+    ckb_in:          Uint64,
+    new_eth_reserve: Uint128,
+}
+
+/*
+ * ReserveForChannel (0x07) – Operator locks liquidity for a Perun channel.
+ * Mirrors reserveForChannel() in LiquidityPool.sol.
+ * Creates a ChannelReservation output cell.
+ */
+table ReserveForChannelWitness {
+    channel_id:  Byte32,
+    ckb_delta:   Uint64,
+    eth_delta:   Uint128,
+}
+
+/*
+ * ExtractToHub (0x08) – Operator extracts reserved CKB to the hub.
+ * Mirrors extractToHub() in LiquidityPool.sol.
+ * Reservation cell must not be expired.
+ */
+table ExtractToHubWitness {
+    channel_id: Byte32,
+}
+
+/*
+ * CancelReservation (0x09) – Operator cancels a channel reservation.
+ * Mirrors cancelReservation() in LiquidityPool.sol.
+ * Reserved counters are released; reservation cell is consumed.
+ */
+table CancelReservationWitness {
+    channel_id: Byte32,
+}
+
+/*
+ * RedistributeSettlement (0x0A) – Hub returns CKB + fees after channel close.
+ * Mirrors redistributeFromSettlement() in LiquidityPool.sol.
+ * Reservation cell is consumed; fee accumulators increase.
+ */
+table RedistributeSettlementWitness {
+    channel_id:   Byte32,
+    ckb_returned: Uint64,
+    eth_returned: Uint128,
+    fee_ckb:      Uint64,
+    fee_eth:      Uint128,
+}
+
+/*
+ * RecordSwap (0x0B) – Operator records a completed swap against a channel.
+ * Mirrors recordSwap() in LiquidityPool.sol.
+ * Increments the pool's swap_count; no reserve changes.
+ */
+table RecordSwapWitness {
+    channel_id: Byte32,
+}
+
+/*
+ * ClaimFees (0x0C) – LP claims their proportional share of accumulated fees.
+ * Mirrors claimFees() in LiquidityPool.sol.
+ * LP position cell's accumulated_fees fields are updated.
+ */
+table ClaimFeesWitness {}
+
+/*
+ * EmergencyWithdraw (0x0D) – Operator withdraws all *available* CKB.
+ * Mirrors emergencyWithdraw() in LiquidityPool.sol.
+ * Only unreserved CKB can be removed.
+ */
+table EmergencyWithdrawWitness {}
+
+/*
+ * Top-level witness union consumed by the pool typescript.
+ * Placed in WitnessArgs.input_type of the pool-state input.
+ */
+union PoolWitness {
+    InitPoolWitness,
+    AddLiquidityWitness,
+    RemoveLiquidityWitness,
+    OperatorUpdateWitness,
+    OperatorCKBOutWitness,
+    OperatorCKBInWitness,
+    ReserveForChannelWitness,
+    ExtractToHubWitness,
+    CancelReservationWitness,
+    RedistributeSettlementWitness,
+    RecordSwapWitness,
+    ClaimFeesWitness,
+    EmergencyWithdrawWitness,
+}
