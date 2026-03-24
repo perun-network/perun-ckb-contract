@@ -6,6 +6,5 @@ pub mod helpers;
 #[allow(clippy::all)]
 pub mod perun_types;
 pub mod pool;
-pub mod pool_lp;
 pub mod sig;
 pub mod sol;

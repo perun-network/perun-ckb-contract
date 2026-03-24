@@ -7,7 +7,7 @@ use perun_common::perun_types::{
     ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances, SEC1EncodedPubKey,
     SubAlloc,
 };
-use perun_common::pool_lp::{op, PoolWitness};
+use perun_common::pool::{op, PoolWitness};
 use perun_common::sig::{ethereum_message_hash, verify_signature};
 use perun_common::sol::convert_ckb_state;
 

@@ -8,7 +8,7 @@ use ckb_testtool::ckb_types::{
 };
 use ckb_testtool::context::Context;
 use perun_common::perun_types::ChannelStatus;
-use perun_common::pool_lp::{LPCell, LPPolicy, PoolWitness};
+use perun_common::pool::{LPCell, LPPolicy, PoolWitness};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -43,8 +43,8 @@ fn load_lp_typescript_binary() -> Option<Bytes> {
     base.push(mode);
 
     let candidates = [
-        "liquidity-pool-typescript-lp",
-        "liquidity-pool-typescript-lp.debug",
+        "liquidity-pool-typescript",
+        "liquidity-pool-typescript.debug",
     ];
     for candidate in candidates {
         let mut path = base.clone();
@@ -60,7 +60,7 @@ fn deploy_lp_typescript(
     context: &mut Context,
 ) -> (ckb_testtool::ckb_types::packed::OutPoint, CellDep) {
     let lp_ts_bin = load_lp_typescript_binary().expect(
-        "LP typescript binary is missing. Build liquidity-pool-typescript-lp artifacts before running LP e2e tests.",
+        "LP typescript binary is missing. Build liquidity-pool-typescript artifacts before running LP e2e tests.",
     );
     let out_point = context.deploy_cell(lp_ts_bin);
     let dep = CellDep::new_builder().out_point(out_point.clone()).build();
