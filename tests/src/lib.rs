@@ -15,6 +15,8 @@ use std::str::FromStr;
 mod perun;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unit_tests;
 
 // The exact same Loader code from capsule's template, except that
 // now we use MODE as the environment variable

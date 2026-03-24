@@ -247,10 +247,10 @@ impl PoolWitness {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
-    #[test]
-    fn roundtrip_lp_cell() {
-        let c = LPCell {
+    fn sample_cell() -> LPCell {
+        LPCell {
             pool_id: [1u8; 32],
             owner_lock_hash: [2u8; 32],
             operator_lock_hash: [3u8; 32],
@@ -265,26 +265,130 @@ mod tests {
             },
             nonce: 9,
             active: true,
-        };
+        }
+    }
+
+    #[test]
+    fn roundtrip_lp_cell() {
+        let c = sample_cell();
         let enc = c.encode();
         assert_eq!(enc.len(), LP_CELL_SIZE);
         let dec = LPCell::decode(&enc).unwrap();
+        assert_eq!(dec.pool_id, c.pool_id);
+        assert_eq!(dec.owner_lock_hash, c.owner_lock_hash);
+        assert_eq!(dec.operator_lock_hash, c.operator_lock_hash);
         assert_eq!(dec.available_ckb, 100);
+        assert_eq!(dec.reserved_ckb, 10);
+        assert_eq!(dec.cumulative_fees_earned_ckb, 7);
+        assert_eq!(dec.policy.max_trading_volume, 500);
         assert_eq!(dec.policy.fee_rate_bps, 25);
+        assert_eq!(dec.policy.policy_flags, 1);
+        assert_eq!(dec.policy.policy_version, 1);
+        assert_eq!(dec.nonce, 9);
         assert!(dec.active);
     }
 
     #[test]
-    fn roundtrip_witness_extract() {
-        let w = PoolWitness::FundChannelExtract {
-            channel_id: [4u8; 32],
-            contribution_id: [5u8; 32],
-            extract_ckb: 42,
-        };
-        let enc = w.encode();
-        match PoolWitness::decode(&enc).unwrap() {
-            PoolWitness::FundChannelExtract { extract_ckb, .. } => assert_eq!(extract_ckb, 42),
-            _ => panic!("unexpected witness variant"),
+    fn lp_cell_decode_rejects_bad_magic_and_short_input() {
+        let mut enc = sample_cell().encode();
+        enc[0] = b'X';
+        assert!(matches!(
+            LPCell::decode(&enc),
+            Err(Error::PoolInvalidCellMagic)
+        ));
+
+        let short = vec![0u8; LP_CELL_SIZE - 1];
+        assert!(matches!(LPCell::decode(&short), Err(Error::Encoding)));
+    }
+
+    #[test]
+    fn is_lp_cell_checks_magic_prefix_only() {
+        let enc = sample_cell().encode();
+        assert!(LPCell::is_lp_cell(&enc));
+
+        let non_lp = vec![0u8; 8];
+        assert!(!LPCell::is_lp_cell(&non_lp));
+    }
+
+    #[test]
+    fn roundtrip_witness_all_variants() {
+        let cases = vec![
+            PoolWitness::LPDeposit,
+            PoolWitness::LPWithdraw { ckb_out: 777 },
+            PoolWitness::FundChannelExtract {
+                channel_id: [4u8; 32],
+                contribution_id: [5u8; 32],
+                extract_ckb: 42,
+            },
+            PoolWitness::SettleChannelInsert {
+                channel_id: [6u8; 32],
+                contribution_id: [7u8; 32],
+                principal_returned: 123,
+                fee_ckb: 9,
+                price_x64: 99,
+            },
+            PoolWitness::CancelReservation {
+                channel_id: [8u8; 32],
+                contribution_id: [9u8; 32],
+            },
+            PoolWitness::RotateOperator {
+                new_operator_lock_hash: [10u8; 32],
+            },
+        ];
+
+        for w in cases {
+            let enc = w.encode();
+            let dec = PoolWitness::decode(&enc).unwrap();
+            let enc2 = dec.encode();
+            assert_eq!(enc, enc2);
         }
+    }
+
+    #[test]
+    fn witness_decode_rejects_invalid_opcode_or_short_payload() {
+        assert!(matches!(
+            PoolWitness::decode(&[]),
+            Err(Error::PoolWitnessMissing)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&[0xFF]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&[op::LP_WITHDRAW, 1, 2, 3]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&vec![op::FUND_CHANNEL_EXTRACT; 72]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&vec![op::SETTLE_CHANNEL_INSERT; 96]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&vec![op::CANCEL_RESERVATION; 64]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&vec![op::ROTATE_OPERATOR; 32]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+    }
+
+    #[test]
+    fn opcode_values_are_frozen_for_mvp() {
+        assert_eq!(op::LP_DEPOSIT, 0x41);
+        assert_eq!(op::LP_WITHDRAW, 0x42);
+        assert_eq!(op::FUND_CHANNEL_EXTRACT, 0x43);
+        assert_eq!(op::SETTLE_CHANNEL_INSERT, 0x44);
+        assert_eq!(op::CANCEL_RESERVATION, 0x45);
+        assert_eq!(op::ROTATE_OPERATOR, 0x46);
     }
 }
