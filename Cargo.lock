@@ -1404,6 +1404,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "liquidity-pool-typescript-lp"
+version = "0.1.0"
+dependencies = [
+ "ckb-std 0.17.2",
+ "molecule",
+ "perun-common",
+]
+
+[[package]]
 name = "log"
 version = "0.4.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"

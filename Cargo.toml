@@ -8,6 +8,7 @@ members = [
     # @@INSERTION_POINT@@
   "contracts/liquidity-pool-lockscript",
   "contracts/liquidity-pool-typescript",
+  "contracts/liquidity-pool-typescript-lp",
   "contracts/perun-vchannel-lockscript",
   "contracts/perun-vchannel-typescript",
   "contracts/sample-udt",

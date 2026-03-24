@@ -157,6 +157,12 @@ pub enum Error {
     NoActivePosition = -33,
     NoFeesToClaim = -34,
     InsufficientLiquidityForSwap = -35,
+    LPCellInputMissing = -36,
+    LPCellOutputMissing = -37,
+    MultipleLPCells = -38,
+    LPPolicyViolation = -39,
+    LPWitnessMismatch = -40,
+    LPBadOperatorRotation = -41,
 }
 impl From<Error> for i8 {
     #[inline]
