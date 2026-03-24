@@ -3,8 +3,9 @@
 pub mod channels;
 pub mod error;
 pub mod helpers;
-pub mod pool;
 #[allow(clippy::all)]
 pub mod perun_types;
+pub mod pool;
+pub mod pool_lp;
 pub mod sig;
 pub mod sol;

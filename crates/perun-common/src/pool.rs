@@ -1,7 +1,13 @@
+/// LEGACY COMPATIBILITY MODULE.
+///
 /// pool.rs – shared data structures, serialisation helpers and AMM math
 /// for the dual-asset CKB-ETH liquidity pool.
 ///
 /// Mirrors the invariants enforced by LiquidityPool.sol on the CKB side.
+///
+/// Kept for existing contracts still importing `perun_common::pool`.
+/// New LP-cell flows should use `perun_common::pool_lp` and
+/// `crates/perun-common/liquidity_pool_lp.mol`.
 ///
 /// # Wire format  (fixed-size, little-endian, no Molecule codegen needed)
 ///

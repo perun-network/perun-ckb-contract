@@ -1,5 +1,12 @@
 import blockchain;
 
+/*
+ * LEGACY COMPATIBILITY SCHEMA.
+ *
+ * Kept for contracts and tooling that still consume the original pool model.
+ * New LP-cell schema lives in `liquidity_pool_lp.mol`.
+ */
+
 /* ── Liquidity Pool Types ────────────────────────────────────────────── */
 
 /*
