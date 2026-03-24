@@ -76,6 +76,10 @@ source ./setup_env.sh test && make test
 ```
 or run them using the IDE
 
+Notes:
+- `setup_env.sh` uses target-scoped build variables for the RISC-V target to avoid contaminating host (x86_64) test builds.
+- You can still run build and test in one shell, but switching modes (`build` -> `test`) is the recommended flow.
+
 ## perun-common
 Additionally, to the available contracts we extracted common functionality into
 its own `perun-common` crate which gives some additional helpers and

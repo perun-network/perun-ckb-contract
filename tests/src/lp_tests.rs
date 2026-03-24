@@ -58,11 +58,13 @@ fn load_lp_typescript_binary() -> Option<Bytes> {
 
 fn deploy_lp_typescript(
     context: &mut Context,
-) -> Option<(ckb_testtool::ckb_types::packed::OutPoint, CellDep)> {
-    let lp_ts_bin = load_lp_typescript_binary()?;
+) -> (ckb_testtool::ckb_types::packed::OutPoint, CellDep) {
+    let lp_ts_bin = load_lp_typescript_binary().expect(
+        "LP typescript binary is missing. Build liquidity-pool-typescript-lp artifacts before running LP e2e tests.",
+    );
     let out_point = context.deploy_cell(lp_ts_bin);
     let dep = CellDep::new_builder().out_point(out_point.clone()).build();
-    Some((out_point, dep))
+    (out_point, dep)
 }
 
 fn deploy_always_success(
@@ -108,12 +110,9 @@ fn channel_status_data(channel_id: [u8; 32]) -> Bytes {
 }
 
 #[test]
-fn lp_e2e_deposit_topup_success() {
+fn lp_deposit_topup_success() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_deposit_topup_success: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x11; 32];
@@ -209,12 +208,9 @@ fn lp_e2e_deposit_topup_success() {
 }
 
 #[test]
-fn lp_e2e_extract_missing_channel_output_fails() {
+fn lp_extract_missing_channel_output_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_extract_missing_channel_output_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x22; 32];
@@ -324,14 +320,9 @@ fn lp_e2e_extract_missing_channel_output_fails() {
 }
 
 #[test]
-fn lp_e2e_settle_success() {
+fn lp_settle_success() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!(
-            "Skipping lp_e2e_settle_success: LP typescript binary not found in build artifacts"
-        );
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x33; 32];
@@ -457,12 +448,9 @@ fn lp_e2e_settle_success() {
 }
 
 #[test]
-fn lp_e2e_settle_insufficient_channel_capacity_fails() {
+fn lp_settle_insufficient_channel_capacity_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_settle_insufficient_channel_capacity_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x44; 32];
@@ -591,12 +579,9 @@ fn lp_e2e_settle_insufficient_channel_capacity_fails() {
 }
 
 #[test]
-fn lp_e2e_extract_wrong_channel_delta_fails() {
+fn lp_extract_wrong_channel_delta_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_extract_wrong_channel_delta_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x55; 32];
@@ -726,12 +711,9 @@ fn lp_e2e_extract_wrong_channel_delta_fails() {
 }
 
 #[test]
-fn lp_e2e_settle_channel_still_in_outputs_fails() {
+fn lp_settle_channel_still_in_outputs_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_settle_channel_still_in_outputs_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x66; 32];
@@ -867,12 +849,9 @@ fn lp_e2e_settle_channel_still_in_outputs_fails() {
 }
 
 #[test]
-fn lp_e2e_extract_without_operator_signer_fails() {
+fn lp_extract_without_operator_signer_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_extract_without_operator_signer_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x77; 32];
@@ -983,12 +962,9 @@ fn lp_e2e_extract_without_operator_signer_fails() {
 }
 
 #[test]
-fn lp_e2e_withdraw_owner_hash_not_signing_fails() {
+fn lp_withdraw_owner_hash_not_signing_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_withdraw_owner_hash_not_signing_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x88; 32];
@@ -1091,14 +1067,9 @@ fn lp_e2e_withdraw_owner_hash_not_signing_fails() {
 }
 
 #[test]
-fn lp_e2e_extract_success() {
+fn lp_extract_success() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!(
-            "Skipping lp_e2e_extract_success: LP typescript binary not found in build artifacts"
-        );
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0x99; 32];
@@ -1223,12 +1194,9 @@ fn lp_e2e_extract_success() {
 }
 
 #[test]
-fn lp_e2e_extract_then_settle_success() {
+fn lp_extract_then_settle_success() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_extract_then_settle_success: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0xAA; 32];
@@ -1442,12 +1410,9 @@ fn lp_e2e_extract_then_settle_success() {
 }
 
 #[test]
-fn lp_e2e_extract_nonce_not_incremented_fails() {
+fn lp_extract_nonce_not_incremented_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_extract_nonce_not_incremented_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0xBB; 32];
@@ -1574,12 +1539,9 @@ fn lp_e2e_extract_nonce_not_incremented_fails() {
 }
 
 #[test]
-fn lp_e2e_extract_over_max_trading_volume_fails() {
+fn lp_extract_over_max_trading_volume_fails() {
     let mut context = Context::default();
-    let Some((lp_ts_out_point, lp_ts_dep)) = deploy_lp_typescript(&mut context) else {
-        eprintln!("Skipping lp_e2e_extract_over_max_trading_volume_fails: LP typescript binary not found in build artifacts");
-        return;
-    };
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0xCC; 32];

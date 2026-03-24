@@ -53,7 +53,11 @@ build:
 		done; \
 	else \
 		$(MAKE) -e -C contracts/$(CONTRACT) build; \
-		cargo build -p $(CONTRACT)-sim; \
+		if cargo metadata --no-deps --format-version 1 | grep -q '"name":"$(CONTRACT)-sim"'; then \
+			cargo build -p $(CONTRACT)-sim; \
+		else \
+			echo "Skipping simulator build: package $(CONTRACT)-sim not found"; \
+		fi; \
 	fi;
 
 # Run a single make task for a specific contract. For example:
