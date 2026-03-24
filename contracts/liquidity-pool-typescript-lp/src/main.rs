@@ -185,6 +185,26 @@ fn checked_sub(a: u64, b: u64) -> Result<u64, Error> {
     a.checked_sub(b).ok_or(Error::LPArithmetic)
 }
 
+fn channel_capacity_by_id(channel_id: &[u8; 32], source: Source) -> Result<u64, Error> {
+    let mut total = 0u64;
+    for idx in 0usize.. {
+        match load_cell_data(idx, source) {
+            Ok(d) => {
+                if let Ok(status) = ChannelStatus::from_slice(d.as_ref()) {
+                    let cid: [u8; 32] = status.state().channel_id().unpack();
+                    if &cid == channel_id {
+                        let cap = load_cell_capacity(idx, source)?;
+                        total = checked_add(total, cap)?;
+                    }
+                }
+            }
+            Err(SysError::IndexOutOfBound) => break,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(total)
+}
+
 fn channel_exists_by_id(channel_id: &[u8; 32], source: Source) -> Result<bool, Error> {
     for idx in 0usize.. {
         match load_cell_data(idx, source) {
@@ -334,6 +354,13 @@ fn check_fund_channel_extract(
         return Err(Error::LPWitnessMismatch);
     }
 
+    // Channel capacity increase for this channel must match extracted CKB.
+    let ch_in_cap = channel_capacity_by_id(channel_id, Source::Input)?;
+    let ch_out_cap = channel_capacity_by_id(channel_id, Source::Output)?;
+    if checked_sub(ch_out_cap, ch_in_cap)? != extract_ckb {
+        return Err(Error::PoolReserveMismatch);
+    }
+
     if out_cap != checked_sub(inp_cap, extract_ckb)?
         || out.available_ckb != checked_sub(inp.available_ckb, extract_ckb)?
         || out.reserved_ckb != checked_add(inp.reserved_ckb, extract_ckb)?
@@ -374,6 +401,13 @@ fn check_settle_channel_insert(
     }
 
     let total_return = checked_add(principal_returned, fee_ckb)?;
+
+    // The consumed channel must hold enough capacity to back the LP return.
+    let ch_in_cap = channel_capacity_by_id(channel_id, Source::Input)?;
+    if ch_in_cap < total_return {
+        return Err(Error::InvalidSettlement);
+    }
+
     if out_cap != checked_add(inp_cap, total_return)?
         || out.available_ckb != checked_add(inp.available_ckb, total_return)?
         || out.reserved_ckb != checked_sub(inp.reserved_ckb, principal_returned)?
