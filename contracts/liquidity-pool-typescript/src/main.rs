@@ -63,9 +63,9 @@ fn main() -> Result<(), Error> {
             price_x64: _,
         } => check_settle_channel_insert(&ctx, &channel_id, principal_returned, fee_ckb),
         PoolWitness::CancelReservation {
-            channel_id: _,
+            channel_id,
             contribution_id: _,
-        } => check_cancel_reservation(&ctx),
+        } => check_cancel_reservation(&ctx, &channel_id),
         PoolWitness::RotateOperator {
             new_operator_lock_hash,
         } => check_rotate_operator(&ctx, &new_operator_lock_hash),
@@ -337,6 +337,7 @@ fn check_fund_channel_extract(
     }
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
+    verify_owner_signing(&inp.owner_lock_hash)?;
 
     require_immutable_except_operator(inp, out)?;
     require_operator_unchanged(inp, out)?;
@@ -392,6 +393,17 @@ fn check_settle_channel_insert(
         return Err(Error::InvalidSettlement);
     }
 
+    if (inp.policy.policy_flags & 0x1) != 0 && inp.policy.fee_rate_bps != 0 {
+        let max_fee_u128 = (principal_returned as u128)
+            .checked_mul(inp.policy.fee_rate_bps as u128)
+            .ok_or(Error::LPArithmetic)?
+            / 10_000u128;
+        let max_fee = u64::try_from(max_fee_u128).map_err(|_| Error::LPArithmetic)?;
+        if fee_ckb > max_fee {
+            return Err(Error::LPPolicyViolation);
+        }
+    }
+
     // Settlement path must consume the channel cell and return value to LP cell.
     if !channel_exists_by_id(channel_id, Source::Input)? {
         return Err(Error::InvalidSettlement);
@@ -419,7 +431,7 @@ fn check_settle_channel_insert(
     Ok(())
 }
 
-fn check_cancel_reservation(ctx: &GroupContext) -> Result<(), Error> {
+fn check_cancel_reservation(ctx: &GroupContext, channel_id: &[u8; 32]) -> Result<(), Error> {
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
 
@@ -427,11 +439,22 @@ fn check_cancel_reservation(ctx: &GroupContext) -> Result<(), Error> {
     require_operator_unchanged(inp, out)?;
     require_nonce_inc(inp, out)?;
 
+    // CancelReservation is only valid when referenced channel is not currently present.
+    if channel_exists_by_id(channel_id, Source::Input)?
+        || channel_exists_by_id(channel_id, Source::Output)?
+    {
+        return Err(Error::InvalidReservationState);
+    }
+
     if out_cap != inp_cap || out.reserved_ckb > inp.reserved_ckb {
         return Err(Error::PoolReserveMismatch);
     }
 
     let released = checked_sub(inp.reserved_ckb, out.reserved_ckb)?;
+    if released == 0 {
+        return Err(Error::InvalidReservationState);
+    }
+
     if out.available_ckb != checked_add(inp.available_ckb, released)?
         || out.cumulative_fees_earned_ckb != inp.cumulative_fees_earned_ckb
     {
@@ -451,7 +474,15 @@ fn check_rotate_operator(
     require_immutable_except_operator(inp, out)?;
     require_nonce_inc(inp, out)?;
 
+    if *new_operator_lock_hash == [0u8; 32] {
+        return Err(Error::LPBadOperatorRotation);
+    }
+
     if &out.operator_lock_hash != new_operator_lock_hash {
+        return Err(Error::LPBadOperatorRotation);
+    }
+
+    if out.operator_lock_hash == inp.operator_lock_hash {
         return Err(Error::LPBadOperatorRotation);
     }
 

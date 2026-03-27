@@ -27,11 +27,14 @@ use ckb_std::default_alloc;
 default_alloc!();
 
 use perun_common::error::Error;
+use perun_common::pool::LPCell;
 
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
-    high_level::{load_cell_type_hash, load_script, load_transaction},
+    high_level::{
+        load_cell_data, load_cell_lock_hash, load_cell_type_hash, load_script, load_transaction,
+    },
     syscalls::SysError,
 };
 
@@ -53,7 +56,8 @@ fn main() -> Result<(), Error> {
 
     let pool_ts_hash: [u8; 32] = args.as_ref().try_into().map_err(|_| Error::PoolLSNoArgs)?;
 
-    verify_pool_typescript_in_inputs(&pool_ts_hash)
+    verify_pool_typescript_in_inputs(&pool_ts_hash)?;
+    verify_lp_owner_or_operator_authorized()
 }
 
 /// Scan all input cells; succeed if any has a type-script hash matching
@@ -74,4 +78,46 @@ fn verify_pool_typescript_in_inputs(pool_ts_hash: &[u8; 32]) -> Result<(), Error
         }
     }
     Err(Error::PoolTypescriptNotFound)
+}
+
+fn signer_exists(lock_hash: &[u8; 32]) -> Result<bool, Error> {
+    for i in 0.. {
+        match load_cell_lock_hash(i, Source::Input) {
+            Ok(h) if h.as_slice() == lock_hash => return Ok(true),
+            Ok(_) => continue,
+            Err(SysError::IndexOutOfBound) => break,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(false)
+}
+
+/// Require at least one transaction signer to be either the LP owner or the
+/// authorized operator found in the consumed LP cells.
+fn verify_lp_owner_or_operator_authorized() -> Result<(), Error> {
+    let mut saw_lp_cell = false;
+
+    for i in 0.. {
+        match load_cell_data(i, Source::GroupInput) {
+            Ok(d) => {
+                if !LPCell::is_lp_cell(d.as_ref()) {
+                    continue;
+                }
+                let lp = LPCell::decode(d.as_ref())?;
+                saw_lp_cell = true;
+
+                if signer_exists(&lp.owner_lock_hash)? || signer_exists(&lp.operator_lock_hash)? {
+                    return Ok(());
+                }
+            }
+            Err(SysError::IndexOutOfBound) => break,
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    if !saw_lp_cell {
+        return Err(Error::PoolInvalidCellMagic);
+    }
+
+    Err(Error::NotParticipant)
 }

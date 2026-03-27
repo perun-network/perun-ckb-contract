@@ -302,6 +302,20 @@ mod tests {
     }
 
     #[test]
+    fn lp_cell_decode_rejects_non_lp_magic_and_version_prefix() {
+        let mut non_lp_like = vec![0u8; LP_CELL_SIZE];
+        non_lp_like[0..4].copy_from_slice(b"POOL");
+        // Non-LP payload hint: bytes 4..8 are populated like an external format version field.
+        non_lp_like[4..8].copy_from_slice(&1u32.to_le_bytes());
+
+        assert!(!LPCell::is_lp_cell(&non_lp_like));
+        assert!(matches!(
+            LPCell::decode(&non_lp_like),
+            Err(Error::PoolInvalidCellMagic)
+        ));
+    }
+
+    #[test]
     fn is_lp_cell_checks_magic_prefix_only() {
         let enc = sample_cell().encode();
         assert!(LPCell::is_lp_cell(&enc));
@@ -349,6 +363,12 @@ mod tests {
         assert!(matches!(
             PoolWitness::decode(&[]),
             Err(Error::PoolWitnessMissing)
+        ));
+
+        // Reserve low opcode range as a non-LP namespace for boundary safety.
+        assert!(matches!(
+            PoolWitness::decode(&[0x01]),
+            Err(Error::PoolWitnessInvalid)
         ));
 
         assert!(matches!(
