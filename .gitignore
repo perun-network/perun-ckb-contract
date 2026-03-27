@@ -5,6 +5,7 @@ contracts/**/target/*
 tests/target/*
 migrations/**
 migrations_vc/**
+migrations_lp/**
 
 # C
 contracts/c/build/*

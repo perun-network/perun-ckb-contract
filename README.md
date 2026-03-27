@@ -80,6 +80,32 @@ Notes:
 - `setup_env.sh` uses target-scoped build variables for the RISC-V target to avoid contaminating host (x86_64) test builds.
 - You can still run build and test in one shell, but switching modes (`build` -> `test`) is the recommended flow.
 
+## LP Deployment And Migration
+
+LP deployment manifests are provided separately for dev and release:
+
+- `deployment/dev/deployment_lp.toml`
+- `deployment/release/deployment_lp.toml`
+
+Run a quick manifest/tooling check:
+
+``` sh
+make verify-lp-deployment
+```
+
+Prepare a fresh-deposit LP cell migration spec:
+
+``` sh
+bash scripts/lp_migration_prepare.sh \
+  --pool-id 0x<64hex> \
+  --owner-lock-hash 0x<64hex> \
+  --operator-lock-hash 0x<64hex> \
+  --network dev \
+  --out migrations_lp/lp_cell_spec.json
+```
+
+The helper prints a minimal command skeleton for deployment and LP cell bootstrap transactions.
+
 ## perun-common
 Additionally, to the available contracts we extracted common functionality into
 its own `perun-common` crate which gives some additional helpers and
