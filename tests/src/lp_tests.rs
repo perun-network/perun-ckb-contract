@@ -1,175 +1,8 @@
+use super::lp_harness::*;
 use super::*;
-use ckb_testtool::builtin::ALWAYS_SUCCESS;
-use ckb_testtool::ckb_types::{
-    bytes::Bytes,
-    core::{ScriptHashType, TransactionBuilder},
-    packed::{Byte32, CellDep, CellInput, CellOutput, Script, WitnessArgs},
-    prelude::*,
-};
+use ckb_testtool::ckb_types::{bytes::Bytes, packed::CellOutput, prelude::*};
 use ckb_testtool::context::Context;
-use perun_common::perun_types::ChannelStatus;
-use perun_common::pool::{LPCell, LPPolicy, PoolWitness};
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-
-const MAX_CYCLES: u64 = 100 * 10_000_000;
-const LP_IN_CAP: u64 = 20_000_000_000;
-const TOPUP_CAP_DELTA: u64 = 5_000_000_000;
-const AUTH_INPUT_CAP: u64 = 10_000_000_000;
-const EXTRACT_CKB: u64 = 2_000_000_000;
-
-fn load_lp_typescript_binary() -> Option<Bytes> {
-    let mode = match env::var("MODE") {
-        Ok(val) if val.eq_ignore_ascii_case("debug") => "debug",
-        _ => "release",
-    };
-
-    let mut base = match env::var("TOP") {
-        Ok(val) => {
-            let mut p = PathBuf::from(val);
-            p.push("build");
-            p
-        }
-        Err(_) => {
-            let mut p = PathBuf::from("build");
-            if !p.exists() {
-                p = PathBuf::from("..");
-                p.push("build");
-            }
-            p
-        }
-    };
-    base.push(mode);
-
-    let candidates = [
-        "liquidity-pool-typescript",
-        "liquidity-pool-typescript.debug",
-    ];
-    for candidate in candidates {
-        let mut path = base.clone();
-        path.push(candidate);
-        if let Ok(bin) = fs::read(path) {
-            return Some(Bytes::from(bin));
-        }
-    }
-    None
-}
-
-fn load_lp_lockscript_binary() -> Option<Bytes> {
-    let mode = match env::var("MODE") {
-        Ok(val) if val.eq_ignore_ascii_case("debug") => "debug",
-        _ => "release",
-    };
-
-    let mut base = match env::var("TOP") {
-        Ok(val) => {
-            let mut p = PathBuf::from(val);
-            p.push("build");
-            p
-        }
-        Err(_) => {
-            let mut p = PathBuf::from("build");
-            if !p.exists() {
-                p = PathBuf::from("..");
-                p.push("build");
-            }
-            p
-        }
-    };
-    base.push(mode);
-
-    let candidates = [
-        "liquidity-pool-lockscript",
-        "liquidity-pool-lockscript.debug",
-    ];
-    for candidate in candidates {
-        let mut path = base.clone();
-        path.push(candidate);
-        if let Ok(bin) = fs::read(path) {
-            return Some(Bytes::from(bin));
-        }
-    }
-    None
-}
-
-fn deploy_lp_typescript(
-    context: &mut Context,
-) -> (ckb_testtool::ckb_types::packed::OutPoint, CellDep) {
-    let lp_ts_bin = load_lp_typescript_binary().expect(
-        "LP typescript binary is missing. Build liquidity-pool-typescript artifacts before running LP e2e tests.",
-    );
-    let out_point = context.deploy_cell(lp_ts_bin);
-    let dep = CellDep::new_builder().out_point(out_point.clone()).build();
-    (out_point, dep)
-}
-
-fn deploy_lp_lockscript(
-    context: &mut Context,
-) -> (ckb_testtool::ckb_types::packed::OutPoint, CellDep) {
-    let lp_ls_bin = load_lp_lockscript_binary().expect(
-        "LP lockscript binary is missing. Build liquidity-pool-lockscript artifacts before running LP e2e tests.",
-    );
-    let out_point = context.deploy_cell(lp_ls_bin);
-    let dep = CellDep::new_builder().out_point(out_point.clone()).build();
-    (out_point, dep)
-}
-
-fn deploy_always_success(
-    context: &mut Context,
-) -> (ckb_testtool::ckb_types::packed::OutPoint, CellDep) {
-    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    let dep = CellDep::new_builder().out_point(out_point.clone()).build();
-    (out_point, dep)
-}
-
-fn build_lock(
-    context: &mut Context,
-    always_success_out_point: &ckb_testtool::ckb_types::packed::OutPoint,
-    tag: u8,
-) -> Script {
-    context
-        .build_script(always_success_out_point, Bytes::from(vec![tag]))
-        .expect("build lock script")
-}
-
-fn lp_policy() -> LPPolicy {
-    LPPolicy {
-        max_trading_volume: 0,
-        fee_rate_bps: 30,
-        policy_flags: 0,
-        policy_version: 1,
-    }
-}
-
-fn script_hash_array(script: &Script) -> [u8; 32] {
-    script.calc_script_hash().unpack()
-}
-
-fn build_lp_lock(
-    context: &mut Context,
-    lp_lockscript_out_point: &ckb_testtool::ckb_types::packed::OutPoint,
-    lp_typescript_hash: [u8; 32],
-) -> Script {
-    context
-        .build_script_with_hash_type(
-            lp_lockscript_out_point,
-            ScriptHashType::Data1,
-            Bytes::from(lp_typescript_hash.to_vec()),
-        )
-        .expect("build lp lockscript")
-}
-
-fn channel_status_data(channel_id: [u8; 32]) -> Bytes {
-    let base = ChannelStatus::default();
-    let state = base
-        .state()
-        .as_builder()
-        .channel_id(Byte32::from_slice(&channel_id).expect("channel id"))
-        .build();
-    let status = base.as_builder().state(state).build();
-    status.as_bytes()
-}
+use perun_common::pool::PoolWitness;
 
 #[test]
 fn lp_lockscript_rejects_without_owner_or_operator_signer() {
@@ -183,94 +16,55 @@ fn lp_lockscript_rejects_without_owner_or_operator_signer() {
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
     let outsider_lock = build_lock(&mut context, &always_success_out_point, 9);
 
-    let lp_type = context
-        .build_script_with_hash_type(
-            &lp_ts_out_point,
-            ScriptHashType::Data1,
-            Bytes::from(pool_id.to_vec()),
-        )
-        .expect("build lp typescript");
-    let lp_lock = build_lp_lock(
-        &mut context,
-        &lp_ls_out_point,
-        lp_type.calc_script_hash().unpack(),
-    );
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+    let lp_lock = build_lp_lock(&mut context, &lp_ls_out_point, script_hash_array(&lp_type));
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
 
-    let input_lp = LPCell {
-        pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 0,
-        active: true,
-    };
+    let input_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 0);
 
-    let output_lp = LPCell {
+    let output_lp = make_lp_cell(
         pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP + TOPUP_CAP_DELTA,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 1,
-        active: true,
-    };
-
-    let lp_input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(LP_IN_CAP.pack())
-            .lock(lp_lock.clone())
-            .type_(Some(lp_type.clone()).pack())
-            .build(),
-        Bytes::from(input_lp.encode()),
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP + TOPUP_CAP_DELTA,
+        0,
+        0,
+        1,
     );
 
-    let outsider_auth_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(outsider_lock.clone())
-            .build(),
-        Bytes::new(),
+    let lp_input_out_point = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        lp_lock.clone(),
+        lp_type.clone(),
+        &input_lp,
     );
 
-    let witness = WitnessArgs::new_builder()
-        .input_type(Some(Bytes::from(PoolWitness::LPDeposit.encode())).pack())
-        .build();
+    let outsider_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, outsider_lock.clone());
 
-    let tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_out_point)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(outsider_auth_input)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity((LP_IN_CAP + TOPUP_CAP_DELTA).pack())
-                .lock(lp_lock)
-                .type_(Some(lp_type).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity((AUTH_INPUT_CAP - TOPUP_CAP_DELTA).pack())
-                .lock(outsider_lock)
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(output_lp.encode()).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep, lp_ls_dep, always_success_dep])
-        .witness(witness.as_bytes().pack())
-        .build();
+    let witness = witness_from_pool(PoolWitness::LPDeposit);
+
+    let tx = build_tx_from_specs(
+        vec![lp_input_out_point, outsider_auth_input],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP + TOPUP_CAP_DELTA,
+                lock: lp_lock,
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP - TOPUP_CAP_DELTA,
+                lock: outsider_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, lp_ls_dep, always_success_dep],
+        witness,
+    );
 
     let tx = context.complete_tx(tx);
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
@@ -291,91 +85,56 @@ fn lp_lockscript_rejects_wrong_typescript_hash_arg() {
     let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
 
-    let lp_type = context
-        .build_script_with_hash_type(
-            &lp_ts_out_point,
-            ScriptHashType::Data1,
-            Bytes::from(pool_id.to_vec()),
-        )
-        .expect("build lp typescript");
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
     let wrong_ts_hash = [0xEE; 32];
     let lp_lock = build_lp_lock(&mut context, &lp_ls_out_point, wrong_ts_hash);
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
 
-    let input_lp = LPCell {
-        pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 0,
-        active: true,
-    };
+    let input_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 0);
 
-    let output_lp = LPCell {
+    let output_lp = make_lp_cell(
         pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP + TOPUP_CAP_DELTA,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 1,
-        active: true,
-    };
-
-    let lp_input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(LP_IN_CAP.pack())
-            .lock(lp_lock.clone())
-            .type_(Some(lp_type.clone()).pack())
-            .build(),
-        Bytes::from(input_lp.encode()),
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP + TOPUP_CAP_DELTA,
+        0,
+        0,
+        1,
     );
 
-    let owner_auth_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(owner_lock.clone())
-            .build(),
-        Bytes::new(),
+    let lp_input_out_point = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        lp_lock.clone(),
+        lp_type.clone(),
+        &input_lp,
     );
 
-    let witness = WitnessArgs::new_builder()
-        .input_type(Some(Bytes::from(PoolWitness::LPDeposit.encode())).pack())
-        .build();
+    let owner_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, owner_lock.clone());
 
-    let tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_out_point)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(owner_auth_input)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity((LP_IN_CAP + TOPUP_CAP_DELTA).pack())
-                .lock(lp_lock)
-                .type_(Some(lp_type).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity((AUTH_INPUT_CAP - TOPUP_CAP_DELTA).pack())
-                .lock(owner_lock)
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(output_lp.encode()).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep, lp_ls_dep, always_success_dep])
-        .witness(witness.as_bytes().pack())
-        .build();
+    let witness = witness_from_pool(PoolWitness::LPDeposit);
+
+    let tx = build_tx_from_specs(
+        vec![lp_input_out_point, owner_auth_input],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP + TOPUP_CAP_DELTA,
+                lock: lp_lock,
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP - TOPUP_CAP_DELTA,
+                lock: owner_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, lp_ls_dep, always_success_dep],
+        witness,
+    );
 
     let tx = context.complete_tx(tx);
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
@@ -401,107 +160,70 @@ fn lp_happy_path_deposit_extract_settle_success() {
     let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
 
-    let lp_type = context
-        .build_script_with_hash_type(
-            &lp_ts_out_point,
-            ScriptHashType::Data1,
-            Bytes::from(pool_id.to_vec()),
-        )
-        .expect("build lp typescript");
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
 
-    let initial_lp = LPCell {
-        pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 70,
-        active: true,
-    };
+    let initial_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 70);
 
     // Step 1: deposit top-up by owner.
-    let after_deposit_lp = LPCell {
+    let after_deposit_lp = make_lp_cell(
         pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP + TOPUP_CAP_DELTA,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 71,
-        active: true,
-    };
-
-    let lp_input_deposit = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(LP_IN_CAP.pack())
-            .lock(owner_lock.clone())
-            .type_(Some(lp_type.clone()).pack())
-            .build(),
-        Bytes::from(initial_lp.encode()),
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP + TOPUP_CAP_DELTA,
+        0,
+        0,
+        71,
     );
 
-    let owner_auth_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(owner_lock.clone())
-            .build(),
-        Bytes::new(),
+    let lp_input_deposit = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock.clone(),
+        lp_type.clone(),
+        &initial_lp,
     );
 
-    let deposit_witness = WitnessArgs::new_builder()
-        .input_type(Some(Bytes::from(PoolWitness::LPDeposit.encode())).pack())
-        .build();
+    let owner_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, owner_lock.clone());
 
-    let deposit_tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_deposit)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(owner_auth_input)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity((LP_IN_CAP + TOPUP_CAP_DELTA).pack())
-                .lock(owner_lock.clone())
-                .type_(Some(lp_type.clone()).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity((AUTH_INPUT_CAP - TOPUP_CAP_DELTA).pack())
-                .lock(owner_lock.clone())
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(after_deposit_lp.encode()).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep.clone(), always_success_dep.clone()])
-        .witness(deposit_witness.as_bytes().pack())
-        .build();
+    let deposit_witness = witness_from_pool(PoolWitness::LPDeposit);
+
+    let deposit_tx = build_tx_from_specs(
+        vec![lp_input_deposit, owner_auth_input],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP + TOPUP_CAP_DELTA,
+                lock: owner_lock.clone(),
+                type_script: Some(lp_type.clone()),
+                data: Bytes::from(after_deposit_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP - TOPUP_CAP_DELTA,
+                lock: owner_lock.clone(),
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep.clone(), always_success_dep.clone()],
+        deposit_witness,
+    );
 
     let deposit_tx = context.complete_tx(deposit_tx);
     verify_and_dump_failed_tx(&context, &deposit_tx, MAX_CYCLES)
         .expect("deposit top-up should pass");
 
     // Step 2: extract from LP into channel.
-    let after_extract_lp = LPCell {
+    let after_extract_lp = make_lp_cell(
         pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB,
-        reserved_ckb: EXTRACT_CKB,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 72,
-        active: true,
-    };
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB,
+        EXTRACT_CKB,
+        0,
+        72,
+    );
 
     let lp_input_extract = context.create_cell(
         CellOutput::new_builder()
@@ -512,13 +234,8 @@ fn lp_happy_path_deposit_extract_settle_success() {
         Bytes::from(after_deposit_lp.encode()),
     );
 
-    let operator_auth_extract = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        Bytes::new(),
-    );
+    let operator_auth_extract =
+        create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
 
     let channel_input_extract = context.create_cell(
         CellOutput::new_builder()
@@ -528,72 +245,56 @@ fn lp_happy_path_deposit_extract_settle_success() {
         channel_status_data(extract_channel_id),
     );
 
-    let extract_witness = WitnessArgs::new_builder()
-        .input_type(
-            Some(Bytes::from(
-                PoolWitness::FundChannelExtract {
-                    channel_id: extract_channel_id,
-                    contribution_id: [0xC3; 32],
-                    extract_ckb: EXTRACT_CKB,
-                }
-                .encode(),
-            ))
-            .pack(),
-        )
-        .build();
+    let extract_witness = witness_from_pool(PoolWitness::FundChannelExtract {
+        channel_id: extract_channel_id,
+        contribution_id: [0xC3; 32],
+        extract_ckb: EXTRACT_CKB,
+    });
 
-    let extract_tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_extract)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(operator_auth_extract)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(channel_input_extract)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity((LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB).pack())
-                .lock(owner_lock.clone())
-                .type_(Some(lp_type.clone()).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity((3_000_000_000u64 + EXTRACT_CKB).pack())
-                .lock(operator_lock.clone())
-                .build(),
-            CellOutput::new_builder()
-                .capacity(AUTH_INPUT_CAP.pack())
-                .lock(operator_lock.clone())
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(after_extract_lp.encode()).pack(),
-            channel_status_data(extract_channel_id).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep.clone(), always_success_dep.clone()])
-        .witness(extract_witness.as_bytes().pack())
-        .build();
+    let extract_tx = build_tx_from_specs(
+        vec![
+            lp_input_extract,
+            operator_auth_extract,
+            channel_input_extract,
+        ],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB,
+                lock: owner_lock.clone(),
+                type_script: Some(lp_type.clone()),
+                data: Bytes::from(after_extract_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: 3_000_000_000u64 + EXTRACT_CKB,
+                lock: operator_lock.clone(),
+                type_script: None,
+                data: channel_status_data(extract_channel_id),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP,
+                lock: operator_lock.clone(),
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep.clone(), always_success_dep.clone()],
+        extract_witness,
+    );
 
     let extract_tx = context.complete_tx(extract_tx);
     verify_and_dump_failed_tx(&context, &extract_tx, MAX_CYCLES)
         .expect("extract should pass when channel capacity delta matches extract_ckb");
 
     // Step 3: settle and return principal + fee to LP.
-    let after_settle_lp = LPCell {
+    let after_settle_lp = make_lp_cell(
         pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB + total_return,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: fee_ckb,
-        policy: lp_policy(),
-        nonce: 73,
-        active: true,
-    };
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB + total_return,
+        0,
+        fee_ckb,
+        73,
+    );
 
     let lp_input_settle = context.create_cell(
         CellOutput::new_builder()
@@ -604,13 +305,8 @@ fn lp_happy_path_deposit_extract_settle_success() {
         Bytes::from(after_extract_lp.encode()),
     );
 
-    let operator_auth_settle = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        Bytes::new(),
-    );
+    let operator_auth_settle =
+        create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
 
     let channel_input_settle = context.create_cell(
         CellOutput::new_builder()
@@ -620,52 +316,33 @@ fn lp_happy_path_deposit_extract_settle_success() {
         channel_status_data(settle_channel_id),
     );
 
-    let settle_witness = WitnessArgs::new_builder()
-        .input_type(
-            Some(Bytes::from(
-                PoolWitness::SettleChannelInsert {
-                    channel_id: settle_channel_id,
-                    contribution_id: [0xE1; 32],
-                    principal_returned,
-                    fee_ckb,
-                    price_x64: 1,
-                }
-                .encode(),
-            ))
-            .pack(),
-        )
-        .build();
+    let settle_witness = witness_from_pool(PoolWitness::SettleChannelInsert {
+        channel_id: settle_channel_id,
+        contribution_id: [0xE1; 32],
+        principal_returned,
+        fee_ckb,
+        price_x64: 1,
+    });
 
-    let settle_tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_settle)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(channel_input_settle)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(operator_auth_settle)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity((LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB + total_return).pack())
-                .lock(owner_lock)
-                .type_(Some(lp_type).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity((AUTH_INPUT_CAP + 4_000_000_000u64 - total_return).pack())
-                .lock(operator_lock)
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(after_settle_lp.encode()).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep, always_success_dep])
-        .witness(settle_witness.as_bytes().pack())
-        .build();
+    let settle_tx = build_tx_from_specs(
+        vec![lp_input_settle, channel_input_settle, operator_auth_settle],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB + total_return,
+                lock: owner_lock,
+                type_script: Some(lp_type),
+                data: Bytes::from(after_settle_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP + 4_000_000_000u64 - total_return,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        settle_witness,
+    );
 
     let settle_tx = context.complete_tx(settle_tx);
     verify_and_dump_failed_tx(&context, &settle_tx, MAX_CYCLES)
@@ -685,56 +362,39 @@ fn lp_extract_without_owner_signer_fails() {
     let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
 
-    let lp_type = context
-        .build_script_with_hash_type(
-            &lp_ts_out_point,
-            ScriptHashType::Data1,
-            Bytes::from(pool_id.to_vec()),
-        )
-        .expect("build lp typescript");
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
 
     let operator_hash = script_hash_array(&operator_lock);
 
-    let input_lp = LPCell {
+    let input_lp = make_lp_cell(
         pool_id,
-        owner_lock_hash: fake_owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 110,
-        active: true,
-    };
-
-    let output_lp = LPCell {
-        pool_id,
-        owner_lock_hash: fake_owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP - EXTRACT_CKB,
-        reserved_ckb: EXTRACT_CKB,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 111,
-        active: true,
-    };
-
-    let lp_input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(LP_IN_CAP.pack())
-            .lock(owner_lock)
-            .type_(Some(lp_type.clone()).pack())
-            .build(),
-        Bytes::from(input_lp.encode()),
+        fake_owner_hash,
+        operator_hash,
+        LP_IN_CAP,
+        0,
+        0,
+        110,
     );
 
-    let operator_auth_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        Bytes::new(),
+    let output_lp = make_lp_cell(
+        pool_id,
+        fake_owner_hash,
+        operator_hash,
+        LP_IN_CAP - EXTRACT_CKB,
+        EXTRACT_CKB,
+        0,
+        111,
     );
+
+    let lp_input_out_point = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+
+    let operator_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
 
     let channel_input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -744,55 +404,41 @@ fn lp_extract_without_owner_signer_fails() {
         channel_status_data(channel_id),
     );
 
-    let witness = WitnessArgs::new_builder()
-        .input_type(
-            Some(Bytes::from(
-                PoolWitness::FundChannelExtract {
-                    channel_id,
-                    contribution_id: [0xC7; 32],
-                    extract_ckb: EXTRACT_CKB,
-                }
-                .encode(),
-            ))
-            .pack(),
-        )
-        .build();
+    let witness = witness_from_pool(PoolWitness::FundChannelExtract {
+        channel_id,
+        contribution_id: [0xC7; 32],
+        extract_ckb: EXTRACT_CKB,
+    });
 
-    let tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_out_point)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(operator_auth_input)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(channel_input_out_point)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity((LP_IN_CAP - EXTRACT_CKB).pack())
-                .lock(operator_lock.clone())
-                .type_(Some(lp_type).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity((3_000_000_000u64 + EXTRACT_CKB).pack())
-                .lock(operator_lock.clone())
-                .build(),
-            CellOutput::new_builder()
-                .capacity(AUTH_INPUT_CAP.pack())
-                .lock(operator_lock)
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(output_lp.encode()).pack(),
-            channel_status_data(channel_id).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep, always_success_dep])
-        .witness(witness.as_bytes().pack())
-        .build();
+    let tx = build_tx_from_specs(
+        vec![
+            lp_input_out_point,
+            operator_auth_input,
+            channel_input_out_point,
+        ],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP - EXTRACT_CKB,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: 3_000_000_000u64 + EXTRACT_CKB,
+                lock: operator_lock.clone(),
+                type_script: None,
+                data: channel_status_data(channel_id),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
 
     let tx = context.complete_tx(tx);
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
@@ -813,57 +459,32 @@ fn lp_cancel_reservation_with_channel_present_fails() {
     let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
 
-    let lp_type = context
-        .build_script_with_hash_type(
-            &lp_ts_out_point,
-            ScriptHashType::Data1,
-            Bytes::from(pool_id.to_vec()),
-        )
-        .expect("build lp typescript");
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
 
-    let input_lp = LPCell {
+    let input_lp = make_lp_cell(
         pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: 7_000_000_000,
-        reserved_ckb: 2_000_000_000,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 134,
-        active: true,
-    };
-
-    let output_lp = LPCell {
-        pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: 9_000_000_000,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 135,
-        active: true,
-    };
-
-    let lp_input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(9_000_000_000u64.pack())
-            .lock(owner_lock)
-            .type_(Some(lp_type.clone()).pack())
-            .build(),
-        Bytes::from(input_lp.encode()),
+        owner_hash,
+        operator_hash,
+        7_000_000_000,
+        2_000_000_000,
+        0,
+        134,
     );
 
-    let operator_auth_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        Bytes::new(),
+    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, 9_000_000_000, 0, 0, 135);
+
+    let lp_input_out_point = create_typed_lp_cell(
+        &mut context,
+        9_000_000_000,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
     );
+
+    let operator_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
 
     // Cancel should fail if referenced channel is currently present.
     let channel_input_out_point = context.create_cell(
@@ -874,49 +495,34 @@ fn lp_cancel_reservation_with_channel_present_fails() {
         channel_status_data(channel_id),
     );
 
-    let witness = WitnessArgs::new_builder()
-        .input_type(
-            Some(Bytes::from(
-                PoolWitness::CancelReservation {
-                    channel_id,
-                    contribution_id: [0xCB; 32],
-                }
-                .encode(),
-            ))
-            .pack(),
-        )
-        .build();
+    let witness = witness_from_pool(PoolWitness::CancelReservation {
+        channel_id,
+        contribution_id: [0xCB; 32],
+    });
 
-    let tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_out_point)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(operator_auth_input)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(channel_input_out_point)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity(9_000_000_000u64.pack())
-                .lock(operator_lock.clone())
-                .type_(Some(lp_type).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity(AUTH_INPUT_CAP.pack())
-                .lock(operator_lock)
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(output_lp.encode()).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep, always_success_dep])
-        .witness(witness.as_bytes().pack())
-        .build();
+    let tx = build_tx_from_specs(
+        vec![
+            lp_input_out_point,
+            operator_auth_input,
+            channel_input_out_point,
+        ],
+        vec![
+            TxOutputSpec {
+                capacity: 9_000_000_000u64,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
 
     let tx = context.complete_tx(tx);
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
@@ -936,97 +542,48 @@ fn lp_rotate_operator_zero_hash_fails() {
     let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
 
-    let lp_type = context
-        .build_script_with_hash_type(
-            &lp_ts_out_point,
-            ScriptHashType::Data1,
-            Bytes::from(pool_id.to_vec()),
-        )
-        .expect("build lp typescript");
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
 
-    let input_lp = LPCell {
-        pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: operator_hash,
-        available_ckb: LP_IN_CAP,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 150,
-        active: true,
-    };
+    let input_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 150);
 
-    let output_lp = LPCell {
-        pool_id,
-        owner_lock_hash: owner_hash,
-        operator_lock_hash: [0u8; 32],
-        available_ckb: LP_IN_CAP,
-        reserved_ckb: 0,
-        cumulative_fees_earned_ckb: 0,
-        policy: lp_policy(),
-        nonce: 151,
-        active: true,
-    };
+    let output_lp = make_lp_cell(pool_id, owner_hash, [0u8; 32], LP_IN_CAP, 0, 0, 151);
 
-    let lp_input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(LP_IN_CAP.pack())
-            .lock(owner_lock)
-            .type_(Some(lp_type.clone()).pack())
-            .build(),
-        Bytes::from(input_lp.encode()),
+    let lp_input_out_point = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
     );
 
-    let operator_auth_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(AUTH_INPUT_CAP.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        Bytes::new(),
+    let operator_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+
+    let witness = witness_from_pool(PoolWitness::RotateOperator {
+        new_operator_lock_hash: [0u8; 32],
+    });
+
+    let tx = build_tx_from_specs(
+        vec![lp_input_out_point, operator_auth_input],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
     );
-
-    let witness = WitnessArgs::new_builder()
-        .input_type(
-            Some(Bytes::from(
-                PoolWitness::RotateOperator {
-                    new_operator_lock_hash: [0u8; 32],
-                }
-                .encode(),
-            ))
-            .pack(),
-        )
-        .build();
-
-    let tx = TransactionBuilder::default()
-        .inputs(vec![
-            CellInput::new_builder()
-                .previous_output(lp_input_out_point)
-                .build(),
-            CellInput::new_builder()
-                .previous_output(operator_auth_input)
-                .build(),
-        ])
-        .outputs(vec![
-            CellOutput::new_builder()
-                .capacity(LP_IN_CAP.pack())
-                .lock(operator_lock.clone())
-                .type_(Some(lp_type).pack())
-                .build(),
-            CellOutput::new_builder()
-                .capacity(AUTH_INPUT_CAP.pack())
-                .lock(operator_lock)
-                .build(),
-        ])
-        .outputs_data(vec![
-            Bytes::from(output_lp.encode()).pack(),
-            Bytes::new().pack(),
-        ])
-        .cell_deps(vec![lp_ts_dep, always_success_dep])
-        .witness(witness.as_bytes().pack())
-        .build();
 
     let tx = context.complete_tx(tx);
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);

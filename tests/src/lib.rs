@@ -12,6 +12,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 #[cfg(test)]
+mod lp_harness;
+#[cfg(test)]
 mod lp_tests;
 #[cfg(test)]
 mod perun;
