@@ -770,7 +770,7 @@ pub fn get_vc_participant_idx(lc_participant_idx: u8, idx_map: &IndexMap) -> Res
 pub fn get_idx_map(parents: &ParentsVec) -> Result<IndexMap, Error> {
     let pcts_hash = match load_cell_type_hash(0, Source::GroupInput)? {
         Some(hash) => hash,
-        None => panic!("type script not found"),
+        None => return Err(Error::TypeHashNotFound),
     };
     for i in 0..parents.len() {
         let parent = match parents.get(i) {
