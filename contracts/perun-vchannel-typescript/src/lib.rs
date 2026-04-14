@@ -26,8 +26,8 @@ use perun_common::{
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
-        ChannelWitnessUnion, Participant, SEC1EncodedPubKey, VCChannelConstants,
+        ChannelParameters, ChannelStatus, ChannelWitness,
+        ChannelWitnessUnion, Participant, VCChannelConstants,
         VirtualChannelStatus,
     },
 };

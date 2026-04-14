@@ -11,7 +11,6 @@ use crate::{
     error::Error,
     perun_types::{CKByteDistribution, SUDTAllocation, SUDTBalances, SUDTDistribution},
 };
-use alloy_primitives::U256;
 #[cfg(not(feature = "std"))]
 use {
     ckb_gen_types::packed::*,
