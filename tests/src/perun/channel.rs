@@ -143,6 +143,11 @@ where
         self
     }
 
+    /// state returns the current channel status.
+    pub fn state(&self) -> &ChannelStatus {
+        &self.channel_state
+    }
+
     /// delay the environment by the given `duration`, this makes the next
     /// transaction receive a block_header with a timestamp that is `duration`
     /// in the future.
@@ -514,6 +519,34 @@ where
             .collect();
         let sig_arr: [Vec<u8>; 2] = sigs?.try_into()?;
         Ok(sig_arr)
+    }
+
+    /// dispute_with_custom_sigs submits a dispute with caller-provided signatures,
+    /// bypassing the normal signing flow. Used for testing signature rejection.
+    pub fn dispute_with_custom_sigs(&mut self, sigs: [Vec<u8>; 2]) -> Result<(), perun::Error> {
+        self.channel_state = self
+            .channel_state
+            .clone()
+            .as_builder()
+            .disputed(ctrue!())
+            .build();
+        let res = match &self.channel_cell {
+            Some(channel_cell) => {
+                call_action!(
+                    self,
+                    dispute,
+                    self.id,
+                    channel_cell.clone(),
+                    self.channel_state.clone(),
+                    self.pcts.clone(),
+                    sigs,
+                )
+            }
+            None => panic!("no channel cell, invalid test setup"),
+        }?;
+        self.channel_cell = Some(res.channel_cell.clone());
+        self.push_header_with_cell(res.channel_cell);
+        Ok(())
     }
 
     /// force_close a channel using the currently active participant set by

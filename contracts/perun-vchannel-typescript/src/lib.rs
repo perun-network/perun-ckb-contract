@@ -1,13 +1,11 @@
 #![cfg_attr(not(feature = "library"), no_std)]
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
-use alloy_sol_types::SolValue;
 use ckb_std::default_alloc;
 ckb_std::entry!(program_entry);
 default_alloc!();
 use alloc::vec;
 use core::{result::Result, usize};
-use perun_common::sol::convert_ckb_state;
 
 use ckb_std::{
     ckb_constants::Source,
@@ -20,9 +18,11 @@ use ckb_std::{
     syscalls::SysError,
 };
 
-use perun_common::sig::ethereum_message_hash;
 use perun_common::{
-    channels::{find_cell_by_type_hash, unpack_byte32, VChannelAction},
+    channels::{
+        find_cell_by_type_hash, unpack_byte32, verify_equal_sum_of_balances,
+        verify_valid_state_sigs, VChannelAction,
+    },
     error::Error,
     helpers::blake2b256,
     perun_types::{
@@ -30,7 +30,6 @@ use perun_common::{
         ChannelWitnessUnion, Participant, SEC1EncodedPubKey, VCChannelConstants,
         VirtualChannelStatus,
     },
-    sig::verify_signature,
 };
 
 pub fn program_entry() -> i8 {
@@ -528,32 +527,8 @@ pub fn verify_max_one_parent(vc_status: &VirtualChannelStatus) -> Result<(), Err
     }
 }
 
-pub fn verify_valid_state_sigs(
-    sig_a: &Bytes,
-    sig_b: &Bytes,
-    state: &ChannelState,
-    pub_key_a: &SEC1EncodedPubKey,
-    pub_key_b: &SEC1EncodedPubKey,
-) -> Result<(), Error> {
-    let state_eth = convert_ckb_state(state);
-    let state_abi_encoded = state_eth.abi_encode();
-    let msg_hash = ethereum_message_hash(&state_abi_encoded);
-    verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
-    debug!("verify_valid_state_sigs: Signature A verified");
-    verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;
-    debug!("verify_valid_state_sigs: Signature B verified");
-    Ok(())
-}
-
-pub fn verify_equal_sum_of_balances(
-    old_balances: &Balances,
-    new_balances: &Balances,
-) -> Result<(), Error> {
-    if !old_balances.equal_in_sum(new_balances)? {
-        return Err(Error::SumOfBalancesNotEqual);
-    }
-    Ok(())
-}
+// verify_valid_state_sigs and verify_equal_sum_of_balances
+// live in perun_common::channels (shared with perun-channel-typescript).
 
 pub fn verify_vchannel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
