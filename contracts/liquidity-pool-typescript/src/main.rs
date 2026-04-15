@@ -83,8 +83,15 @@ fn main() -> Result<(), Error> {
         PoolWitness::RotateOperator {
             new_operator_lock_hash,
         } => check_rotate_operator(&ctx, &new_operator_lock_hash),
-        PoolWitness::LPChallengeClose { .. } => Err(Error::PoolWitnessInvalid),
-        PoolWitness::LPRecoverAfterChallenge { .. } => Err(Error::PoolWitnessInvalid),
+        PoolWitness::LPChallengeClose {
+            channel_id,
+            contribution_id,
+            reserved_ckb,
+        } => check_lp_challenge_close(&ctx, &channel_id, &contribution_id, reserved_ckb),
+        PoolWitness::LPRecoverAfterChallenge {
+            channel_id,
+            reserved_ckb,
+        } => check_lp_recover_after_challenge(&ctx, &channel_id, reserved_ckb),
     }
 }
 
@@ -228,6 +235,24 @@ fn channel_exists_by_id(channel_id: &[u8; 32], source: Source) -> Result<bool, E
                 if let Ok(status) = ChannelStatus::from_slice(d.as_ref()) {
                     let cid: [u8; 32] = status.state().channel_id().unpack();
                     if &cid == channel_id {
+                        return Ok(true);
+                    }
+                }
+            }
+            Err(SysError::IndexOutOfBound) => break,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(false)
+}
+
+fn channel_disputed_by_id(channel_id: &[u8; 32], source: Source) -> Result<bool, Error> {
+    for idx in 0usize.. {
+        match load_cell_data(idx, source) {
+            Ok(d) => {
+                if let Ok(status) = ChannelStatus::from_slice(d.as_ref()) {
+                    let cid: [u8; 32] = status.state().channel_id().unpack();
+                    if &cid == channel_id && status.disputed().to_bool() {
                         return Ok(true);
                     }
                 }
@@ -448,7 +473,6 @@ fn check_fund_channel_extract(
         return Err(Error::PoolCKBAmountZero);
     }
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
-    verify_owner_signing(&inp.owner_lock_hash)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
     require_nonzero_id(contribution_id)?;
 
@@ -645,6 +669,91 @@ fn check_rotate_operator(
         || out.cumulative_fees_earned_ckb != inp.cumulative_fees_earned_ckb
     {
         return Err(Error::LPBadOperatorRotation);
+    }
+
+    Ok(())
+}
+
+fn check_lp_challenge_close(
+    ctx: &GroupContext,
+    channel_id: &[u8; 32],
+    contribution_id: &[u8; 32],
+    reserved_ckb: u64,
+) -> Result<(), Error> {
+    if reserved_ckb == 0 {
+        return Err(Error::LPChallengeStateInvalid);
+    }
+
+    let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
+    verify_operator_signing(&inp.operator_lock_hash)?;
+    require_nonzero_id(contribution_id)?;
+
+    require_immutable_except_operator(inp, out)?;
+    require_operator_unchanged(inp, out)?;
+    require_nonce_inc(inp, out)?;
+
+    if reserved_ckb > inp.reserved_ckb {
+        return Err(Error::LPChallengeStateInvalid);
+    }
+
+    // Challenge-close witness can only unwind when disputed channel input is consumed.
+    if !channel_disputed_by_id(channel_id, Source::Input)? {
+        return Err(Error::LPChallengeStateInvalid);
+    }
+    if channel_exists_by_id(channel_id, Source::Output)? {
+        return Err(Error::LPChallengeStateInvalid);
+    }
+
+    let input_bindings = channel_bindings_by_id(channel_id, Source::Input)?;
+    if input_bindings.is_empty() {
+        return Err(Error::LPChallengeStateInvalid);
+    }
+    require_uniform_channel_bindings(&input_bindings)?;
+
+    if out_cap != inp_cap
+        || out.available_ckb != checked_add(inp.available_ckb, reserved_ckb)?
+        || out.reserved_ckb != checked_sub(inp.reserved_ckb, reserved_ckb)?
+        || out.cumulative_fees_earned_ckb != inp.cumulative_fees_earned_ckb
+    {
+        return Err(Error::PoolReserveMismatch);
+    }
+
+    Ok(())
+}
+
+fn check_lp_recover_after_challenge(
+    ctx: &GroupContext,
+    channel_id: &[u8; 32],
+    reserved_ckb: u64,
+) -> Result<(), Error> {
+    if reserved_ckb == 0 {
+        return Err(Error::LPRecoveryStateInvalid);
+    }
+
+    let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
+    verify_operator_signing(&inp.operator_lock_hash)?;
+
+    require_immutable_except_operator(inp, out)?;
+    require_operator_unchanged(inp, out)?;
+    require_nonce_inc(inp, out)?;
+
+    if reserved_ckb > inp.reserved_ckb {
+        return Err(Error::LPRecoveryStateInvalid);
+    }
+
+    // Recovery can only run once the channel is no longer present on-chain.
+    if channel_exists_by_id(channel_id, Source::Input)?
+        || channel_exists_by_id(channel_id, Source::Output)?
+    {
+        return Err(Error::LPRecoveryStateInvalid);
+    }
+
+    if out_cap != inp_cap
+        || out.available_ckb != checked_add(inp.available_ckb, reserved_ckb)?
+        || out.reserved_ckb != checked_sub(inp.reserved_ckb, reserved_ckb)?
+        || out.cumulative_fees_earned_ckb != inp.cumulative_fees_earned_ckb
+    {
+        return Err(Error::PoolReserveMismatch);
     }
 
     Ok(())

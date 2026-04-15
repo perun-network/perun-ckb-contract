@@ -6,7 +6,7 @@ use ckb_testtool::ckb_types::{
     prelude::*,
 };
 use ckb_testtool::context::Context;
-use perun_common::perun_types::ChannelStatus;
+use perun_common::perun_types::{Bool, ChannelStatus};
 use perun_common::pool::{LPCell, LPPolicy, PoolWitness};
 use std::env;
 use std::fs;
@@ -281,12 +281,25 @@ pub fn build_tx_from_specs(
 }
 
 pub fn channel_status_data(channel_id: [u8; 32]) -> Bytes {
+    channel_status_data_with_flags(channel_id, false, false)
+}
+
+pub fn channel_status_data_with_flags(
+    channel_id: [u8; 32],
+    disputed: bool,
+    is_final: bool,
+) -> Bytes {
     let base = ChannelStatus::default();
     let state = base
         .state()
         .as_builder()
         .channel_id(Byte32::from_slice(&channel_id).expect("channel id"))
+        .is_final(Bool::from_bool(is_final))
         .build();
-    let status = base.as_builder().state(state).build();
+    let status = base
+        .as_builder()
+        .state(state)
+        .disputed(Bool::from_bool(disputed))
+        .build();
     status.as_bytes()
 }

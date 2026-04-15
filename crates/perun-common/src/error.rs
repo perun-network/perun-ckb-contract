@@ -163,6 +163,8 @@ pub enum Error {
     LPPolicyViolation = -39,
     LPWitnessMismatch = -40,
     LPBadOperatorRotation = -41,
+    LPChallengeStateInvalid = -42,
+    LPRecoveryStateInvalid = -43,
 }
 impl From<Error> for i8 {
     #[inline]

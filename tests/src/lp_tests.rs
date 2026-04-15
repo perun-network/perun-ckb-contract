@@ -440,7 +440,7 @@ fn lp_extract_without_operator_signer_fails() {
 }
 
 #[test]
-fn lp_extract_without_owner_signer_fails() {
+fn lp_extract_without_owner_signer_succeeds_operator_only() {
     let mut context = Context::default();
     let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
@@ -523,9 +523,226 @@ fn lp_extract_without_owner_signer_fails() {
     let tx = context.complete_tx(tx);
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
     assert!(
-        result.is_err(),
-        "extract must fail when owner hash from state does not appear in tx inputs"
+        result.is_ok(),
+        "extract must succeed when operator signs even if owner hash from state does not appear in tx inputs"
     );
+}
+
+#[test]
+fn lp_challenge_close_releases_reserved_after_disputed_channel_consumed() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xA9; 32];
+    let channel_id = [0xB9; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+    let reserved_ckb = EXTRACT_CKB;
+
+    let input_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - reserved_ckb,
+        reserved_ckb,
+        0,
+        62,
+    );
+    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 63);
+
+    let lp_input = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+    let channel_input = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(4_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        channel_status_data_with_flags(channel_id, true, false),
+    );
+
+    let witness = witness_from_pool(PoolWitness::LPChallengeClose {
+        channel_id,
+        contribution_id: [0xC9; 32],
+        reserved_ckb,
+    });
+
+    let tx = build_tx_from_specs(
+        vec![lp_input, channel_input, operator_auth],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP + 4_000_000_000u64,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES)
+        .expect("challenge-close should release reserved CKB after disputed channel is consumed");
+}
+
+#[test]
+fn lp_challenge_close_requires_disputed_channel() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xAA; 32];
+    let channel_id = [0xBA; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+    let reserved_ckb = EXTRACT_CKB;
+
+    let input_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - reserved_ckb,
+        reserved_ckb,
+        0,
+        64,
+    );
+    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 65);
+
+    let lp_input = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+    let channel_input = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(4_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        channel_status_data_with_flags(channel_id, false, false),
+    );
+
+    let witness = witness_from_pool(PoolWitness::LPChallengeClose {
+        channel_id,
+        contribution_id: [0xCA; 32],
+        reserved_ckb,
+    });
+
+    let tx = build_tx_from_specs(
+        vec![lp_input, channel_input, operator_auth],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP + 4_000_000_000u64,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "challenge-close must fail when referenced channel is not disputed"
+    );
+}
+
+#[test]
+fn lp_recover_after_challenge_releases_reserved_when_channel_absent() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xAB; 32];
+    let channel_id = [0xBB; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+    let reserved_ckb = EXTRACT_CKB;
+
+    let input_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - reserved_ckb,
+        reserved_ckb,
+        0,
+        66,
+    );
+    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 67);
+
+    let lp_input = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+
+    let witness = witness_from_pool(PoolWitness::LPRecoverAfterChallenge {
+        channel_id,
+        reserved_ckb,
+    });
+
+    let tx = build_tx_from_specs(
+        vec![lp_input, operator_auth],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES)
+        .expect("recover-after-challenge should release reserved CKB when channel is absent");
 }
 
 #[test]

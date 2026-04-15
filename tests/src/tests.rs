@@ -4,10 +4,11 @@ use crate::perun::virtual_channel::*;
 
 use super::*;
 use ckb_occupied_capacity::Capacity;
-use ckb_testtool::ckb_types::{packed::*, prelude::*};
+use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
 use perun::{test, virtual_channel};
+use perun_common::pool::PoolWitness;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Mutex;
@@ -75,6 +76,93 @@ fn channel_vc_test_bench() -> Result<(), perun::Error> {
     })
     .collect::<Vec<_>>();
     res.into_iter().collect()
+}
+
+#[test]
+fn lp_challenge_close_integration_smoke() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = super::lp_harness::deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) =
+        super::lp_harness::deploy_always_success(&mut context);
+
+    let pool_id = [0xAC; 32];
+    let channel_id = [0xBC; 32];
+    let owner_lock = super::lp_harness::build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = super::lp_harness::build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = super::lp_harness::build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = super::lp_harness::script_hash_array(&owner_lock);
+    let operator_hash = super::lp_harness::script_hash_array(&operator_lock);
+    let reserved_ckb = super::lp_harness::EXTRACT_CKB;
+
+    let input_lp = super::lp_harness::make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        super::lp_harness::LP_IN_CAP - reserved_ckb,
+        reserved_ckb,
+        0,
+        80,
+    );
+    let output_lp = super::lp_harness::make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        super::lp_harness::LP_IN_CAP,
+        0,
+        0,
+        81,
+    );
+
+    let lp_input = super::lp_harness::create_typed_lp_cell(
+        &mut context,
+        super::lp_harness::LP_IN_CAP,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+    let operator_auth = super::lp_harness::create_auth_cell(
+        &mut context,
+        super::lp_harness::AUTH_INPUT_CAP,
+        operator_lock.clone(),
+    );
+    let channel_input = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(4_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        super::lp_harness::channel_status_data_with_flags(channel_id, true, false),
+    );
+
+    let witness = super::lp_harness::witness_from_pool(PoolWitness::LPChallengeClose {
+        channel_id,
+        contribution_id: [0xCC; 32],
+        reserved_ckb,
+    });
+
+    let tx = super::lp_harness::build_tx_from_specs(
+        vec![lp_input, channel_input, operator_auth],
+        vec![
+            super::lp_harness::TxOutputSpec {
+                capacity: super::lp_harness::LP_IN_CAP,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            super::lp_harness::TxOutputSpec {
+                capacity: super::lp_harness::AUTH_INPUT_CAP + 4_000_000_000u64,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    super::verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES)
+        .expect("LP challenge-close integration smoke test should pass");
 }
 
 fn create_channel_test(
