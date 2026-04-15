@@ -100,11 +100,24 @@ bash scripts/lp_migration_prepare.sh \
   --pool-id 0x<64hex> \
   --owner-lock-hash 0x<64hex> \
   --operator-lock-hash 0x<64hex> \
+  --policy-flags 0 \
+  --policy-version 1 \
   --network dev \
-  --out migrations_lp/lp_cell_spec.json
+  --out migrations_lp/lp_cell_spec.json \
+  --monitoring-checklist-out migrations_lp/lp_monitoring_checklist.md
 ```
 
 The helper prints a minimal command skeleton for deployment and LP cell bootstrap transactions.
+It also writes a rollout checklist that you can use during staged rollout to track signer-auth failures,
+policy violations, reserve conservation errors, and fee attribution drift.
+
+Recommended staged rollout sequence:
+
+1. Run `make verify-lp-deployment`.
+2. Generate migration spec and checklist with `scripts/lp_migration_prepare.sh`.
+3. Deploy LP scripts using `deployment/<network>/deployment_lp.toml`.
+4. Execute one canary LP funding tx and one canary settlement tx.
+5. Gate wider rollout on checklist pass with no unexplained signer/policy/conservation failures.
 
 ## perun-common
 Additionally, to the available contracts we extracted common functionality into
