@@ -239,6 +239,15 @@ fn lp_witness_roundtrip_in_tests_crate() {
         PoolWitness::RotateOperator {
             new_operator_lock_hash: [0x77; 32],
         },
+        PoolWitness::LPChallengeClose {
+            channel_id: [0x88; 32],
+            contribution_id: [0x99; 32],
+            reserved_ckb: 1_000,
+        },
+        PoolWitness::LPRecoverAfterChallenge {
+            channel_id: [0xAA; 32],
+            reserved_ckb: 2_000,
+        },
     ];
 
     for witness in cases {

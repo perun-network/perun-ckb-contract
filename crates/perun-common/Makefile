@@ -17,7 +17,7 @@ CARGO_ARGS :=
 MODE := release
 # Tweak this to change the clang version to use for building C code. By default
 # we use a bash script with somes heuristics to find clang in current system.
-CLANG := $(shell $(TOP)/scripts/find_clang)
+CLANG := $(shell if [ -x "$(TOP)/scripts/find_clang" ]; then "$(TOP)/scripts/find_clang"; elif [ -x "$(TOP)/../scripts/find_clang" ]; then "$(TOP)/../scripts/find_clang"; elif [ -x "$(TOP)/../../scripts/find_clang" ]; then "$(TOP)/../../scripts/find_clang"; else command -v clang || echo clang; fi)
 AR := $(subst clang,llvm-ar,$(CLANG))
 OBJCOPY := $(subst clang,llvm-objcopy,$(CLANG))
 # When this is set to some value, the generated binaries will be copied over
@@ -34,7 +34,14 @@ endif
 
 default: build test
 
+generate-liquidity-pool-types:
+	@set -eu; \
+	moleculec --language rust --schema-file $(TOP)/liquidity_pool.mol > $(TOP)/src/liquidity_pool_types.rs.tmp; \
+	sed 's/use super :: blockchain :: \* ;/use super :: blockchain_types :: * ;/' $(TOP)/src/liquidity_pool_types.rs.tmp > $(TOP)/src/liquidity_pool_types.rs; \
+	rm -f $(TOP)/src/liquidity_pool_types.rs.tmp
+
 build:
+	$(MAKE) generate-liquidity-pool-types
 	RUSTFLAGS="$(FULL_RUSTFLAGS)" TARGET_CC="$(CLANG)" TARGET_AR="$(AR)" \
 		cargo build --target=riscv64imac-unknown-none-elf $(MODE_ARGS) $(CARGO_ARGS)
 	@set -eu; \
@@ -50,9 +57,11 @@ build:
 # test, check, clippy and fmt here are provided for completeness,
 # there is nothing wrong invoking cargo directly instead of make.
 test:
+	$(MAKE) generate-liquidity-pool-types
 	cargo test $(CARGO_ARGS)
 
 check:
+	$(MAKE) generate-liquidity-pool-types
 	cargo check $(CARGO_ARGS)
 
 clippy:
@@ -77,4 +86,4 @@ clean:
 prepare:
 	rustup target add riscv64imac-unknown-none-elf
 
-.PHONY: build test check clippy fmt cargo clean prepare
+.PHONY: build test check clippy fmt cargo clean prepare generate-liquidity-pool-types

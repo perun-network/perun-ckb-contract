@@ -1,4 +1,7 @@
 use crate::error::Error;
+use crate::liquidity_pool_types as lp_types;
+
+use molecule::prelude::{Builder, Entity};
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -6,6 +9,9 @@ use alloc::vec::Vec;
 pub const MAGIC_LP_CELL: &[u8; 4] = b"LPLC";
 
 pub const LP_CELL_SIZE: usize = 153;
+const LP_LEGACY_BODY_SIZE: usize = 32 + 32 + 32 + 8 + 8 + 8 + 8 + 4 + 4 + 4 + 8 + 1;
+const _: [(); LP_CELL_SIZE] = [(); MAGIC_LP_CELL.len() + LP_LEGACY_BODY_SIZE];
+const _: [(); 4] = [(); MAGIC_LP_CELL.len()];
 
 pub mod op {
     pub const LP_DEPOSIT: u8 = 0x41;
@@ -14,6 +20,8 @@ pub mod op {
     pub const SETTLE_CHANNEL_INSERT: u8 = 0x44;
     pub const CANCEL_RESERVATION: u8 = 0x45;
     pub const ROTATE_OPERATOR: u8 = 0x46;
+    pub const LP_CHALLENGE_CLOSE: u8 = 0x47;
+    pub const LP_RECOVER_AFTER_CHALLENGE: u8 = 0x48;
 }
 
 #[derive(Clone, Debug)]
@@ -123,14 +131,28 @@ pub enum PoolWitness {
     RotateOperator {
         new_operator_lock_hash: [u8; 32],
     },
+    LPChallengeClose {
+        channel_id: [u8; 32],
+        contribution_id: [u8; 32],
+        reserved_ckb: u64,
+    },
+    LPRecoverAfterChallenge {
+        channel_id: [u8; 32],
+        reserved_ckb: u64,
+    },
 }
 
 impl PoolWitness {
+    fn canonicalize_via_generated(self) -> Result<Self, Error> {
+        let molecule_entity = self.to_generated_entity();
+        Self::from_generated_entity(&molecule_entity)
+    }
+
     pub fn decode(data: &[u8]) -> Result<Self, Error> {
         if data.is_empty() {
             return Err(Error::PoolWitnessMissing);
         }
-        match data[0] {
+        let decoded = match data[0] {
             op::LP_DEPOSIT => Ok(Self::LPDeposit),
             op::LP_WITHDRAW => {
                 if data.len() < 9 {
@@ -189,8 +211,33 @@ impl PoolWitness {
                     new_operator_lock_hash,
                 })
             }
+            op::LP_CHALLENGE_CLOSE => {
+                if data.len() < 73 {
+                    return Err(Error::PoolWitnessInvalid);
+                }
+                let channel_id = data[1..33].try_into().unwrap();
+                let contribution_id = data[33..65].try_into().unwrap();
+                let reserved_ckb = u64::from_le_bytes(data[65..73].try_into().unwrap());
+                Ok(Self::LPChallengeClose {
+                    channel_id,
+                    contribution_id,
+                    reserved_ckb,
+                })
+            }
+            op::LP_RECOVER_AFTER_CHALLENGE => {
+                if data.len() < 41 {
+                    return Err(Error::PoolWitnessInvalid);
+                }
+                let channel_id = data[1..33].try_into().unwrap();
+                let reserved_ckb = u64::from_le_bytes(data[33..41].try_into().unwrap());
+                Ok(Self::LPRecoverAfterChallenge {
+                    channel_id,
+                    reserved_ckb,
+                })
+            }
             _ => Err(Error::PoolWitnessInvalid),
-        }
+        }?;
+        decoded.canonicalize_via_generated()
     }
 
     pub fn encode(&self) -> Vec<u8> {
@@ -239,8 +286,185 @@ impl PoolWitness {
                 b.push(op::ROTATE_OPERATOR);
                 b.extend_from_slice(new_operator_lock_hash);
             }
+            Self::LPChallengeClose {
+                channel_id,
+                contribution_id,
+                reserved_ckb,
+            } => {
+                b.push(op::LP_CHALLENGE_CLOSE);
+                b.extend_from_slice(channel_id);
+                b.extend_from_slice(contribution_id);
+                b.extend_from_slice(&reserved_ckb.to_le_bytes());
+            }
+            Self::LPRecoverAfterChallenge {
+                channel_id,
+                reserved_ckb,
+            } => {
+                b.push(op::LP_RECOVER_AFTER_CHALLENGE);
+                b.extend_from_slice(channel_id);
+                b.extend_from_slice(&reserved_ckb.to_le_bytes());
+            }
         }
         b
+    }
+
+    fn to_generated_entity(&self) -> lp_types::PoolWitness {
+        match self {
+            Self::LPDeposit => lp_types::PoolWitness::new_builder()
+                .set(lp_types::LPDepositWitness::new_builder().build())
+                .build(),
+            Self::LPWithdraw { ckb_out } => lp_types::PoolWitness::new_builder()
+                .set(
+                    lp_types::LPWithdrawWitness::new_builder()
+                        .ckb_out((*ckb_out).to_le_bytes().into())
+                        .build(),
+                )
+                .build(),
+            Self::FundChannelExtract {
+                channel_id,
+                contribution_id,
+                extract_ckb,
+            } => lp_types::PoolWitness::new_builder()
+                .set(
+                    lp_types::FundChannelExtractWitness::new_builder()
+                        .channel_id((*channel_id).into())
+                        .contribution_id((*contribution_id).into())
+                        .extract_ckb((*extract_ckb).to_le_bytes().into())
+                        .build(),
+                )
+                .build(),
+            Self::SettleChannelInsert {
+                channel_id,
+                contribution_id,
+                principal_returned,
+                fee_ckb,
+                price_x64,
+            } => lp_types::PoolWitness::new_builder()
+                .set(
+                    lp_types::SettleChannelInsertWitness::new_builder()
+                        .channel_id((*channel_id).into())
+                        .contribution_id((*contribution_id).into())
+                        .principal_returned((*principal_returned).to_le_bytes().into())
+                        .fee_ckb((*fee_ckb).to_le_bytes().into())
+                        .price_x64((*price_x64).to_le_bytes().into())
+                        .build(),
+                )
+                .build(),
+            Self::CancelReservation {
+                channel_id,
+                contribution_id,
+            } => lp_types::PoolWitness::new_builder()
+                .set(
+                    lp_types::CancelReservationWitness::new_builder()
+                        .channel_id((*channel_id).into())
+                        .contribution_id((*contribution_id).into())
+                        .build(),
+                )
+                .build(),
+            Self::RotateOperator {
+                new_operator_lock_hash,
+            } => lp_types::PoolWitness::new_builder()
+                .set(
+                    lp_types::RotateOperatorWitness::new_builder()
+                        .new_operator_lock_hash((*new_operator_lock_hash).into())
+                        .build(),
+                )
+                .build(),
+            Self::LPChallengeClose {
+                channel_id,
+                contribution_id,
+                reserved_ckb,
+            } => lp_types::PoolWitness::new_builder()
+                .set(
+                    lp_types::LPChallengeCloseWitness::new_builder()
+                        .channel_id((*channel_id).into())
+                        .contribution_id((*contribution_id).into())
+                        .reserved_ckb((*reserved_ckb).to_le_bytes().into())
+                        .build(),
+                )
+                .build(),
+            Self::LPRecoverAfterChallenge {
+                channel_id,
+                reserved_ckb,
+            } => lp_types::PoolWitness::new_builder()
+                .set(
+                    lp_types::LPRecoverAfterChallengeWitness::new_builder()
+                        .channel_id((*channel_id).into())
+                        .reserved_ckb((*reserved_ckb).to_le_bytes().into())
+                        .build(),
+                )
+                .build(),
+        }
+    }
+
+    fn from_generated_entity(entity: &lp_types::PoolWitness) -> Result<Self, Error> {
+        use lp_types::PoolWitnessUnion;
+
+        match entity.to_enum() {
+            PoolWitnessUnion::LPDepositWitness(_) => Ok(Self::LPDeposit),
+            PoolWitnessUnion::LPWithdrawWitness(w) => {
+                let ckb_out: [u8; 8] = w.ckb_out().into();
+                Ok(Self::LPWithdraw {
+                    ckb_out: u64::from_le_bytes(ckb_out),
+                })
+            }
+            PoolWitnessUnion::FundChannelExtractWitness(w) => {
+                let channel_id: [u8; 32] = w.channel_id().into();
+                let contribution_id: [u8; 32] = w.contribution_id().into();
+                let extract_ckb: [u8; 8] = w.extract_ckb().into();
+                Ok(Self::FundChannelExtract {
+                    channel_id,
+                    contribution_id,
+                    extract_ckb: u64::from_le_bytes(extract_ckb),
+                })
+            }
+            PoolWitnessUnion::SettleChannelInsertWitness(w) => {
+                let channel_id: [u8; 32] = w.channel_id().into();
+                let contribution_id: [u8; 32] = w.contribution_id().into();
+                let principal_returned: [u8; 8] = w.principal_returned().into();
+                let fee_ckb: [u8; 8] = w.fee_ckb().into();
+                let price_x64: [u8; 16] = w.price_x64().into();
+                Ok(Self::SettleChannelInsert {
+                    channel_id,
+                    contribution_id,
+                    principal_returned: u64::from_le_bytes(principal_returned),
+                    fee_ckb: u64::from_le_bytes(fee_ckb),
+                    price_x64: u128::from_le_bytes(price_x64),
+                })
+            }
+            PoolWitnessUnion::CancelReservationWitness(w) => {
+                let channel_id: [u8; 32] = w.channel_id().into();
+                let contribution_id: [u8; 32] = w.contribution_id().into();
+                Ok(Self::CancelReservation {
+                    channel_id,
+                    contribution_id,
+                })
+            }
+            PoolWitnessUnion::RotateOperatorWitness(w) => {
+                let new_operator_lock_hash: [u8; 32] = w.new_operator_lock_hash().into();
+                Ok(Self::RotateOperator {
+                    new_operator_lock_hash,
+                })
+            }
+            PoolWitnessUnion::LPChallengeCloseWitness(w) => {
+                let channel_id: [u8; 32] = w.channel_id().into();
+                let contribution_id: [u8; 32] = w.contribution_id().into();
+                let reserved_ckb: [u8; 8] = w.reserved_ckb().into();
+                Ok(Self::LPChallengeClose {
+                    channel_id,
+                    contribution_id,
+                    reserved_ckb: u64::from_le_bytes(reserved_ckb),
+                })
+            }
+            PoolWitnessUnion::LPRecoverAfterChallengeWitness(w) => {
+                let channel_id: [u8; 32] = w.channel_id().into();
+                let reserved_ckb: [u8; 8] = w.reserved_ckb().into();
+                Ok(Self::LPRecoverAfterChallenge {
+                    channel_id,
+                    reserved_ckb: u64::from_le_bytes(reserved_ckb),
+                })
+            }
+        }
     }
 }
 
@@ -348,6 +572,15 @@ mod tests {
             PoolWitness::RotateOperator {
                 new_operator_lock_hash: [10u8; 32],
             },
+            PoolWitness::LPChallengeClose {
+                channel_id: [11u8; 32],
+                contribution_id: [12u8; 32],
+                reserved_ckb: 456,
+            },
+            PoolWitness::LPRecoverAfterChallenge {
+                channel_id: [13u8; 32],
+                reserved_ckb: 789,
+            },
         ];
 
         for w in cases {
@@ -400,6 +633,16 @@ mod tests {
             PoolWitness::decode(&vec![op::ROTATE_OPERATOR; 32]),
             Err(Error::PoolWitnessInvalid)
         ));
+
+        assert!(matches!(
+            PoolWitness::decode(&vec![op::LP_CHALLENGE_CLOSE; 72]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&vec![op::LP_RECOVER_AFTER_CHALLENGE; 40]),
+            Err(Error::PoolWitnessInvalid)
+        ));
     }
 
     #[test]
@@ -410,5 +653,7 @@ mod tests {
         assert_eq!(op::SETTLE_CHANNEL_INSERT, 0x44);
         assert_eq!(op::CANCEL_RESERVATION, 0x45);
         assert_eq!(op::ROTATE_OPERATOR, 0x46);
+        assert_eq!(op::LP_CHALLENGE_CLOSE, 0x47);
+        assert_eq!(op::LP_RECOVER_AFTER_CHALLENGE, 0x48);
     }
 }

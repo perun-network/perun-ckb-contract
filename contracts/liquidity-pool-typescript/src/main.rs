@@ -69,6 +69,8 @@ fn main() -> Result<(), Error> {
         PoolWitness::RotateOperator {
             new_operator_lock_hash,
         } => check_rotate_operator(&ctx, &new_operator_lock_hash),
+        PoolWitness::LPChallengeClose { .. } => Err(Error::PoolWitnessInvalid),
+        PoolWitness::LPRecoverAfterChallenge { .. } => Err(Error::PoolWitnessInvalid),
     }
 }
 
