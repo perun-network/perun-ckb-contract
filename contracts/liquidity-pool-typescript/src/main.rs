@@ -24,10 +24,17 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
     high_level::{
-        load_cell_capacity, load_cell_data, load_cell_lock_hash, load_script, load_witness_args,
+        load_cell_capacity, load_cell_data, load_cell_lock_hash, load_cell_type_hash, load_script,
+        load_witness_args,
     },
     syscalls::SysError,
 };
+
+const POLICY_FLAG_ENFORCE_MAX_FEE: u32 = 1 << 0;
+const POLICY_FLAG_ENFORCE_MIN_FEE: u32 = 1 << 1;
+const POLICY_FLAG_REQUIRE_PRICE: u32 = 1 << 2;
+const POLICY_FLAG_ALLOWED_MASK: u32 =
+    POLICY_FLAG_ENFORCE_MAX_FEE | POLICY_FLAG_ENFORCE_MIN_FEE | POLICY_FLAG_REQUIRE_PRICE;
 
 pub fn program_entry() -> i8 {
     match main() {
@@ -52,20 +59,27 @@ fn main() -> Result<(), Error> {
         PoolWitness::LPWithdraw { ckb_out } => check_lp_withdraw(&ctx, ckb_out),
         PoolWitness::FundChannelExtract {
             channel_id,
-            contribution_id: _,
+            contribution_id,
             extract_ckb,
-        } => check_fund_channel_extract(&ctx, &channel_id, extract_ckb),
+        } => check_fund_channel_extract(&ctx, &channel_id, &contribution_id, extract_ckb),
         PoolWitness::SettleChannelInsert {
             channel_id,
-            contribution_id: _,
+            contribution_id,
             principal_returned,
             fee_ckb,
-            price_x64: _,
-        } => check_settle_channel_insert(&ctx, &channel_id, principal_returned, fee_ckb),
+            price_x64,
+        } => check_settle_channel_insert(
+            &ctx,
+            &channel_id,
+            &contribution_id,
+            principal_returned,
+            fee_ckb,
+            price_x64,
+        ),
         PoolWitness::CancelReservation {
             channel_id,
-            contribution_id: _,
-        } => check_cancel_reservation(&ctx, &channel_id),
+            contribution_id,
+        } => check_cancel_reservation(&ctx, &channel_id, &contribution_id),
         PoolWitness::RotateOperator {
             new_operator_lock_hash,
         } => check_rotate_operator(&ctx, &new_operator_lock_hash),
@@ -225,6 +239,93 @@ fn channel_exists_by_id(channel_id: &[u8; 32], source: Source) -> Result<bool, E
     Ok(false)
 }
 
+#[derive(Clone, Copy)]
+struct ChannelBinding {
+    lock_hash: [u8; 32],
+    type_hash: Option<[u8; 32]>,
+}
+
+fn channel_bindings_by_id(
+    channel_id: &[u8; 32],
+    source: Source,
+) -> Result<Vec<ChannelBinding>, Error> {
+    let mut bindings = Vec::new();
+    for idx in 0usize.. {
+        match load_cell_data(idx, source) {
+            Ok(d) => {
+                if let Ok(status) = ChannelStatus::from_slice(d.as_ref()) {
+                    let cid: [u8; 32] = status.state().channel_id().unpack();
+                    if &cid == channel_id {
+                        let lock_hash_raw = load_cell_lock_hash(idx, source)?;
+                        let mut lock_hash = [0u8; 32];
+                        lock_hash.copy_from_slice(lock_hash_raw.as_slice());
+                        let type_hash = load_cell_type_hash(idx, source)?;
+                        bindings.push(ChannelBinding {
+                            lock_hash,
+                            type_hash,
+                        });
+                    }
+                }
+            }
+            Err(SysError::IndexOutOfBound) => break,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(bindings)
+}
+
+fn require_uniform_channel_bindings(bindings: &[ChannelBinding]) -> Result<(), Error> {
+    if let Some(first) = bindings.first() {
+        for b in bindings.iter().skip(1) {
+            if b.lock_hash != first.lock_hash || b.type_hash != first.type_hash {
+                return Err(Error::LPWitnessMismatch);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn require_nonzero_id(id: &[u8; 32]) -> Result<(), Error> {
+    if *id == [0u8; 32] {
+        return Err(Error::LPWitnessMismatch);
+    }
+    Ok(())
+}
+
+fn validate_policy_fields(policy: &perun_common::pool::LPPolicy) -> Result<(), Error> {
+    if policy.fee_rate_bps == 0 {
+        return Err(Error::LPPolicyViolation);
+    }
+    if policy.policy_version == 0 {
+        return Err(Error::LPPolicyViolation);
+    }
+    if (policy.policy_flags & !POLICY_FLAG_ALLOWED_MASK) != 0 {
+        return Err(Error::LPPolicyViolation);
+    }
+    Ok(())
+}
+
+fn owner_non_lp_capacity(owner_lock_hash: &[u8; 32], source: Source) -> Result<u64, Error> {
+    let mut total = 0u64;
+    for idx in 0usize.. {
+        match load_cell_lock_hash(idx, source) {
+            Ok(h) => {
+                if h.as_slice() != owner_lock_hash {
+                    continue;
+                }
+                let d = load_cell_data(idx, source)?;
+                if LPCell::is_lp_cell(d.as_ref()) {
+                    continue;
+                }
+                total = checked_add(total, load_cell_capacity(idx, source)?)?;
+            }
+            Err(SysError::IndexOutOfBound) => break,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(total)
+}
+
 fn same_policy(a: &LPCell, b: &LPCell) -> bool {
     a.policy.max_trading_volume == b.policy.max_trading_volume
         && a.policy.fee_rate_bps == b.policy.fee_rate_bps
@@ -278,6 +379,7 @@ fn check_lp_deposit(ctx: &GroupContext) -> Result<(), Error> {
         {
             return Err(Error::PoolReserveMismatch);
         }
+        validate_policy_fields(&out.policy)?;
         return Ok(());
     }
 
@@ -326,12 +428,20 @@ fn check_lp_withdraw(ctx: &GroupContext, ckb_out: u64) -> Result<(), Error> {
         return Err(Error::PoolReserveMismatch);
     }
 
+    let in_owner_non_lp = owner_non_lp_capacity(&inp.owner_lock_hash, Source::Input)?;
+    let out_owner_non_lp = owner_non_lp_capacity(&inp.owner_lock_hash, Source::Output)?;
+    let owner_delta = out_owner_non_lp.saturating_sub(in_owner_non_lp);
+    if owner_delta < ckb_out {
+        return Err(Error::LPWitnessMismatch);
+    }
+
     Ok(())
 }
 
 fn check_fund_channel_extract(
     ctx: &GroupContext,
     channel_id: &[u8; 32],
+    contribution_id: &[u8; 32],
     extract_ckb: u64,
 ) -> Result<(), Error> {
     if extract_ckb == 0 {
@@ -339,7 +449,7 @@ fn check_fund_channel_extract(
     }
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
-    verify_owner_signing(&inp.owner_lock_hash)?;
+    require_nonzero_id(contribution_id)?;
 
     require_immutable_except_operator(inp, out)?;
     require_operator_unchanged(inp, out)?;
@@ -364,6 +474,20 @@ fn check_fund_channel_extract(
         return Err(Error::PoolReserveMismatch);
     }
 
+    let output_bindings = channel_bindings_by_id(channel_id, Source::Output)?;
+    if output_bindings.is_empty() {
+        return Err(Error::LPWitnessMismatch);
+    }
+    require_uniform_channel_bindings(&output_bindings)?;
+
+    let input_bindings = channel_bindings_by_id(channel_id, Source::Input)?;
+    require_uniform_channel_bindings(&input_bindings)?;
+    if let (Some(first_in), Some(first_out)) = (input_bindings.first(), output_bindings.first()) {
+        if first_in.lock_hash != first_out.lock_hash || first_in.type_hash != first_out.type_hash {
+            return Err(Error::LPWitnessMismatch);
+        }
+    }
+
     if out_cap != checked_sub(inp_cap, extract_ckb)?
         || out.available_ckb != checked_sub(inp.available_ckb, extract_ckb)?
         || out.reserved_ckb != checked_add(inp.reserved_ckb, extract_ckb)?
@@ -378,14 +502,23 @@ fn check_fund_channel_extract(
 fn check_settle_channel_insert(
     ctx: &GroupContext,
     channel_id: &[u8; 32],
+    contribution_id: &[u8; 32],
     principal_returned: u64,
     fee_ckb: u64,
+    price_x64: u128,
 ) -> Result<(), Error> {
     if principal_returned == 0 && fee_ckb == 0 {
         return Err(Error::InvalidSettlement);
     }
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
+    require_nonzero_id(contribution_id)?;
+
+    if price_x64 == 0
+        || (inp.policy.policy_flags & POLICY_FLAG_REQUIRE_PRICE) != 0 && price_x64 == 0
+    {
+        return Err(Error::LPPolicyViolation);
+    }
 
     require_immutable_except_operator(inp, out)?;
     require_operator_unchanged(inp, out)?;
@@ -395,13 +528,19 @@ fn check_settle_channel_insert(
         return Err(Error::InvalidSettlement);
     }
 
-    if (inp.policy.policy_flags & 0x1) != 0 && inp.policy.fee_rate_bps != 0 {
-        let max_fee_u128 = (principal_returned as u128)
+    if inp.policy.fee_rate_bps != 0
+        && (inp.policy.policy_flags & (POLICY_FLAG_ENFORCE_MAX_FEE | POLICY_FLAG_ENFORCE_MIN_FEE))
+            != 0
+    {
+        let policy_fee_u128 = (principal_returned as u128)
             .checked_mul(inp.policy.fee_rate_bps as u128)
             .ok_or(Error::LPArithmetic)?
             / 10_000u128;
-        let max_fee = u64::try_from(max_fee_u128).map_err(|_| Error::LPArithmetic)?;
-        if fee_ckb > max_fee {
+        let policy_fee = u64::try_from(policy_fee_u128).map_err(|_| Error::LPArithmetic)?;
+        if (inp.policy.policy_flags & POLICY_FLAG_ENFORCE_MAX_FEE) != 0 && fee_ckb > policy_fee {
+            return Err(Error::LPPolicyViolation);
+        }
+        if (inp.policy.policy_flags & POLICY_FLAG_ENFORCE_MIN_FEE) != 0 && fee_ckb < policy_fee {
             return Err(Error::LPPolicyViolation);
         }
     }
@@ -422,6 +561,12 @@ fn check_settle_channel_insert(
         return Err(Error::InvalidSettlement);
     }
 
+    let input_bindings = channel_bindings_by_id(channel_id, Source::Input)?;
+    if input_bindings.is_empty() {
+        return Err(Error::InvalidSettlement);
+    }
+    require_uniform_channel_bindings(&input_bindings)?;
+
     if out_cap != checked_add(inp_cap, total_return)?
         || out.available_ckb != checked_add(inp.available_ckb, total_return)?
         || out.reserved_ckb != checked_sub(inp.reserved_ckb, principal_returned)?
@@ -433,9 +578,14 @@ fn check_settle_channel_insert(
     Ok(())
 }
 
-fn check_cancel_reservation(ctx: &GroupContext, channel_id: &[u8; 32]) -> Result<(), Error> {
+fn check_cancel_reservation(
+    ctx: &GroupContext,
+    channel_id: &[u8; 32],
+    contribution_id: &[u8; 32],
+) -> Result<(), Error> {
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
+    require_nonzero_id(contribution_id)?;
 
     require_immutable_except_operator(inp, out)?;
     require_operator_unchanged(inp, out)?;

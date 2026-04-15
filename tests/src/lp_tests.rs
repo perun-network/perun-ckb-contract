@@ -350,35 +350,26 @@ fn lp_happy_path_deposit_extract_settle_success() {
 }
 
 #[test]
-fn lp_extract_without_owner_signer_fails() {
+fn lp_extract_without_operator_signer_fails() {
     let mut context = Context::default();
     let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
 
     let pool_id = [0xCD; 32];
     let channel_id = [0xD7; 32];
-    let fake_owner_hash = [0xAB; 32];
-
     let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
 
     let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
 
+    let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
 
-    let input_lp = make_lp_cell(
-        pool_id,
-        fake_owner_hash,
-        operator_hash,
-        LP_IN_CAP,
-        0,
-        0,
-        110,
-    );
+    let input_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 110);
 
     let output_lp = make_lp_cell(
         pool_id,
-        fake_owner_hash,
+        owner_hash,
         operator_hash,
         LP_IN_CAP - EXTRACT_CKB,
         EXTRACT_CKB,
@@ -389,17 +380,17 @@ fn lp_extract_without_owner_signer_fails() {
     let lp_input_out_point = create_typed_lp_cell(
         &mut context,
         LP_IN_CAP,
-        owner_lock,
+        owner_lock.clone(),
         lp_type.clone(),
         &input_lp,
     );
 
-    let operator_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+    let owner_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, owner_lock.clone());
 
     let channel_input_out_point = context.create_cell(
         CellOutput::new_builder()
             .capacity(3_000_000_000u64.pack())
-            .lock(operator_lock.clone())
+            .lock(owner_lock.clone())
             .build(),
         channel_status_data(channel_id),
     );
@@ -413,7 +404,7 @@ fn lp_extract_without_owner_signer_fails() {
     let tx = build_tx_from_specs(
         vec![
             lp_input_out_point,
-            operator_auth_input,
+            owner_auth_input,
             channel_input_out_point,
         ],
         vec![
@@ -425,7 +416,7 @@ fn lp_extract_without_owner_signer_fails() {
             },
             TxOutputSpec {
                 capacity: 3_000_000_000u64 + EXTRACT_CKB,
-                lock: operator_lock.clone(),
+                lock: owner_lock.clone(),
                 type_script: None,
                 data: channel_status_data(channel_id),
             },
@@ -444,7 +435,7 @@ fn lp_extract_without_owner_signer_fails() {
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
     assert!(
         result.is_err(),
-        "extract must fail when LP owner hash from state does not appear in tx inputs"
+        "extract must fail when operator hash from state does not appear in tx inputs"
     );
 }
 
@@ -888,5 +879,270 @@ fn lp_settle_return_exceeds_consumed_channel_fails() {
     assert!(
         result.is_err(),
         "settlement must fail when consumed channel capacity is below principal+fee return"
+    );
+}
+
+#[test]
+fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xA5; 32];
+    let channel_id = [0xB5; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+    let principal_returned = 1_000_000_000u64;
+    let fee_ckb = 60_000_000u64;
+    let total_return = principal_returned + fee_ckb;
+
+    let mut input_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - principal_returned,
+        principal_returned,
+        0,
+        50,
+    );
+    input_lp.policy.fee_rate_bps = 500;
+    input_lp.policy.policy_flags = 0x1;
+
+    let mut output_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - principal_returned + total_return,
+        0,
+        fee_ckb,
+        51,
+    );
+    output_lp.policy.fee_rate_bps = 500;
+    output_lp.policy.policy_flags = 0x1;
+
+    let lp_input = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP - principal_returned,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+    let channel_input = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(3_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        channel_status_data(channel_id),
+    );
+
+    let witness = witness_from_pool(PoolWitness::SettleChannelInsert {
+        channel_id,
+        contribution_id: [0x55; 32],
+        principal_returned,
+        fee_ckb,
+        price_x64: 1,
+    });
+
+    let tx = build_tx_from_specs(
+        vec![lp_input, channel_input, operator_auth],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP - principal_returned + total_return,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP + 3_000_000_000u64 - total_return,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "settlement must fail when fee exceeds policy cap under policy_flags"
+    );
+}
+
+#[test]
+fn lp_settle_zero_price_fails() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xA6; 32];
+    let channel_id = [0xB6; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+    let principal_returned = EXTRACT_CKB;
+    let fee_ckb = 1u64;
+    let total_return = principal_returned + fee_ckb;
+
+    let input_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - EXTRACT_CKB,
+        EXTRACT_CKB,
+        0,
+        52,
+    );
+    let output_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - EXTRACT_CKB + total_return,
+        0,
+        fee_ckb,
+        53,
+    );
+
+    let lp_input = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP - EXTRACT_CKB,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+    let channel_input = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(4_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        channel_status_data(channel_id),
+    );
+
+    let witness = witness_from_pool(PoolWitness::SettleChannelInsert {
+        channel_id,
+        contribution_id: [0x66; 32],
+        principal_returned,
+        fee_ckb,
+        price_x64: 0,
+    });
+
+    let tx = build_tx_from_specs(
+        vec![lp_input, channel_input, operator_auth],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP - EXTRACT_CKB + total_return,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP + 4_000_000_000u64 - total_return,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "settlement must fail when price_x64 is zero"
+    );
+}
+
+#[test]
+fn lp_extract_zero_contribution_id_fails() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xA7; 32];
+    let channel_id = [0xB7; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+
+    let input_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 60);
+    let output_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - EXTRACT_CKB,
+        EXTRACT_CKB,
+        0,
+        61,
+    );
+
+    let lp_input = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock,
+        lp_type.clone(),
+        &input_lp,
+    );
+    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+    let channel_input = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(3_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        channel_status_data(channel_id),
+    );
+
+    let witness = witness_from_pool(PoolWitness::FundChannelExtract {
+        channel_id,
+        contribution_id: [0u8; 32],
+        extract_ckb: EXTRACT_CKB,
+    });
+
+    let tx = build_tx_from_specs(
+        vec![lp_input, operator_auth, channel_input],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP - EXTRACT_CKB,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: 3_000_000_000u64 + EXTRACT_CKB,
+                lock: operator_lock.clone(),
+                type_script: None,
+                data: channel_status_data(channel_id),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "extract must fail when contribution_id is all zeros"
     );
 }
