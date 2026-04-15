@@ -440,6 +440,95 @@ fn lp_extract_without_operator_signer_fails() {
 }
 
 #[test]
+fn lp_extract_without_owner_signer_fails() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xC4; 32];
+    let channel_id = [0xCA; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+
+    let input_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 11);
+    let output_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - EXTRACT_CKB,
+        EXTRACT_CKB,
+        0,
+        12,
+    );
+
+    let lp_input_out_point = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        operator_lock.clone(),
+        lp_type.clone(),
+        &input_lp,
+    );
+
+    let operator_auth_input = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+
+    let channel_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(3_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        channel_status_data(channel_id),
+    );
+
+    let witness = witness_from_pool(PoolWitness::FundChannelExtract {
+        channel_id,
+        contribution_id: [0xC8; 32],
+        extract_ckb: EXTRACT_CKB,
+    });
+
+    let tx = build_tx_from_specs(
+        vec![
+            lp_input_out_point,
+            operator_auth_input,
+            channel_input_out_point,
+        ],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP - EXTRACT_CKB,
+                lock: operator_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: 3_000_000_000u64 + EXTRACT_CKB,
+                lock: operator_lock.clone(),
+                type_script: None,
+                data: channel_status_data(channel_id),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP,
+                lock: operator_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "extract must fail when owner hash from state does not appear in tx inputs"
+    );
+}
+
+#[test]
 fn lp_cancel_reservation_with_channel_present_fails() {
     let mut context = Context::default();
     let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);

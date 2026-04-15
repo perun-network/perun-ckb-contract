@@ -448,6 +448,7 @@ fn check_fund_channel_extract(
         return Err(Error::PoolCKBAmountZero);
     }
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
+    verify_owner_signing(&inp.owner_lock_hash)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
     require_nonzero_id(contribution_id)?;
 
