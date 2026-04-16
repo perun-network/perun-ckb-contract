@@ -152,7 +152,11 @@ fn lp_happy_path_deposit_extract_settle_success() {
 
     let pool_id = [0x99; 32];
     let extract_channel_id = [0xD3; 32];
-    let settle_channel_id = [0xC1; 32];
+    let settle_channel_id = [
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC,
+        0xFE, 0x55, 0xAA, 0x11, 0x22, 0x33, 0x44, 0x66, 0x77, 0x88, 0x99, 0xBB, 0xCC, 0xDD, 0xEE,
+        0x13, 0x37,
+    ];
     let principal_returned = EXTRACT_CKB;
     let fee_ckb = 500_000_000u64;
     let total_return = principal_returned + fee_ckb;
@@ -305,15 +309,10 @@ fn lp_happy_path_deposit_extract_settle_success() {
         Bytes::from(after_extract_lp.encode()),
     );
 
-    let operator_auth_settle =
-        create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
-
-    let channel_input_settle = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(4_000_000_000u64.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        channel_status_data(settle_channel_id),
+    let operator_settle_funding = create_auth_cell(
+        &mut context,
+        AUTH_INPUT_CAP + total_return,
+        operator_lock.clone(),
     );
 
     let settle_witness = witness_from_pool(PoolWitness::SettleChannelInsert {
@@ -325,7 +324,7 @@ fn lp_happy_path_deposit_extract_settle_success() {
     });
 
     let settle_tx = build_tx_from_specs(
-        vec![lp_input_settle, channel_input_settle, operator_auth_settle],
+        vec![lp_input_settle, operator_settle_funding],
         vec![
             TxOutputSpec {
                 capacity: LP_IN_CAP + TOPUP_CAP_DELTA - EXTRACT_CKB + total_return,
@@ -334,7 +333,7 @@ fn lp_happy_path_deposit_extract_settle_success() {
                 data: Bytes::from(after_settle_lp.encode()),
             },
             TxOutputSpec {
-                capacity: AUTH_INPUT_CAP + 4_000_000_000u64 - total_return,
+                capacity: AUTH_INPUT_CAP,
                 lock: operator_lock,
                 type_script: None,
                 data: Bytes::new(),
@@ -346,7 +345,7 @@ fn lp_happy_path_deposit_extract_settle_success() {
 
     let settle_tx = context.complete_tx(settle_tx);
     verify_and_dump_failed_tx(&context, &settle_tx, MAX_CYCLES)
-        .expect("settlement insertion with sufficient consumed channel capacity should pass");
+        .expect("settlement insertion should pass when operator directly funds LP return");
 }
 
 #[test]
@@ -529,158 +528,7 @@ fn lp_extract_without_owner_signer_succeeds_operator_only() {
 }
 
 #[test]
-fn lp_challenge_close_releases_reserved_after_disputed_channel_consumed() {
-    let mut context = Context::default();
-    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
-    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
-
-    let pool_id = [0xA9; 32];
-    let channel_id = [0xB9; 32];
-    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
-    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
-    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
-
-    let owner_hash = script_hash_array(&owner_lock);
-    let operator_hash = script_hash_array(&operator_lock);
-    let reserved_ckb = EXTRACT_CKB;
-
-    let input_lp = make_lp_cell(
-        pool_id,
-        owner_hash,
-        operator_hash,
-        LP_IN_CAP - reserved_ckb,
-        reserved_ckb,
-        0,
-        62,
-    );
-    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 63);
-
-    let lp_input = create_typed_lp_cell(
-        &mut context,
-        LP_IN_CAP,
-        owner_lock,
-        lp_type.clone(),
-        &input_lp,
-    );
-    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
-    let channel_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(4_000_000_000u64.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        channel_status_data_with_flags(channel_id, true, false),
-    );
-
-    let witness = witness_from_pool(PoolWitness::LPChallengeClose {
-        channel_id,
-        contribution_id: [0xC9; 32],
-        reserved_ckb,
-    });
-
-    let tx = build_tx_from_specs(
-        vec![lp_input, channel_input, operator_auth],
-        vec![
-            TxOutputSpec {
-                capacity: LP_IN_CAP,
-                lock: operator_lock.clone(),
-                type_script: Some(lp_type),
-                data: Bytes::from(output_lp.encode()),
-            },
-            TxOutputSpec {
-                capacity: AUTH_INPUT_CAP + 4_000_000_000u64,
-                lock: operator_lock,
-                type_script: None,
-                data: Bytes::new(),
-            },
-        ],
-        vec![lp_ts_dep, always_success_dep],
-        witness,
-    );
-
-    let tx = context.complete_tx(tx);
-    verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES)
-        .expect("challenge-close should release reserved CKB after disputed channel is consumed");
-}
-
-#[test]
-fn lp_challenge_close_requires_disputed_channel() {
-    let mut context = Context::default();
-    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
-    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
-
-    let pool_id = [0xAA; 32];
-    let channel_id = [0xBA; 32];
-    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
-    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
-    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
-
-    let owner_hash = script_hash_array(&owner_lock);
-    let operator_hash = script_hash_array(&operator_lock);
-    let reserved_ckb = EXTRACT_CKB;
-
-    let input_lp = make_lp_cell(
-        pool_id,
-        owner_hash,
-        operator_hash,
-        LP_IN_CAP - reserved_ckb,
-        reserved_ckb,
-        0,
-        64,
-    );
-    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 65);
-
-    let lp_input = create_typed_lp_cell(
-        &mut context,
-        LP_IN_CAP,
-        owner_lock,
-        lp_type.clone(),
-        &input_lp,
-    );
-    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
-    let channel_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(4_000_000_000u64.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        channel_status_data_with_flags(channel_id, false, false),
-    );
-
-    let witness = witness_from_pool(PoolWitness::LPChallengeClose {
-        channel_id,
-        contribution_id: [0xCA; 32],
-        reserved_ckb,
-    });
-
-    let tx = build_tx_from_specs(
-        vec![lp_input, channel_input, operator_auth],
-        vec![
-            TxOutputSpec {
-                capacity: LP_IN_CAP,
-                lock: operator_lock.clone(),
-                type_script: Some(lp_type),
-                data: Bytes::from(output_lp.encode()),
-            },
-            TxOutputSpec {
-                capacity: AUTH_INPUT_CAP + 4_000_000_000u64,
-                lock: operator_lock,
-                type_script: None,
-                data: Bytes::new(),
-            },
-        ],
-        vec![lp_ts_dep, always_success_dep],
-        witness,
-    );
-
-    let tx = context.complete_tx(tx);
-    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
-    assert!(
-        result.is_err(),
-        "challenge-close must fail when referenced channel is not disputed"
-    );
-}
-
-#[test]
-fn lp_recover_after_challenge_releases_reserved_when_channel_absent() {
+fn lp_settle_rejects_when_channel_still_live_in_tx() {
     let mut context = Context::default();
     let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
@@ -693,47 +541,77 @@ fn lp_recover_after_challenge_releases_reserved_when_channel_absent() {
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
-    let reserved_ckb = EXTRACT_CKB;
+    let principal_returned = EXTRACT_CKB;
+    let fee_ckb = 100_000_000u64;
+    let total_return = principal_returned + fee_ckb;
 
     let input_lp = make_lp_cell(
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - reserved_ckb,
-        reserved_ckb,
+        LP_IN_CAP - principal_returned,
+        principal_returned,
         0,
         66,
     );
-    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 67);
+    let output_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP - principal_returned + total_return,
+        0,
+        fee_ckb,
+        67,
+    );
 
     let lp_input = create_typed_lp_cell(
         &mut context,
-        LP_IN_CAP,
+        LP_IN_CAP - principal_returned,
         owner_lock,
         lp_type.clone(),
         &input_lp,
     );
-    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
+    let operator_funding = create_auth_cell(
+        &mut context,
+        AUTH_INPUT_CAP + total_return,
+        operator_lock.clone(),
+    );
+    let live_channel = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(3_000_000_000u64.pack())
+            .lock(operator_lock.clone())
+            .build(),
+        channel_status_data(channel_id),
+    );
 
-    let witness = witness_from_pool(PoolWitness::LPRecoverAfterChallenge {
+    let witness = witness_from_pool(PoolWitness::SettleChannelInsert {
         channel_id,
-        reserved_ckb,
+        contribution_id: [0xCB; 32],
+        principal_returned,
+        fee_ckb,
+        price_x64: 1,
     });
 
     let tx = build_tx_from_specs(
-        vec![lp_input, operator_auth],
+        vec![lp_input, operator_funding, live_channel],
         vec![
             TxOutputSpec {
-                capacity: LP_IN_CAP,
+                capacity: LP_IN_CAP - principal_returned + total_return,
                 lock: operator_lock.clone(),
                 type_script: Some(lp_type),
                 data: Bytes::from(output_lp.encode()),
             },
             TxOutputSpec {
                 capacity: AUTH_INPUT_CAP,
-                lock: operator_lock,
+                lock: operator_lock.clone(),
                 type_script: None,
                 data: Bytes::new(),
+            },
+            TxOutputSpec {
+                capacity: 3_000_000_000u64,
+                lock: operator_lock,
+                type_script: None,
+                data: channel_status_data(channel_id),
             },
         ],
         vec![lp_ts_dep, always_success_dep],
@@ -741,8 +619,11 @@ fn lp_recover_after_challenge_releases_reserved_when_channel_absent() {
     );
 
     let tx = context.complete_tx(tx);
-    verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES)
-        .expect("recover-after-challenge should release reserved CKB when channel is absent");
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "settle must fail when referenced channel is still live in the settle tx"
+    );
 }
 
 #[test]
@@ -1100,7 +981,7 @@ fn lp_deposit_nonce_not_incremented_fails() {
 }
 
 #[test]
-fn lp_settle_return_exceeds_consumed_channel_fails() {
+fn lp_settle_rejects_when_operator_does_not_fund_return() {
     let mut context = Context::default();
     let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
     let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
@@ -1109,6 +990,7 @@ fn lp_settle_return_exceeds_consumed_channel_fails() {
     let channel_id = [0xB4; 32];
     let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
     let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let outsider_lock = build_lock(&mut context, &always_success_out_point, 9);
     let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
 
     let owner_hash = script_hash_array(&owner_lock);
@@ -1144,13 +1026,7 @@ fn lp_settle_return_exceeds_consumed_channel_fails() {
         &input_lp,
     );
     let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
-    let channel_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(EXTRACT_CKB.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        channel_status_data(channel_id),
-    );
+    let outsider_funding = create_auth_cell(&mut context, total_return, outsider_lock.clone());
 
     let witness = witness_from_pool(PoolWitness::SettleChannelInsert {
         channel_id,
@@ -1161,7 +1037,7 @@ fn lp_settle_return_exceeds_consumed_channel_fails() {
     });
 
     let tx = build_tx_from_specs(
-        vec![lp_input, channel_input, operator_auth],
+        vec![lp_input, operator_auth, outsider_funding],
         vec![
             TxOutputSpec {
                 capacity: LP_IN_CAP - EXTRACT_CKB + total_return,
@@ -1170,7 +1046,7 @@ fn lp_settle_return_exceeds_consumed_channel_fails() {
                 data: Bytes::from(output_lp.encode()),
             },
             TxOutputSpec {
-                capacity: AUTH_INPUT_CAP + EXTRACT_CKB - total_return,
+                capacity: AUTH_INPUT_CAP,
                 lock: operator_lock,
                 type_script: None,
                 data: Bytes::new(),
@@ -1184,7 +1060,7 @@ fn lp_settle_return_exceeds_consumed_channel_fails() {
     let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
     assert!(
         result.is_err(),
-        "settlement must fail when consumed channel capacity is below principal+fee return"
+        "settlement must fail when principal+fee is funded by non-operator inputs"
     );
 }
 
@@ -1237,13 +1113,10 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
         lp_type.clone(),
         &input_lp,
     );
-    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
-    let channel_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(3_000_000_000u64.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        channel_status_data(channel_id),
+    let operator_funding = create_auth_cell(
+        &mut context,
+        AUTH_INPUT_CAP + total_return,
+        operator_lock.clone(),
     );
 
     let witness = witness_from_pool(PoolWitness::SettleChannelInsert {
@@ -1255,7 +1128,7 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
     });
 
     let tx = build_tx_from_specs(
-        vec![lp_input, channel_input, operator_auth],
+        vec![lp_input, operator_funding],
         vec![
             TxOutputSpec {
                 capacity: LP_IN_CAP - principal_returned + total_return,
@@ -1264,7 +1137,7 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
                 data: Bytes::from(output_lp.encode()),
             },
             TxOutputSpec {
-                capacity: AUTH_INPUT_CAP + 3_000_000_000u64 - total_return,
+                capacity: AUTH_INPUT_CAP,
                 lock: operator_lock,
                 type_script: None,
                 data: Bytes::new(),
@@ -1331,13 +1204,10 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
         lp_type.clone(),
         &input_lp,
     );
-    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
-    let channel_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(3_000_000_000u64.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        channel_status_data(channel_id),
+    let operator_funding = create_auth_cell(
+        &mut context,
+        AUTH_INPUT_CAP + total_return,
+        operator_lock.clone(),
     );
 
     let witness = witness_from_pool(PoolWitness::SettleChannelInsert {
@@ -1349,7 +1219,7 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
     });
 
     let tx = build_tx_from_specs(
-        vec![lp_input, channel_input, operator_auth],
+        vec![lp_input, operator_funding],
         vec![
             TxOutputSpec {
                 capacity: LP_IN_CAP - principal_returned + total_return,
@@ -1358,7 +1228,7 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
                 data: Bytes::from(output_lp.encode()),
             },
             TxOutputSpec {
-                capacity: AUTH_INPUT_CAP + 3_000_000_000u64 - total_return,
+                capacity: AUTH_INPUT_CAP,
                 lock: operator_lock,
                 type_script: None,
                 data: Bytes::new(),
@@ -1420,13 +1290,10 @@ fn lp_settle_zero_price_fails() {
         lp_type.clone(),
         &input_lp,
     );
-    let operator_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, operator_lock.clone());
-    let channel_input = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(4_000_000_000u64.pack())
-            .lock(operator_lock.clone())
-            .build(),
-        channel_status_data(channel_id),
+    let operator_funding = create_auth_cell(
+        &mut context,
+        AUTH_INPUT_CAP + total_return,
+        operator_lock.clone(),
     );
 
     let witness = witness_from_pool(PoolWitness::SettleChannelInsert {
@@ -1438,7 +1305,7 @@ fn lp_settle_zero_price_fails() {
     });
 
     let tx = build_tx_from_specs(
-        vec![lp_input, channel_input, operator_auth],
+        vec![lp_input, operator_funding],
         vec![
             TxOutputSpec {
                 capacity: LP_IN_CAP - EXTRACT_CKB + total_return,
@@ -1447,7 +1314,7 @@ fn lp_settle_zero_price_fails() {
                 data: Bytes::from(output_lp.encode()),
             },
             TxOutputSpec {
-                capacity: AUTH_INPUT_CAP + 4_000_000_000u64 - total_return,
+                capacity: AUTH_INPUT_CAP,
                 lock: operator_lock,
                 type_script: None,
                 data: Bytes::new(),

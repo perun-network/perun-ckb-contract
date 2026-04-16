@@ -137,3 +137,28 @@ sudo ln -s /usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h /usr/riscv64-linux-g
 ```
 
 Then try compiling again.
+
+## LP Audit Remediation Notes (perun-x-yield-pool branch)
+
+- **Operator-authorized LP operations**: `FundChannelExtract` and LP settlement paths are operator-authorized. LP deposits/withdrawals remain owner-authorized.
+
+- **Two-step settle model**: LP settlement is decoupled from channel cell consumption. The expected flow is: (1) channel settle returns balances to channel participants, including the hub/operator leg, then (2) operator calls LP `SettleChannelInsert` in a separate transaction and directly funds principal+fee back to the LP cell. The LP validator enforces operator-funded return accounting in this second step.
+
+- **LP witness set simplified**: LP transitions are modeled via `LPDeposit`, `LPWithdraw`, `FundChannelExtract`, `SettleChannelInsert`, `CancelReservation`, and `RotateOperator`.
+
+- **Molecule codegen guard**: A build-time guard has been added in the `perun-common` crate to detect stale generated Molecule bindings. If you modify `crates/perun-common/liquidity_pool.mol`, regenerate the bindings before building:
+
+```sh
+make -C crates/perun-common generate-liquidity-pool-types
+```
+
+If you see a build error mentioning `src/liquidity_pool_types.rs is older than liquidity_pool.mol`, run the command above and rebuild.
+
+- **Tests & harness**: Unit and integration tests cover the operator-auth model and two-step settlement constraints (including rejection when operator funding is missing or channel state is still live in settle tx) under `tests/`. Run the full test suite after regenerating bindings:
+
+```sh
+source ./setup_env.sh test && make test
+```
+
+- **Migration helper & rollout checklist**: The `scripts/lp_migration_prepare.sh` helper was extended to emit a monitoring checklist for staged rollouts. Use `make verify-lp-deployment` and the migration helper to prepare a safe deployment.
+

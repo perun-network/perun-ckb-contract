@@ -512,9 +512,8 @@ pub fn check_vc_force_close(
     debug!("check_vc_force_close");
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
 
-    // Ledger-channel preconditions are shared with LP recovery flows.
-    verify_force_close_lp_recovery_preconditions(old_status, channel_constants)?;
-    debug!("verify_force_close_lp_recovery_preconditions(lc) passed");
+    verify_force_close_preconditions(old_status, channel_constants)?;
+    debug!("verify_force_close_preconditions(lc) passed");
 
     //perform checks for child vc
     verify_time_lock_expired(vcts_args.params().challenge_duration().unpack())?;
@@ -543,8 +542,8 @@ pub fn check_normal_force_close(
 
     verify_no_locked_funds(&old_status)?;
     debug!("verify_no_locked_funds passed");
-    verify_force_close_lp_recovery_preconditions(old_status, channel_constants)?;
-    debug!("verify_force_close_lp_recovery_preconditions passed");
+    verify_force_close_preconditions(old_status, channel_constants)?;
+    debug!("verify_force_close_preconditions passed");
 
     // Check if this is a case where vc cell is being closed
     verify_all_paid(
@@ -557,7 +556,7 @@ pub fn check_normal_force_close(
     Ok(())
 }
 
-pub fn verify_force_close_lp_recovery_preconditions(
+pub fn verify_force_close_preconditions(
     old_status: &ChannelStatus,
     channel_constants: &ChannelConstants,
 ) -> Result<(), Error> {

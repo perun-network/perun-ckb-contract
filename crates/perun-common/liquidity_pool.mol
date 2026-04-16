@@ -50,17 +50,6 @@ table RotateOperatorWitness {
     new_operator_lock_hash: Byte32,
 }
 
-table LPChallengeCloseWitness {
-    channel_id:      Byte32,
-    contribution_id: Byte32,
-    reserved_ckb:    Uint64,
-}
-
-table LPRecoverAfterChallengeWitness {
-    channel_id:   Byte32,
-    reserved_ckb: Uint64,
-}
-
 union PoolWitness {
     LPDepositWitness,
     LPWithdrawWitness,
@@ -68,6 +57,4 @@ union PoolWitness {
     SettleChannelInsertWitness,
     CancelReservationWitness,
     RotateOperatorWitness,
-    LPChallengeCloseWitness,
-    LPRecoverAfterChallengeWitness,
 }
