@@ -7,7 +7,7 @@ use ckb_testtool::ckb_types::{
 };
 use ckb_testtool::context::Context;
 use perun_common::perun_types::{Bool, ChannelStatus};
-use perun_common::pool::{LPCell, LPPolicy, PoolWitness};
+use perun_common::pool::{LPCell, LPPolicy, LPPolicyFlags, PoolWitness};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -147,6 +147,13 @@ pub fn lp_policy() -> LPPolicy {
         policy_flags: 0,
         policy_version: 1,
     }
+}
+
+pub fn lp_policy_with(fee_rate_bps: u32, flags: LPPolicyFlags) -> LPPolicy {
+    let mut policy = lp_policy();
+    policy.fee_rate_bps = fee_rate_bps;
+    policy.policy_flags = flags.bits();
+    policy
 }
 
 pub fn script_hash_array(script: &Script) -> [u8; 32] {

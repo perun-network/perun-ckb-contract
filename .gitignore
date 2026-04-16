@@ -14,3 +14,5 @@ contracts/c/build/*
 build/*
 !.gitkeep
 .tmp/
+
+tests/failed_txs/*

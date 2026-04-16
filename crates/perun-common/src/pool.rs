@@ -9,9 +9,63 @@ use alloc::vec::Vec;
 pub const MAGIC_LP_CELL: &[u8; 4] = b"LPLC";
 
 pub const LP_CELL_SIZE: usize = 153;
-const LP_LEGACY_BODY_SIZE: usize = 32 + 32 + 32 + 8 + 8 + 8 + 8 + 4 + 4 + 4 + 8 + 1;
-const _: [(); LP_CELL_SIZE] = [(); MAGIC_LP_CELL.len() + LP_LEGACY_BODY_SIZE];
+const LP_OFFSET_POOL_ID: usize = 4;
+const LP_OFFSET_OWNER_LOCK_HASH: usize = LP_OFFSET_POOL_ID + 32;
+const LP_OFFSET_OPERATOR_LOCK_HASH: usize = LP_OFFSET_OWNER_LOCK_HASH + 32;
+const LP_OFFSET_AVAILABLE_CKB: usize = LP_OFFSET_OPERATOR_LOCK_HASH + 32;
+const LP_OFFSET_RESERVED_CKB: usize = LP_OFFSET_AVAILABLE_CKB + 8;
+const LP_OFFSET_CUMULATIVE_FEES: usize = LP_OFFSET_RESERVED_CKB + 8;
+const LP_OFFSET_MAX_TRADING_VOLUME: usize = LP_OFFSET_CUMULATIVE_FEES + 8;
+const LP_OFFSET_FEE_RATE_BPS: usize = LP_OFFSET_MAX_TRADING_VOLUME + 8;
+const LP_OFFSET_POLICY_FLAGS: usize = LP_OFFSET_FEE_RATE_BPS + 4;
+const LP_OFFSET_POLICY_VERSION: usize = LP_OFFSET_POLICY_FLAGS + 4;
+const LP_OFFSET_NONCE: usize = LP_OFFSET_POLICY_VERSION + 4;
+const LP_OFFSET_ACTIVE: usize = LP_OFFSET_NONCE + 8;
+
+const LP_END_POOL_ID: usize = LP_OFFSET_POOL_ID + 32;
+const LP_END_OWNER_LOCK_HASH: usize = LP_OFFSET_OWNER_LOCK_HASH + 32;
+const LP_END_OPERATOR_LOCK_HASH: usize = LP_OFFSET_OPERATOR_LOCK_HASH + 32;
+const LP_END_AVAILABLE_CKB: usize = LP_OFFSET_AVAILABLE_CKB + 8;
+const LP_END_RESERVED_CKB: usize = LP_OFFSET_RESERVED_CKB + 8;
+const LP_END_CUMULATIVE_FEES: usize = LP_OFFSET_CUMULATIVE_FEES + 8;
+const LP_END_MAX_TRADING_VOLUME: usize = LP_OFFSET_MAX_TRADING_VOLUME + 8;
+const LP_END_FEE_RATE_BPS: usize = LP_OFFSET_FEE_RATE_BPS + 4;
+const LP_END_POLICY_FLAGS: usize = LP_OFFSET_POLICY_FLAGS + 4;
+const LP_END_POLICY_VERSION: usize = LP_OFFSET_POLICY_VERSION + 4;
+const LP_END_NONCE: usize = LP_OFFSET_NONCE + 8;
+const LP_END_ACTIVE: usize = LP_OFFSET_ACTIVE + 1;
+
+const _: [(); LP_CELL_SIZE] = [(); LP_END_ACTIVE];
 const _: [(); 4] = [(); MAGIC_LP_CELL.len()];
+
+const WITNESS_LEN_LP_DEPOSIT: usize = 1;
+const WITNESS_LEN_LP_WITHDRAW: usize = 9;
+const WITNESS_LEN_FUND_CHANNEL_EXTRACT: usize = 73;
+const WITNESS_LEN_SETTLE_CHANNEL_INSERT: usize = 97;
+const WITNESS_LEN_CANCEL_RESERVATION: usize = 65;
+const WITNESS_LEN_ROTATE_OPERATOR: usize = 33;
+
+const WITNESS_OFFSET_CHANNEL_ID: usize = 1;
+const WITNESS_OFFSET_WITHDRAW_CKB_OUT: usize = 1;
+const WITNESS_OFFSET_CONTRIBUTION_ID: usize = WITNESS_OFFSET_CHANNEL_ID + 32;
+const WITNESS_OFFSET_U64_A: usize = WITNESS_OFFSET_CONTRIBUTION_ID + 32;
+const WITNESS_OFFSET_U64_B: usize = WITNESS_OFFSET_U64_A + 8;
+const WITNESS_OFFSET_U128: usize = WITNESS_OFFSET_U64_B + 8;
+const WITNESS_OFFSET_ROTATE_OPERATOR: usize = 1;
+
+const WITNESS_END_CHANNEL_ID: usize = WITNESS_OFFSET_CHANNEL_ID + 32;
+const WITNESS_END_WITHDRAW_CKB_OUT: usize = WITNESS_OFFSET_WITHDRAW_CKB_OUT + 8;
+const WITNESS_END_CONTRIBUTION_ID: usize = WITNESS_OFFSET_CONTRIBUTION_ID + 32;
+const WITNESS_END_U64_A: usize = WITNESS_OFFSET_U64_A + 8;
+const WITNESS_END_U64_B: usize = WITNESS_OFFSET_U64_B + 8;
+const WITNESS_END_U128: usize = WITNESS_OFFSET_U128 + 16;
+const WITNESS_END_ROTATE_OPERATOR: usize = WITNESS_OFFSET_ROTATE_OPERATOR + 32;
+
+const _: [(); WITNESS_LEN_LP_WITHDRAW] = [(); WITNESS_END_WITHDRAW_CKB_OUT];
+const _: [(); WITNESS_LEN_FUND_CHANNEL_EXTRACT] = [(); WITNESS_END_U64_A];
+const _: [(); WITNESS_LEN_SETTLE_CHANNEL_INSERT] = [(); WITNESS_END_U128];
+const _: [(); WITNESS_LEN_CANCEL_RESERVATION] = [(); WITNESS_END_CONTRIBUTION_ID];
+const _: [(); WITNESS_LEN_ROTATE_OPERATOR] = [(); WITNESS_END_ROTATE_OPERATOR];
 
 pub mod op {
     pub const LP_DEPOSIT: u8 = 0x41;
@@ -20,6 +74,47 @@ pub mod op {
     pub const SETTLE_CHANNEL_INSERT: u8 = 0x44;
     pub const CANCEL_RESERVATION: u8 = 0x45;
     pub const ROTATE_OPERATOR: u8 = 0x46;
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LPPolicyFlag {
+    EnforceMaxFee = 1 << 0,
+    EnforceMinFee = 1 << 1,
+    RequirePrice = 1 << 2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LPPolicyFlags(u32);
+
+impl LPPolicyFlags {
+    pub const ALLOWED_MASK: u32 = (LPPolicyFlag::EnforceMaxFee as u32)
+        | (LPPolicyFlag::EnforceMinFee as u32)
+        | (LPPolicyFlag::RequirePrice as u32);
+
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    pub const fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    pub const fn with(self, flag: LPPolicyFlag) -> Self {
+        Self(self.0 | (flag as u32))
+    }
+
+    pub const fn contains(self, flag: LPPolicyFlag) -> bool {
+        (self.0 & (flag as u32)) != 0
+    }
+
+    pub const fn has_unknown_bits(self) -> bool {
+        (self.0 & !Self::ALLOWED_MASK) != 0
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -63,24 +158,57 @@ impl LPCell {
     }
 
     pub fn decode(data: &[u8]) -> Result<Self, Error> {
-        if data.len() < LP_CELL_SIZE {
+        if data.len() != LP_CELL_SIZE {
             return Err(Error::Encoding);
         }
-        if &data[0..4] != MAGIC_LP_CELL {
+        if &data[0..LP_OFFSET_POOL_ID] != MAGIC_LP_CELL {
             return Err(Error::PoolInvalidCellMagic);
         }
-        let pool_id: [u8; 32] = data[4..36].try_into().unwrap();
-        let owner_lock_hash: [u8; 32] = data[36..68].try_into().unwrap();
-        let operator_lock_hash: [u8; 32] = data[68..100].try_into().unwrap();
-        let available_ckb = u64::from_le_bytes(data[100..108].try_into().unwrap());
-        let reserved_ckb = u64::from_le_bytes(data[108..116].try_into().unwrap());
-        let cumulative_fees_earned_ckb = u64::from_le_bytes(data[116..124].try_into().unwrap());
-        let max_trading_volume = u64::from_le_bytes(data[124..132].try_into().unwrap());
-        let fee_rate_bps = u32::from_le_bytes(data[132..136].try_into().unwrap());
-        let policy_flags = u32::from_le_bytes(data[136..140].try_into().unwrap());
-        let policy_version = u32::from_le_bytes(data[140..144].try_into().unwrap());
-        let nonce = u64::from_le_bytes(data[144..152].try_into().unwrap());
-        let active = data[152] != 0;
+        let pool_id: [u8; 32] = data[LP_OFFSET_POOL_ID..LP_END_POOL_ID].try_into().unwrap();
+        let owner_lock_hash: [u8; 32] = data[LP_OFFSET_OWNER_LOCK_HASH..LP_END_OWNER_LOCK_HASH]
+            .try_into()
+            .unwrap();
+        let operator_lock_hash: [u8; 32] = data
+            [LP_OFFSET_OPERATOR_LOCK_HASH..LP_END_OPERATOR_LOCK_HASH]
+            .try_into()
+            .unwrap();
+        let available_ckb = u64::from_le_bytes(
+            data[LP_OFFSET_AVAILABLE_CKB..LP_END_AVAILABLE_CKB]
+                .try_into()
+                .unwrap(),
+        );
+        let reserved_ckb = u64::from_le_bytes(
+            data[LP_OFFSET_RESERVED_CKB..LP_END_RESERVED_CKB]
+                .try_into()
+                .unwrap(),
+        );
+        let cumulative_fees_earned_ckb = u64::from_le_bytes(
+            data[LP_OFFSET_CUMULATIVE_FEES..LP_END_CUMULATIVE_FEES]
+                .try_into()
+                .unwrap(),
+        );
+        let max_trading_volume = u64::from_le_bytes(
+            data[LP_OFFSET_MAX_TRADING_VOLUME..LP_END_MAX_TRADING_VOLUME]
+                .try_into()
+                .unwrap(),
+        );
+        let fee_rate_bps = u32::from_le_bytes(
+            data[LP_OFFSET_FEE_RATE_BPS..LP_END_FEE_RATE_BPS]
+                .try_into()
+                .unwrap(),
+        );
+        let policy_flags = u32::from_le_bytes(
+            data[LP_OFFSET_POLICY_FLAGS..LP_END_POLICY_FLAGS]
+                .try_into()
+                .unwrap(),
+        );
+        let policy_version = u32::from_le_bytes(
+            data[LP_OFFSET_POLICY_VERSION..LP_END_POLICY_VERSION]
+                .try_into()
+                .unwrap(),
+        );
+        let nonce = u64::from_le_bytes(data[LP_OFFSET_NONCE..LP_END_NONCE].try_into().unwrap());
+        let active = data[LP_OFFSET_ACTIVE] != 0;
 
         Ok(Self {
             pool_id,
@@ -142,21 +270,39 @@ impl PoolWitness {
             return Err(Error::PoolWitnessMissing);
         }
         let decoded = match data[0] {
-            op::LP_DEPOSIT => Ok(Self::LPDeposit),
-            op::LP_WITHDRAW => {
-                if data.len() < 9 {
+            op::LP_DEPOSIT => {
+                if data.len() != WITNESS_LEN_LP_DEPOSIT {
                     return Err(Error::PoolWitnessInvalid);
                 }
-                let ckb_out = u64::from_le_bytes(data[1..9].try_into().unwrap());
+                Ok(Self::LPDeposit)
+            }
+            op::LP_WITHDRAW => {
+                if data.len() != WITNESS_LEN_LP_WITHDRAW {
+                    return Err(Error::PoolWitnessInvalid);
+                }
+                let ckb_out = u64::from_le_bytes(
+                    data[WITNESS_OFFSET_WITHDRAW_CKB_OUT..WITNESS_END_WITHDRAW_CKB_OUT]
+                        .try_into()
+                        .unwrap(),
+                );
                 Ok(Self::LPWithdraw { ckb_out })
             }
             op::FUND_CHANNEL_EXTRACT => {
-                if data.len() < 73 {
+                if data.len() != WITNESS_LEN_FUND_CHANNEL_EXTRACT {
                     return Err(Error::PoolWitnessInvalid);
                 }
-                let channel_id = data[1..33].try_into().unwrap();
-                let contribution_id = data[33..65].try_into().unwrap();
-                let extract_ckb = u64::from_le_bytes(data[65..73].try_into().unwrap());
+                let channel_id = data[WITNESS_OFFSET_CHANNEL_ID..WITNESS_END_CHANNEL_ID]
+                    .try_into()
+                    .unwrap();
+                let contribution_id = data
+                    [WITNESS_OFFSET_CONTRIBUTION_ID..WITNESS_END_CONTRIBUTION_ID]
+                    .try_into()
+                    .unwrap();
+                let extract_ckb = u64::from_le_bytes(
+                    data[WITNESS_OFFSET_U64_A..WITNESS_END_U64_A]
+                        .try_into()
+                        .unwrap(),
+                );
                 Ok(Self::FundChannelExtract {
                     channel_id,
                     contribution_id,
@@ -164,14 +310,31 @@ impl PoolWitness {
                 })
             }
             op::SETTLE_CHANNEL_INSERT => {
-                if data.len() < 97 {
+                if data.len() != WITNESS_LEN_SETTLE_CHANNEL_INSERT {
                     return Err(Error::PoolWitnessInvalid);
                 }
-                let channel_id = data[1..33].try_into().unwrap();
-                let contribution_id = data[33..65].try_into().unwrap();
-                let principal_returned = u64::from_le_bytes(data[65..73].try_into().unwrap());
-                let fee_ckb = u64::from_le_bytes(data[73..81].try_into().unwrap());
-                let price_x64 = u128::from_le_bytes(data[81..97].try_into().unwrap());
+                let channel_id = data[WITNESS_OFFSET_CHANNEL_ID..WITNESS_END_CHANNEL_ID]
+                    .try_into()
+                    .unwrap();
+                let contribution_id = data
+                    [WITNESS_OFFSET_CONTRIBUTION_ID..WITNESS_END_CONTRIBUTION_ID]
+                    .try_into()
+                    .unwrap();
+                let principal_returned = u64::from_le_bytes(
+                    data[WITNESS_OFFSET_U64_A..WITNESS_END_U64_A]
+                        .try_into()
+                        .unwrap(),
+                );
+                let fee_ckb = u64::from_le_bytes(
+                    data[WITNESS_OFFSET_U64_B..WITNESS_END_U64_B]
+                        .try_into()
+                        .unwrap(),
+                );
+                let price_x64 = u128::from_le_bytes(
+                    data[WITNESS_OFFSET_U128..WITNESS_END_U128]
+                        .try_into()
+                        .unwrap(),
+                );
                 Ok(Self::SettleChannelInsert {
                     channel_id,
                     contribution_id,
@@ -181,21 +344,29 @@ impl PoolWitness {
                 })
             }
             op::CANCEL_RESERVATION => {
-                if data.len() < 65 {
+                if data.len() != WITNESS_LEN_CANCEL_RESERVATION {
                     return Err(Error::PoolWitnessInvalid);
                 }
-                let channel_id = data[1..33].try_into().unwrap();
-                let contribution_id = data[33..65].try_into().unwrap();
+                let channel_id = data[WITNESS_OFFSET_CHANNEL_ID..WITNESS_END_CHANNEL_ID]
+                    .try_into()
+                    .unwrap();
+                let contribution_id = data
+                    [WITNESS_OFFSET_CONTRIBUTION_ID..WITNESS_END_CONTRIBUTION_ID]
+                    .try_into()
+                    .unwrap();
                 Ok(Self::CancelReservation {
                     channel_id,
                     contribution_id,
                 })
             }
             op::ROTATE_OPERATOR => {
-                if data.len() < 33 {
+                if data.len() != WITNESS_LEN_ROTATE_OPERATOR {
                     return Err(Error::PoolWitnessInvalid);
                 }
-                let new_operator_lock_hash = data[1..33].try_into().unwrap();
+                let new_operator_lock_hash = data
+                    [WITNESS_OFFSET_ROTATE_OPERATOR..WITNESS_END_ROTATE_OPERATOR]
+                    .try_into()
+                    .unwrap();
                 Ok(Self::RotateOperator {
                     new_operator_lock_hash,
                 })
@@ -428,6 +599,13 @@ mod tests {
 
         let short = vec![0u8; LP_CELL_SIZE - 1];
         assert!(matches!(LPCell::decode(&short), Err(Error::Encoding)));
+
+        let mut with_trailing = sample_cell().encode();
+        with_trailing.push(0);
+        assert!(matches!(
+            LPCell::decode(&with_trailing),
+            Err(Error::Encoding)
+        ));
     }
 
     #[test]
@@ -527,6 +705,19 @@ mod tests {
 
         assert!(matches!(
             PoolWitness::decode(&vec![op::ROTATE_OPERATOR; 32]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        assert!(matches!(
+            PoolWitness::decode(&[op::LP_DEPOSIT, 0]),
+            Err(Error::PoolWitnessInvalid)
+        ));
+
+        let mut long_withdraw = vec![op::LP_WITHDRAW];
+        long_withdraw.extend_from_slice(&7u64.to_le_bytes());
+        long_withdraw.push(0);
+        assert!(matches!(
+            PoolWitness::decode(&long_withdraw),
             Err(Error::PoolWitnessInvalid)
         ));
 

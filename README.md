@@ -146,6 +146,21 @@ Then try compiling again.
 
 - **LP witness set simplified**: LP transitions are modeled via `LPDeposit`, `LPWithdraw`, `FundChannelExtract`, `SettleChannelInsert`, `CancelReservation`, and `RotateOperator`.
 
+- **Typed LP policy flags**: `policy_flags` is validated against the typed bit set in `perun_common::pool::LPPolicyFlag`:
+  - bit 0: `EnforceMaxFee`
+  - bit 1: `EnforceMinFee`
+  - bit 2: `RequirePrice`
+  Unknown bits are rejected on LP initialization and policy validation paths.
+
+- **Witness and cell parser strictness**:
+  - LP cell decoding now requires exact `LP_CELL_SIZE` length (no trailing-byte acceptance).
+  - LP witness decoding now enforces exact opcode payload lengths (no short/long payload tolerance).
+  - Parser layout offsets for LP cells and LP witnesses are centralized with compile-time size assertions.
+
+- **Witness ID semantics**:
+  - `FundChannelExtract`, `SettleChannelInsert`, and `CancelReservation` require non-zero `contribution_id`.
+  - `FundChannelExtract` and `CancelReservation` now also require non-zero `channel_id`.
+
 - **Molecule codegen guard**: A build-time guard has been added in the `perun-common` crate to detect stale generated Molecule bindings. If you modify `crates/perun-common/liquidity_pool.mol`, regenerate the bindings before building:
 
 ```sh

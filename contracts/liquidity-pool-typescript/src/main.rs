@@ -17,7 +17,7 @@ default_alloc!();
 use perun_common::{
     error::Error,
     perun_types::ChannelStatus,
-    pool::{LPCell, PoolWitness},
+    pool::{LPCell, LPPolicyFlag, LPPolicyFlags, PoolWitness},
 };
 
 use ckb_std::{
@@ -29,12 +29,6 @@ use ckb_std::{
     },
     syscalls::SysError,
 };
-
-const POLICY_FLAG_ENFORCE_MAX_FEE: u32 = 1 << 0;
-const POLICY_FLAG_ENFORCE_MIN_FEE: u32 = 1 << 1;
-const POLICY_FLAG_REQUIRE_PRICE: u32 = 1 << 2;
-const POLICY_FLAG_ALLOWED_MASK: u32 =
-    POLICY_FLAG_ENFORCE_MAX_FEE | POLICY_FLAG_ENFORCE_MIN_FEE | POLICY_FLAG_REQUIRE_PRICE;
 
 pub fn program_entry() -> i8 {
     match main() {
@@ -306,7 +300,7 @@ fn validate_policy_fields(policy: &perun_common::pool::LPPolicy) -> Result<(), E
     if policy.policy_version == 0 {
         return Err(Error::LPPolicyViolation);
     }
-    if (policy.policy_flags & !POLICY_FLAG_ALLOWED_MASK) != 0 {
+    if LPPolicyFlags::from_bits(policy.policy_flags).has_unknown_bits() {
         return Err(Error::LPPolicyViolation);
     }
     Ok(())
@@ -464,6 +458,7 @@ fn check_fund_channel_extract(
     }
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
+    require_nonzero_id(channel_id)?;
     require_nonzero_id(contribution_id)?;
 
     require_immutable_except_operator(inp, out)?;
@@ -530,9 +525,8 @@ fn check_settle_channel_insert(
     require_nonzero_id(channel_id)?;
     require_nonzero_id(contribution_id)?;
 
-    if price_x64 == 0
-        || (inp.policy.policy_flags & POLICY_FLAG_REQUIRE_PRICE) != 0 && price_x64 == 0
-    {
+    let flags = LPPolicyFlags::from_bits(inp.policy.policy_flags);
+    if flags.contains(LPPolicyFlag::RequirePrice) && price_x64 == 0 {
         return Err(Error::LPPolicyViolation);
     }
 
@@ -545,18 +539,18 @@ fn check_settle_channel_insert(
     }
 
     if inp.policy.fee_rate_bps != 0
-        && (inp.policy.policy_flags & (POLICY_FLAG_ENFORCE_MAX_FEE | POLICY_FLAG_ENFORCE_MIN_FEE))
-            != 0
+        && (flags.contains(LPPolicyFlag::EnforceMaxFee)
+            || flags.contains(LPPolicyFlag::EnforceMinFee))
     {
         let policy_fee_u128 = (principal_returned as u128)
             .checked_mul(inp.policy.fee_rate_bps as u128)
             .ok_or(Error::LPArithmetic)?
             / 10_000u128;
         let policy_fee = u64::try_from(policy_fee_u128).map_err(|_| Error::LPArithmetic)?;
-        if (inp.policy.policy_flags & POLICY_FLAG_ENFORCE_MAX_FEE) != 0 && fee_ckb > policy_fee {
+        if flags.contains(LPPolicyFlag::EnforceMaxFee) && fee_ckb > policy_fee {
             return Err(Error::LPPolicyViolation);
         }
-        if (inp.policy.policy_flags & POLICY_FLAG_ENFORCE_MIN_FEE) != 0 && fee_ckb < policy_fee {
+        if flags.contains(LPPolicyFlag::EnforceMinFee) && fee_ckb < policy_fee {
             return Err(Error::LPPolicyViolation);
         }
     }
@@ -596,6 +590,7 @@ fn check_cancel_reservation(
 ) -> Result<(), Error> {
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
     verify_operator_signing(&inp.operator_lock_hash)?;
+    require_nonzero_id(channel_id)?;
     require_nonzero_id(contribution_id)?;
 
     require_immutable_except_operator(inp, out)?;
