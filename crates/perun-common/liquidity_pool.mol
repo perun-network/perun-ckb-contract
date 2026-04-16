@@ -7,6 +7,8 @@ table LPPolicy {
     fee_rate_bps:       Uint32,
     policy_flags:       Uint32,
     policy_version:     Uint32,
+    safe_price_min_x64: Uint128,
+    safe_price_max_x64: Uint128,
 }
 
 table LPCell {

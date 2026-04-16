@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 pub const MAGIC_LP_CELL: &[u8; 4] = b"LPLC";
 
-pub const LP_CELL_SIZE: usize = 153;
+pub const LP_CELL_SIZE: usize = 185;
 const LP_OFFSET_POOL_ID: usize = 4;
 const LP_OFFSET_OWNER_LOCK_HASH: usize = LP_OFFSET_POOL_ID + 32;
 const LP_OFFSET_OPERATOR_LOCK_HASH: usize = LP_OFFSET_OWNER_LOCK_HASH + 32;
@@ -19,7 +19,9 @@ const LP_OFFSET_MAX_TRADING_VOLUME: usize = LP_OFFSET_CUMULATIVE_FEES + 8;
 const LP_OFFSET_FEE_RATE_BPS: usize = LP_OFFSET_MAX_TRADING_VOLUME + 8;
 const LP_OFFSET_POLICY_FLAGS: usize = LP_OFFSET_FEE_RATE_BPS + 4;
 const LP_OFFSET_POLICY_VERSION: usize = LP_OFFSET_POLICY_FLAGS + 4;
-const LP_OFFSET_NONCE: usize = LP_OFFSET_POLICY_VERSION + 4;
+const LP_OFFSET_SAFE_PRICE_MIN_X64: usize = LP_OFFSET_POLICY_VERSION + 4;
+const LP_OFFSET_SAFE_PRICE_MAX_X64: usize = LP_OFFSET_SAFE_PRICE_MIN_X64 + 16;
+const LP_OFFSET_NONCE: usize = LP_OFFSET_SAFE_PRICE_MAX_X64 + 16;
 const LP_OFFSET_ACTIVE: usize = LP_OFFSET_NONCE + 8;
 
 const LP_END_POOL_ID: usize = LP_OFFSET_POOL_ID + 32;
@@ -32,6 +34,8 @@ const LP_END_MAX_TRADING_VOLUME: usize = LP_OFFSET_MAX_TRADING_VOLUME + 8;
 const LP_END_FEE_RATE_BPS: usize = LP_OFFSET_FEE_RATE_BPS + 4;
 const LP_END_POLICY_FLAGS: usize = LP_OFFSET_POLICY_FLAGS + 4;
 const LP_END_POLICY_VERSION: usize = LP_OFFSET_POLICY_VERSION + 4;
+const LP_END_SAFE_PRICE_MIN_X64: usize = LP_OFFSET_SAFE_PRICE_MIN_X64 + 16;
+const LP_END_SAFE_PRICE_MAX_X64: usize = LP_OFFSET_SAFE_PRICE_MAX_X64 + 16;
 const LP_END_NONCE: usize = LP_OFFSET_NONCE + 8;
 const LP_END_ACTIVE: usize = LP_OFFSET_ACTIVE + 1;
 
@@ -82,6 +86,7 @@ pub enum LPPolicyFlag {
     EnforceMaxFee = 1 << 0,
     EnforceMinFee = 1 << 1,
     RequirePrice = 1 << 2,
+    SafePrice = 1 << 3,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,7 +95,8 @@ pub struct LPPolicyFlags(u32);
 impl LPPolicyFlags {
     pub const ALLOWED_MASK: u32 = (LPPolicyFlag::EnforceMaxFee as u32)
         | (LPPolicyFlag::EnforceMinFee as u32)
-        | (LPPolicyFlag::RequirePrice as u32);
+        | (LPPolicyFlag::RequirePrice as u32)
+        | (LPPolicyFlag::SafePrice as u32);
 
     pub const fn empty() -> Self {
         Self(0)
@@ -123,6 +129,8 @@ pub struct LPPolicy {
     pub fee_rate_bps: u32,
     pub policy_flags: u32,
     pub policy_version: u32,
+    pub safe_price_min_x64: u128,
+    pub safe_price_max_x64: u128,
 }
 
 #[derive(Clone, Debug)]
@@ -152,6 +160,8 @@ impl LPCell {
         b.extend_from_slice(&self.policy.fee_rate_bps.to_le_bytes());
         b.extend_from_slice(&self.policy.policy_flags.to_le_bytes());
         b.extend_from_slice(&self.policy.policy_version.to_le_bytes());
+        b.extend_from_slice(&self.policy.safe_price_min_x64.to_le_bytes());
+        b.extend_from_slice(&self.policy.safe_price_max_x64.to_le_bytes());
         b.extend_from_slice(&self.nonce.to_le_bytes());
         b.push(if self.active { 1 } else { 0 });
         b
@@ -207,6 +217,16 @@ impl LPCell {
                 .try_into()
                 .unwrap(),
         );
+        let safe_price_min_x64 = u128::from_le_bytes(
+            data[LP_OFFSET_SAFE_PRICE_MIN_X64..LP_END_SAFE_PRICE_MIN_X64]
+                .try_into()
+                .unwrap(),
+        );
+        let safe_price_max_x64 = u128::from_le_bytes(
+            data[LP_OFFSET_SAFE_PRICE_MAX_X64..LP_END_SAFE_PRICE_MAX_X64]
+                .try_into()
+                .unwrap(),
+        );
         let nonce = u64::from_le_bytes(data[LP_OFFSET_NONCE..LP_END_NONCE].try_into().unwrap());
         let active = data[LP_OFFSET_ACTIVE] != 0;
 
@@ -222,6 +242,8 @@ impl LPCell {
                 fee_rate_bps,
                 policy_flags,
                 policy_version,
+                safe_price_min_x64,
+                safe_price_max_x64,
             },
             nonce,
             active,
@@ -562,6 +584,8 @@ mod tests {
                 fee_rate_bps: 25,
                 policy_flags: 1,
                 policy_version: 1,
+                safe_price_min_x64: 10,
+                safe_price_max_x64: 1_000,
             },
             nonce: 9,
             active: true,
@@ -584,6 +608,8 @@ mod tests {
         assert_eq!(dec.policy.fee_rate_bps, 25);
         assert_eq!(dec.policy.policy_flags, 1);
         assert_eq!(dec.policy.policy_version, 1);
+        assert_eq!(dec.policy.safe_price_min_x64, 10);
+        assert_eq!(dec.policy.safe_price_max_x64, 1_000);
         assert_eq!(dec.nonce, 9);
         assert!(dec.active);
     }

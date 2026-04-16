@@ -146,13 +146,26 @@ pub fn lp_policy() -> LPPolicy {
         fee_rate_bps: 30,
         policy_flags: 0,
         policy_version: 1,
+        safe_price_min_x64: 0,
+        safe_price_max_x64: u128::MAX,
     }
 }
 
 pub fn lp_policy_with(fee_rate_bps: u32, flags: LPPolicyFlags) -> LPPolicy {
+    lp_policy_with_price_range(fee_rate_bps, flags, 0, u128::MAX)
+}
+
+pub fn lp_policy_with_price_range(
+    fee_rate_bps: u32,
+    flags: LPPolicyFlags,
+    safe_price_min_x64: u128,
+    safe_price_max_x64: u128,
+) -> LPPolicy {
     let mut policy = lp_policy();
     policy.fee_rate_bps = fee_rate_bps;
     policy.policy_flags = flags.bits();
+    policy.safe_price_min_x64 = safe_price_min_x64;
+    policy.safe_price_max_x64 = safe_price_max_x64;
     policy
 }
 

@@ -303,6 +303,9 @@ fn validate_policy_fields(policy: &perun_common::pool::LPPolicy) -> Result<(), E
     if LPPolicyFlags::from_bits(policy.policy_flags).has_unknown_bits() {
         return Err(Error::LPPolicyViolation);
     }
+    if policy.safe_price_min_x64 > policy.safe_price_max_x64 {
+        return Err(Error::LPPolicyViolation);
+    }
     Ok(())
 }
 
@@ -340,6 +343,8 @@ fn same_policy(a: &LPCell, b: &LPCell) -> bool {
         && a.policy.fee_rate_bps == b.policy.fee_rate_bps
         && a.policy.policy_flags == b.policy.policy_flags
         && a.policy.policy_version == b.policy.policy_version
+        && a.policy.safe_price_min_x64 == b.policy.safe_price_min_x64
+        && a.policy.safe_price_max_x64 == b.policy.safe_price_max_x64
 }
 
 fn require_immutable_except_operator(inp: &LPCell, out: &LPCell) -> Result<(), Error> {
@@ -527,6 +532,11 @@ fn check_settle_channel_insert(
 
     let flags = LPPolicyFlags::from_bits(inp.policy.policy_flags);
     if flags.contains(LPPolicyFlag::RequirePrice) && price_x64 == 0 {
+        return Err(Error::LPPolicyViolation);
+    }
+    if flags.contains(LPPolicyFlag::SafePrice)
+        && (price_x64 < inp.policy.safe_price_min_x64 || price_x64 > inp.policy.safe_price_max_x64)
+    {
         return Err(Error::LPPolicyViolation);
     }
 
