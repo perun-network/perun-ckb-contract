@@ -857,7 +857,7 @@ pub fn verify_funding_in_outputs(
     }
 
     let mut udt_sum =
-        vec![0u128, initial_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+        vec![0u128; initial_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
 
     let expected_pcts_script_hash = load_script_hash()?;
     let outputs = load_transaction()?.raw().outputs();

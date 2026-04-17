@@ -64,10 +64,15 @@ pub fn mk_vc_merge(
     ];
 
     let vcls_script = env.build_vcls(ctx, Default::default());
+    // Since both VCs have the same block number in tests, vc1 is selected as the
+    // merged output (see check_valid_vc_merge). The merged output must preserve
+    // vc1's state (including owner); rent payout goes to the discarded vc2's owner.
+    let vc_status1 = args.vc_status1.clone();
     let vc_status2 = args.vc_status2.clone();
+    let capacity_for_vc1 = env.min_capacity_for_vc_channel(vc_status1.clone())?;
     let capacity_for_vc2 = env.min_capacity_for_vc_channel(vc_status2.clone())?;
-    let vc_cell2 = CellOutput::new_builder()
-        .capacity(capacity_for_vc2.pack())
+    let vc_cell_merged = CellOutput::new_builder()
+        .capacity(capacity_for_vc1.pack())
         .lock(vcls_script.clone())
         .type_(Some(args.vcts_script.clone()).pack())
         .build();
@@ -77,7 +82,7 @@ pub fn mk_vc_merge(
         .lock(env.build_lock_script(ctx, Bytes::from(vec![owner_idx])))
         .build();
     let outputs = vec![
-        (vc_cell2.clone(), vc_status2.as_bytes()),
+        (vc_cell_merged.clone(), vc_status1.as_bytes()),
         (onwer_vc_rent_payout, Bytes::new()),
     ];
     let outputs_data: Vec<_> = outputs.iter().map(|e| e.1.clone()).collect();

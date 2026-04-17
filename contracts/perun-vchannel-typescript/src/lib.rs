@@ -208,17 +208,20 @@ pub fn check_valid_vc_merge(
 
     let selected_vc_cell;
     let discarded_vc_cell;
+    let discarded_input_idx: usize;
     if vc_cell1_block_num < vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats1);
         discarded_vc_cell = Some(input_vc_stats2);
+        discarded_input_idx = 1;
     } else if vc_cell1_block_num > vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats2);
         discarded_vc_cell = Some(input_vc_stats1);
-    } else if vc_cell1_block_num == vc_cell2_block_num {
+        discarded_input_idx = 0;
+    } else {
+        // equal block numbers: prefer input 0 (arbitrary but deterministic)
         selected_vc_cell = Some(input_vc_stats1);
         discarded_vc_cell = Some(input_vc_stats2);
-    } else {
-        return Err(Error::InvalidVCMergeTx);
+        discarded_input_idx = 1;
     }
     debug!("selected the block with lower block number");
 
@@ -226,7 +229,7 @@ pub fn check_valid_vc_merge(
     debug!("verify_equal_vc_status passed");
 
     // funds put up for the vc cell being removed from chain should be returned to owner
-    verify_vc_rent_payout_merge(&discarded_vc_cell.unwrap().owner())?;
+    verify_vc_rent_payout_merge(&discarded_vc_cell.unwrap().owner(), discarded_input_idx)?;
     debug!("verify_vc_rent_payout_merge passed");
 
     debug!("check_valid_vc_merge passed");
@@ -254,7 +257,7 @@ pub fn check_valid_close1(
 
     // all othe fields except first force close flag are equal
     if input_vc_status.parents().as_slice() != output_vc_status.parents().as_slice()
-        && input_vc_status.vcstate().as_slice() != output_vc_status.vcstate().as_slice()
+        || input_vc_status.vcstate().as_slice() != output_vc_status.vcstate().as_slice()
     {
         return Err(Error::InvalidVCClose1Tx);
     }
@@ -318,9 +321,9 @@ pub fn verify_vc_rent_payout_close2(owner: &Participant) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_vc_rent_payout_merge(owner: &Participant) -> Result<(), Error> {
+pub fn verify_vc_rent_payout_merge(owner: &Participant, discarded_input_idx: usize) -> Result<(), Error> {
     let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
-    let vc_cell_capacity = load_cell_capacity(0, Source::GroupInput)?;
+    let vc_cell_capacity = load_cell_capacity(discarded_input_idx, Source::GroupInput)?;
 
     let matches: vec::Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
         .enumerate()
@@ -364,6 +367,10 @@ pub fn verify_equal_vc_status(
     if input_vc_status.first_force_close().as_slice()
         != merged_vc_status.first_force_close().as_slice()
     {
+        return Err(Error::InvalidVCMergeTx);
+    }
+
+    if input_vc_status.owner().as_slice() != merged_vc_status.owner().as_slice() {
         return Err(Error::InvalidVCMergeTx);
     }
     Ok(())
