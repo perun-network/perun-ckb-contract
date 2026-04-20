@@ -138,8 +138,8 @@ if (( POLICY_VERSION == 0 )); then
   exit 1
 fi
 
-if (( (POLICY_FLAGS & ~7) != 0 )); then
-  echo "policy-flags contains unsupported bits; allowed mask is 0x7" >&2
+if (( (POLICY_FLAGS & ~15) != 0 )); then
+  echo "policy-flags contains unsupported bits; allowed mask is 0xF" >&2
   exit 1
 fi
 

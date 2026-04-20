@@ -150,6 +150,7 @@ Then try compiling again.
   - bit 0: `EnforceMaxFee`
   - bit 1: `EnforceMinFee`
   - bit 2: `RequirePrice`
+  - bit 3: `SafePrice`
   Unknown bits are rejected on LP initialization and policy validation paths.
 
 - **Witness and cell parser strictness**:
