@@ -11,7 +11,6 @@ use crate::{
     error::Error,
     perun_types::{CKByteDistribution, SUDTAllocation, SUDTBalances, SUDTDistribution},
 };
-use alloy_primitives::U256;
 #[cfg(not(feature = "std"))]
 use {
     ckb_gen_types::packed::*,
@@ -336,7 +335,6 @@ impl Balances {
             .build()
     }
 
-    #[allow(dead_code)]
     fn eth_rows(&self) -> Vec<ETHBalances> {
         let mut v = Vec::new();
         for row in self.assets().into_iter() {
@@ -736,6 +734,10 @@ impl SubBalances {
                 }
             }
         }
+
+        // NOTE: SubBalances molecule schema has no eth_rows field (only ckbytes + sudts).
+        // If ETH support is needed in locked/sub balances, the molecule type must be extended.
+
         Ok(true)
     }
 }

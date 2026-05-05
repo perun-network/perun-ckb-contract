@@ -3,8 +3,6 @@
 #![allow(unused_attributes)]
 
 use ckb_std::default_alloc;
-use core::arch::asm;
-
 ckb_std::entry!(program_entry);
 default_alloc!();
 

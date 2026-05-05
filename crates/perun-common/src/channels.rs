@@ -231,3 +231,63 @@ pub fn unpack_u64<T: Unpack<u64>>(t: &T) -> u64 {
 pub fn unpack_byte32<T: Unpack<[u8; 32]>>(t: &T) -> [u8; 32] {
     t.unpack()
 }
+
+/// Verify that both parties have signed the given channel state.
+pub fn verify_valid_state_sigs(
+    sig_a: &ckb_std::ckb_types::bytes::Bytes,
+    sig_b: &ckb_std::ckb_types::bytes::Bytes,
+    state: &crate::perun_types::ChannelState,
+    pub_key_a: &crate::perun_types::SEC1EncodedPubKey,
+    pub_key_b: &crate::perun_types::SEC1EncodedPubKey,
+) -> Result<(), Error> {
+    use alloy_sol_types::SolValue;
+    let state_eth = crate::sol::convert_ckb_state(state);
+    let state_abi_encoded = state_eth.abi_encode();
+    let msg_hash = crate::sig::ethereum_message_hash(&state_abi_encoded);
+    crate::sig::verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
+    debug!("verify_valid_state_sigs: Signature A verified");
+    crate::sig::verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;
+    debug!("verify_valid_state_sigs: Signature B verified");
+    Ok(())
+}
+
+/// Verify that the sum of balances is equal between old and new state.
+pub fn verify_equal_sum_of_balances(
+    old_balances: &crate::perun_types::Balances,
+    new_balances: &crate::perun_types::Balances,
+) -> Result<(), Error> {
+    if !old_balances.equal_in_sum(new_balances)? {
+        return Err(Error::SumOfBalancesNotEqual);
+    }
+    Ok(())
+}
+
+/// Verify version number progression. If `strict` is true, the new version must
+/// be strictly greater (normal dispute). If false, it may be equal (VC dispute).
+/// Special case: when strict and the channel is not yet disputed, version 0->0
+/// is allowed (initial state registration).
+pub fn verify_version_number(
+    old_status: &ChannelStatus,
+    new_state: &crate::perun_types::ChannelState,
+    strict: bool,
+) -> Result<(), Error> {
+    let old_version: u64 = old_status.state().version().unpack();
+    let new_version: u64 = new_state.version().unpack();
+    if strict {
+        let old_disputed: bool = old_status.disputed().to_bool();
+        // Allow registering initial state (version 0 when not yet disputed).
+        if !old_disputed && old_version == 0 && new_version == 0 {
+            debug!("Allow registering initial state");
+            return Ok(());
+        }
+        if old_version < new_version {
+            return Ok(());
+        }
+        Err(Error::VersionNumberNotIncreasing)
+    } else {
+        if old_version > new_version {
+            return Err(Error::InvalidVersionNumberVCProgressTx);
+        }
+        Ok(())
+    }
+}

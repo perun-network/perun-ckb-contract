@@ -1,13 +1,11 @@
 #![cfg_attr(not(feature = "library"), no_std)]
 #![allow(special_module_name)]
 #![allow(unused_attributes)]
-use alloy_sol_types::SolValue;
 use ckb_std::default_alloc;
 ckb_std::entry!(program_entry);
 default_alloc!();
 use alloc::vec;
 use core::{result::Result, usize};
-use perun_common::sol::convert_ckb_state;
 
 use ckb_std::{
     ckb_constants::Source,
@@ -20,17 +18,18 @@ use ckb_std::{
     syscalls::SysError,
 };
 
-use perun_common::sig::ethereum_message_hash;
 use perun_common::{
-    channels::{find_cell_by_type_hash, unpack_byte32, VChannelAction},
+    channels::{
+        find_cell_by_type_hash, unpack_byte32, verify_equal_sum_of_balances,
+        verify_valid_state_sigs, VChannelAction,
+    },
     error::Error,
     helpers::blake2b256,
     perun_types::{
-        Balances, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
-        ChannelWitnessUnion, Participant, SEC1EncodedPubKey, VCChannelConstants,
+        ChannelParameters, ChannelStatus, ChannelWitness,
+        ChannelWitnessUnion, Participant, VCChannelConstants,
         VirtualChannelStatus,
     },
-    sig::verify_signature,
 };
 
 pub fn program_entry() -> i8 {
@@ -209,17 +208,20 @@ pub fn check_valid_vc_merge(
 
     let selected_vc_cell;
     let discarded_vc_cell;
+    let discarded_input_idx: usize;
     if vc_cell1_block_num < vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats1);
         discarded_vc_cell = Some(input_vc_stats2);
+        discarded_input_idx = 1;
     } else if vc_cell1_block_num > vc_cell2_block_num {
         selected_vc_cell = Some(input_vc_stats2);
         discarded_vc_cell = Some(input_vc_stats1);
-    } else if vc_cell1_block_num == vc_cell2_block_num {
+        discarded_input_idx = 0;
+    } else {
+        // equal block numbers: prefer input 0 (arbitrary but deterministic)
         selected_vc_cell = Some(input_vc_stats1);
         discarded_vc_cell = Some(input_vc_stats2);
-    } else {
-        return Err(Error::InvalidVCMergeTx);
+        discarded_input_idx = 1;
     }
     debug!("selected the block with lower block number");
 
@@ -227,7 +229,7 @@ pub fn check_valid_vc_merge(
     debug!("verify_equal_vc_status passed");
 
     // funds put up for the vc cell being removed from chain should be returned to owner
-    verify_vc_rent_payout_merge(&discarded_vc_cell.unwrap().owner())?;
+    verify_vc_rent_payout_merge(&discarded_vc_cell.unwrap().owner(), discarded_input_idx)?;
     debug!("verify_vc_rent_payout_merge passed");
 
     debug!("check_valid_vc_merge passed");
@@ -255,7 +257,7 @@ pub fn check_valid_close1(
 
     // all othe fields except first force close flag are equal
     if input_vc_status.parents().as_slice() != output_vc_status.parents().as_slice()
-        && input_vc_status.vcstate().as_slice() != output_vc_status.vcstate().as_slice()
+        || input_vc_status.vcstate().as_slice() != output_vc_status.vcstate().as_slice()
     {
         return Err(Error::InvalidVCClose1Tx);
     }
@@ -319,9 +321,9 @@ pub fn verify_vc_rent_payout_close2(owner: &Participant) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_vc_rent_payout_merge(owner: &Participant) -> Result<(), Error> {
+pub fn verify_vc_rent_payout_merge(owner: &Participant, discarded_input_idx: usize) -> Result<(), Error> {
     let owner_lock_hash: [u8; 32] = owner.payment_script_hash().unpack();
-    let vc_cell_capacity = load_cell_capacity(0, Source::GroupInput)?;
+    let vc_cell_capacity = load_cell_capacity(discarded_input_idx, Source::GroupInput)?;
 
     let matches: vec::Vec<usize> = QueryIter::new(load_cell_lock_hash, Source::Output)
         .enumerate()
@@ -365,6 +367,10 @@ pub fn verify_equal_vc_status(
     if input_vc_status.first_force_close().as_slice()
         != merged_vc_status.first_force_close().as_slice()
     {
+        return Err(Error::InvalidVCMergeTx);
+    }
+
+    if input_vc_status.owner().as_slice() != merged_vc_status.owner().as_slice() {
         return Err(Error::InvalidVCMergeTx);
     }
     Ok(())
@@ -528,32 +534,8 @@ pub fn verify_max_one_parent(vc_status: &VirtualChannelStatus) -> Result<(), Err
     }
 }
 
-pub fn verify_valid_state_sigs(
-    sig_a: &Bytes,
-    sig_b: &Bytes,
-    state: &ChannelState,
-    pub_key_a: &SEC1EncodedPubKey,
-    pub_key_b: &SEC1EncodedPubKey,
-) -> Result<(), Error> {
-    let state_eth = convert_ckb_state(state);
-    let state_abi_encoded = state_eth.abi_encode();
-    let msg_hash = ethereum_message_hash(&state_abi_encoded);
-    verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
-    debug!("verify_valid_state_sigs: Signature A verified");
-    verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;
-    debug!("verify_valid_state_sigs: Signature B verified");
-    Ok(())
-}
-
-pub fn verify_equal_sum_of_balances(
-    old_balances: &Balances,
-    new_balances: &Balances,
-) -> Result<(), Error> {
-    if !old_balances.equal_in_sum(new_balances)? {
-        return Err(Error::SumOfBalancesNotEqual);
-    }
-    Ok(())
-}
+// verify_valid_state_sigs and verify_equal_sum_of_balances
+// live in perun_common::channels (shared with perun-channel-typescript).
 
 pub fn verify_vchannel_params_compatibility(params: &ChannelParameters) -> Result<(), Error> {
     if params.app().to_opt().is_some() {
