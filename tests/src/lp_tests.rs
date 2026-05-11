@@ -2247,6 +2247,42 @@ fn lp_extract_rejects_channel_binding_mismatch() {
 }
 
 #[test]
+fn lp_init_deposit_succeeds() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xAF; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+
+    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 0);
+
+    let funding_input = create_auth_cell(&mut context, LP_IN_CAP, owner_lock.clone());
+    let witness = witness_from_pool(PoolWitness::LPDeposit);
+
+    let tx = build_tx_from_specs(
+        vec![funding_input],
+        vec![TxOutputSpec {
+            capacity: LP_IN_CAP,
+            lock: owner_lock,
+            type_script: Some(lp_type),
+            data: Bytes::from(output_lp.encode()),
+        }],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES)
+        .expect("init deposit should allow LP cell creation");
+}
+
+#[test]
 fn lp_init_rejects_zero_fee_policy() {
     let mut context = Context::default();
     let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);

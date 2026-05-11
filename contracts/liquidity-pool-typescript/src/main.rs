@@ -91,7 +91,11 @@ fn load_pool_id() -> Result<[u8; 32], Error> {
 }
 
 fn load_pool_witness() -> Result<PoolWitness, Error> {
-    let wa = load_witness_args(0, Source::GroupInput)?;
+    let wa = match load_witness_args(0, Source::GroupInput) {
+        Ok(wa) => wa,
+        Err(SysError::IndexOutOfBound) => load_witness_args(0, Source::Input)?,
+        Err(e) => return Err(e.into()),
+    };
     let raw = wa
         .input_type()
         .to_opt()
@@ -434,8 +438,12 @@ fn check_lp_withdraw(ctx: &GroupContext, ckb_out: u64) -> Result<(), Error> {
     if ckb_out > inp.available_ckb {
         return Err(Error::InsufficientCKBLiquidity);
     }
-    if out_cap != checked_sub(inp_cap, ckb_out)?
-        || out.available_ckb != checked_sub(inp.available_ckb, ckb_out)?
+    let cap_delta = checked_sub(inp_cap, out_cap)?;
+    if cap_delta < ckb_out {
+        return Err(Error::PoolReserveMismatch);
+    }
+    let fee = checked_sub(cap_delta, ckb_out)?;
+    if out.available_ckb != checked_sub(inp.available_ckb, checked_add(ckb_out, fee)?)?
         || out.reserved_ckb != inp.reserved_ckb
         || out.cumulative_fees_earned_ckb != inp.cumulative_fees_earned_ckb
     {

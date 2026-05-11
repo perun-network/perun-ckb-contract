@@ -1,0 +1,29 @@
+{
+  "cell_recipes": [
+    {
+      "name": "sudt",
+      "tx_hash": "0x8e8711e628d0cd3791282c480f0ad62599ba20f59e85c97df25258c3ebe608a3",
+      "index": 0,
+      "occupied_capacity": 4036600000000,
+      "data_hash": "0xdf5e653205d12fb3c41bf2aae79b1095e41c87d3e7ae2d0737dcaaf142216915",
+      "type_id": "0xff901e1302c7b2858e58fd371b762b4d641849f646dfb05d867e956112a1474b"
+    },
+    {
+      "name": "pcls",
+      "tx_hash": "0x8e8711e628d0cd3791282c480f0ad62599ba20f59e85c97df25258c3ebe608a3",
+      "index": 1,
+      "occupied_capacity": 7040600000000,
+      "data_hash": "0xa6027ab064126ab5ba14e662507471701336a6f0821e4307fdfc27059fc30491",
+      "type_id": "0x082c4c9305b90ce34bf24dd5dc5ee09d1315b17df6297f456d28c5f9fe65d93b"
+    },
+    {
+      "name": "pfls",
+      "tx_hash": "0x8e8711e628d0cd3791282c480f0ad62599ba20f59e85c97df25258c3ebe608a3",
+      "index": 2,
+      "occupied_capacity": 5745400000000,
+      "data_hash": "0x6bab514871933bdb7a3168ccf437f9d398bffcc4020d41634155c6c2f4199682",
+      "type_id": "0xab67095774172e01da61cfcc7f2f743160c8778ac2e0fe7cbdc9e8a4a94cec3f"
+    }
+  ],
+  "dep_group_recipes": []
+}
