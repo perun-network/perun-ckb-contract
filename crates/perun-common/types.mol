@@ -6,6 +6,7 @@ array EthAddress        [byte; 20];
 array CKByteDistribution [Uint64; 2];
 array SUDTDistribution   [Uint128; 2];
 array ETHDistribution    [Uint128; 2];
+array IndexMap               [byte; 2];
 
 vector SUDTAllocation <SUDTBalances>;
 vector Locked_balances  <SubAlloc>;
@@ -21,12 +22,10 @@ vector Allocation <AnyBalances>;
 table SubAlloc {
   id: Byte32, // subchannel/virtual channel id
   balances: SubBalances,
+  idx_map: IndexMap,
 }
 
-table SubBalances {
-  ckbytes: CKByteDistribution,
-  sudts: SUDTAllocation,
-}
+vector SubBalances <Uint128>;
 
 table SUDTAsset {
   type_script: Script,
@@ -152,11 +151,9 @@ struct ChannelToken {
 
 vector ParentsVec <ParentData>;
 
-array index_map [byte; 2];
-
 table ParentData {
   pcts_hash: Byte32,
-  idx_map: index_map,
+  idx_map: IndexMap,
 }
 
 table VirtualChannelStatus {

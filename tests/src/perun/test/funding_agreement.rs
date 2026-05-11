@@ -6,11 +6,16 @@ use ckb_types::bytes::Bytes;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::PublicKey;
 
-use perun_common::perun_types::{self, Balances, CKByteDistribution, ETHAsset, ETHBalances, ETHDistribution, LockedBalances, ParticipantBuilder, SEC1EncodedPubKeyBuilder, SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances, Allocation, AnyBalances, AnyBalancesUnion};
+use perun_common::perun_types::{
+    self, Allocation, AnyBalances, AnyBalancesUnion, Balances, CKByteDistribution, ETHAsset,
+    ETHBalances, ETHDistribution, LockedBalances, ParticipantBuilder, SEC1EncodedPubKeyBuilder,
+    SUDTAllocation, SUDTAsset, SUDTBalances, SUDTDistribution, SubAlloc, SubBalances,
+};
 use sha3::Digest;
 
 use crate::perun;
 use crate::perun::test::ChannelId;
+
 #[derive(Debug, Clone)]
 pub struct FundingAgreement {
     entries: Vec<FundingAgreementEntry>,
@@ -25,6 +30,7 @@ impl FundingAgreement {
     pub fn has_udts(&self) -> bool {
         self.register.len() > 0
     }
+
     pub fn new_with_capacities_and_assets<P: perun::Account>(
         caps: Vec<(P, u64)>,
         sudt_script: &Script,
@@ -35,7 +41,6 @@ impl FundingAgreement {
     ) -> Self {
         let mut r = AssetRegister::new();
 
-        // Register SUDT asset
         let sudt_index = r.register_asset(
             SUDTAsset::new_builder()
                 .type_script(sudt_script.clone())
@@ -43,7 +48,6 @@ impl FundingAgreement {
                 .build(),
         );
 
-        // Register ETH asset
         let eth_index = r.register_eth_asset(
             ETHAsset::new_builder()
                 .chain_id(eth_chain_id.pack())
@@ -66,6 +70,7 @@ impl FundingAgreement {
             register: r,
         }
     }
+
     pub fn new_with_capacities<P: perun::Account>(caps: Vec<(P, u64)>) -> Self {
         FundingAgreement {
             entries: caps
@@ -140,25 +145,13 @@ impl FundingAgreement {
                 let unlock_script = ctx
                     .build_script(
                         &env.always_success_out_point,
-                        // NOTE: To be able to make sure we can distinguish between the payout of
-                        // the participants, we will pass their corresponding index as an argument.
-                        // This will have no effect on the execution of the always_success_script,
-                        // because it does not bother checking its arguments, but will allow us to
-                        // assert the correct indices once a channel is concluded.
                         Bytes::from(vec![entry.index]),
                     )
                     .expect("script");
                 let unlock_script_hash = unlock_script.calc_script_hash();
                 ParticipantBuilder::default()
-                    // The payment script hash used to lock the funds after a channel close for
-                    // this party.
                     .payment_script_hash(unlock_script_hash.clone())
-                    // The minimum capacity required for the payment cell to be valid.
                     .payment_min_capacity(payment_min_capacity.pack())
-                    // The unlock script hash used to identify this party. Normally this would be
-                    // the lock args for a secp256k1 script or similar. Since we use the always
-                    // success script, we will use the hash of said script parameterized by the
-                    // party index.
                     .unlock_script_hash(unlock_script_hash.clone())
                     .pub_key(sec1_pub_key)
                     .build()
@@ -166,19 +159,17 @@ impl FundingAgreement {
             .collect()
     }
 
-    /// mk_balances creates a Balances object from the funding agreement where the given indices
-    /// already funded their part.
     pub fn mk_balances(&self, indices: Vec<u8>) -> Result<Balances, perun::Error> {
         let mut ckbytes = [0u64; 2];
         let sudts = self.register.get_sudtassets();
         let mut sudt_dist: Vec<[u128; 2]> = vec![[0u128, 0]; sudts.len()];
         let eth_assets = self.register.get_eth_assets();
         let mut eth_dist: Vec<[u128; 2]> = vec![[0u128, 0]; eth_assets.len()];
+
         for fae in self.entries.iter() {
             if indices.iter().find(|&&i| i == fae.index).is_none() {
                 continue;
             }
-
             ckbytes[fae.index as usize] = fae.ckbytes;
             for (asset, amount) in fae.sudts.iter() {
                 sudt_dist[asset.0 as usize][fae.index as usize] = *amount;
@@ -188,28 +179,28 @@ impl FundingAgreement {
             }
         }
 
-        let ckb_dist = AnyBalancesUnion::CKByteDistribution(CKByteDistribution::new_builder()
-            .nth0(ckbytes[0].pack())
-            .nth1(ckbytes[1].pack())
-            .build());
+        let ckb_dist = AnyBalancesUnion::CKByteDistribution(
+            CKByteDistribution::new_builder()
+                .nth0(ckbytes[0].pack())
+                .nth1(ckbytes[1].pack())
+                .build(),
+        );
 
-        let mut alloc_builder = Allocation::new_builder()
-            .push(AnyBalances::new_builder().set(ckb_dist).build());
+        let mut alloc_builder =
+            Allocation::new_builder().push(AnyBalances::new_builder().set(ckb_dist).build());
 
         for (i, asset) in sudts.iter().enumerate() {
             let dist = SUDTDistribution::new_builder()
                 .nth0(sudt_dist[i][0].pack())
                 .nth1(sudt_dist[i][1].pack())
                 .build();
-
-            let sudt_bal = AnyBalancesUnion::SUDTBalances(SUDTBalances::new_builder()
-                .asset(asset.clone())
-                .distribution(dist)
-                .build());
-
-            alloc_builder = alloc_builder.push(
-                AnyBalances::new_builder().set(sudt_bal).build()
+            let sudt_bal = AnyBalancesUnion::SUDTBalances(
+                SUDTBalances::new_builder()
+                    .asset(asset.clone())
+                    .distribution(dist)
+                    .build(),
             );
+            alloc_builder = alloc_builder.push(AnyBalances::new_builder().set(sudt_bal).build());
         }
 
         for (i, asset) in eth_assets.iter().enumerate() {
@@ -217,67 +208,62 @@ impl FundingAgreement {
                 .nth0(eth_dist[i][0].pack())
                 .nth1(eth_dist[i][1].pack())
                 .build();
-
-            let eth_bal = AnyBalancesUnion::ETHBalances(ETHBalances::new_builder()
-                .asset(asset.clone())
-                .distribution(dist)
-                .build());
-
-            alloc_builder = alloc_builder.push(
-                AnyBalances::new_builder().set(eth_bal).build()
+            let eth_bal = AnyBalancesUnion::ETHBalances(
+                ETHBalances::new_builder()
+                    .asset(asset.clone())
+                    .distribution(dist)
+                    .build(),
             );
+            alloc_builder = alloc_builder.push(AnyBalances::new_builder().set(eth_bal).build());
         }
 
-        let assets = alloc_builder.build();
-
         Ok(Balances::new_builder()
-            .assets(assets)
+            .assets(alloc_builder.build())
             .build())
     }
 
     pub fn mk_locked_balances(&self, id: ChannelId) -> Result<LockedBalances, perun::Error> {
         let mut ckbytes = [0u64; 2];
         let sudts = self.register.get_sudtassets();
-        let mut sudt_dist: Vec<[u128; 2]> = Vec::new();
-        for _ in 0..sudts.len() {
-            sudt_dist.push([0u128, 0]);
-        }
+        let mut sudt_dist: Vec<[u128; 2]> = vec![[0u128; 2]; sudts.len()];
+        // FIX: was get_ethassets() — correct method is get_eth_assets()
+        let eths = self.register.get_eth_assets();
+        let mut eth_dist: Vec<[u128; 2]> = vec![[0u128; 2]; eths.len()];
+
         for fae in self.entries.iter() {
             ckbytes[fae.index as usize] = fae.ckbytes;
             for (asset, amount) in fae.sudts.iter() {
                 sudt_dist[asset.0 as usize][fae.index as usize] = *amount;
             }
-        }
-        let mut sudt_alloc: Vec<SUDTBalances> = Vec::new();
-        for (i, asset) in sudts.iter().enumerate() {
-            sudt_alloc.push(
-                SUDTBalances::new_builder()
-                    .asset(asset.clone())
-                    .distribution(
-                        SUDTDistribution::new_builder()
-                            .nth0(sudt_dist[i][0].pack())
-                            .nth1(sudt_dist[i][1].pack())
-                            .build(),
-                    )
-                    .build(),
-            );
+            // FIX: was fae.eths — correct field is fae.eth_asset
+            for (asset, amount) in fae.eth_asset.iter() {
+                eth_dist[asset.0 as usize][fae.index as usize] = *amount;
+            }
         }
 
-        let sub_balances = SubBalances::new_builder()
-            .ckbytes(
-                CKByteDistribution::new_builder()
-                    .nth0(ckbytes[0].pack())
-                    .nth1(ckbytes[1].pack())
-                    .build(),
-            )
-            .sudts(SUDTAllocation::new_builder().set(sudt_alloc).build())
-            .build();
+        // SubBalances is flat vector<Uint128>: one entry per asset,
+        // ordered CKBytes → SUDTs → ETH, matching parent Balances ordering.
+        // Each entry is the sum across both participants for that asset.
+        let mut sub_balances_builder = SubBalances::new_builder();
+
+        let ckb_total: u128 = ckbytes[0] as u128 + ckbytes[1] as u128;
+        sub_balances_builder = sub_balances_builder.push(ckb_total.pack());
+
+        for dist in sudt_dist.iter() {
+            let total: u128 = dist[0] + dist[1];
+            sub_balances_builder = sub_balances_builder.push(total.pack());
+        }
+
+        for dist in eth_dist.iter() {
+            let total: u128 = dist[0] + dist[1];
+            sub_balances_builder = sub_balances_builder.push(total.pack());
+        }
 
         Ok(LockedBalances::new_builder()
             .push(
                 SubAlloc::new_builder()
                     .id(id.to_byte32())
-                    .balances(sub_balances)
+                    .balances(sub_balances_builder.build())
                     .build(),
             )
             .build())
@@ -335,8 +321,8 @@ pub struct FundingAgreementEntry {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Asset(pub u32);
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EthAsset(pub u32);
 
 impl Asset {
@@ -384,7 +370,7 @@ impl AssetRegister {
     pub fn register_asset(&mut self, sudt_asset: SUDTAsset) -> Asset {
         let asset = Asset(self.assets.len() as u32);
         self.assets.push((asset, sudt_asset));
-        return asset;
+        asset
     }
 
     pub fn register_eth_asset(&mut self, eth_asset: ETHAsset) -> EthAsset {
@@ -396,6 +382,13 @@ impl AssetRegister {
     pub fn get_sudtasset(&self, asset: &Asset) -> Option<&SUDTAsset> {
         match self.assets.get(asset.0 as usize) {
             Some((_, sudt_asset)) => Some(sudt_asset),
+            None => None,
+        }
+    }
+
+    pub fn get_eth_asset(&self, asset: &EthAsset) -> Option<&ETHAsset> {
+        match self.eth_assets.get(asset.0 as usize) {
+            Some((_, eth_asset)) => Some(eth_asset),
             None => None,
         }
     }
@@ -423,6 +416,7 @@ impl AssetRegister {
     pub fn get_sudtassets(&self) -> Vec<SUDTAsset> {
         self.assets.iter().map(|(_, a)| a.clone()).collect()
     }
+
     pub fn get_eth_assets(&self) -> Vec<ETHAsset> {
         self.eth_assets.iter().map(|(_, a)| a.clone()).collect()
     }

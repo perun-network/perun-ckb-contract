@@ -46,7 +46,7 @@ const DUMMY_LOCKED_FUNDS_ID: [u8; 32] = [0u8; 32];
 
 pub fn program_entry() -> i8 {
     match main() {
-        Ok(_) => 0,   // Success
+        Ok(_) => 0,         // Success
         Err(e) => e.into(), // Failure
     }
 }
@@ -479,24 +479,23 @@ fn verify_dummy_locked_funds(locked_funds: &SubAlloc) -> Result<(), Error> {
         debug!("Locked funds ID {:?} is not dummy ID", locked_funds.id());
         return Err(Error::InvalidDummyEntry);
     }
-    // Check CKBytes are zero
-    let party_a_ckbytes = locked_funds.balances().ckbytes().get(0)?;
-    let party_b_ckbytes = locked_funds.balances().ckbytes().get(1)?;
-    if party_a_ckbytes != 0 || party_b_ckbytes != 0 {
-        debug!(
-            "Dummy has non-zero ckbytes: party_a={}, party_b={}",
-            party_a_ckbytes, party_b_ckbytes
-        );
-        return Err(Error::InvalidDummyEntry);
+
+    // SubBalances is a flat vector<Uint128> — each entry is the total locked
+    // amount for asset[i] in the parent channel's Balances ordering.
+    // A valid dummy entry must have all entries equal to zero.
+    let balances = locked_funds.balances();
+
+    if !balances.is_empty() {
+        for i in 0..balances.len() {
+            let entry = balances.get(i).ok_or(Error::UnexpectedSysError)?;
+            let amount: u128 = entry.unpack();
+            if amount != 0 {
+                debug!("Dummy has non-zero balance at index {}: {}", i, amount);
+                return Err(Error::InvalidDummyEntry);
+            }
+        }
     }
-    // Check no SUDTs
-    if !locked_funds.balances().sudts().is_empty() {
-        debug!(
-            "Dummy has {} SUDT entries",
-            locked_funds.balances().sudts().len()
-        );
-        return Err(Error::InvalidDummyEntry);
-    }
+
     Ok(())
 }
 
@@ -811,7 +810,6 @@ pub fn verify_status_funded(status: &ChannelStatus) -> Result<(), Error> {
     }
     Ok(())
 }
-
 
 pub fn verify_channel_continues_locked() -> Result<(), Error> {
     let input_lock_script = load_cell_lock(0, Source::GroupInput)?;

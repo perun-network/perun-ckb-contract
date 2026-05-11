@@ -6,7 +6,10 @@ use {
     ckb_types::prelude::*, std::vec::Vec,
 };
 
-use crate::perun_types::{Balances, Bool, BoolUnion, ChannelParameters, ChannelStatus, SEC1EncodedPubKey, SubBalances, ETHBalances, AnyBalances, Allocation, AnyBalancesUnion, ETHDistribution};
+use crate::perun_types::{
+    Allocation, AnyBalances, AnyBalancesUnion, Balances, Bool, BoolUnion, ChannelParameters,
+    ChannelStatus, ETHBalances, ETHDistribution, SEC1EncodedPubKey, SubBalances,
+};
 use crate::{
     error::Error,
     perun_types::{CKByteDistribution, SUDTAllocation, SUDTBalances, SUDTDistribution},
@@ -242,9 +245,7 @@ impl AnyBalances {
     }
 }
 
-
 impl Balances {
-
     pub fn sudts(&self) -> SUDTAllocation {
         let mut v: Vec<SUDTBalances> = Vec::new();
         for row in self.assets().into_iter() {
@@ -297,7 +298,6 @@ impl Balances {
             .build()
     }
 
-
     pub fn with_sudts(&self, new_sudts: SUDTAllocation) -> Balances {
         let mut out = Vec::new();
         let mut repl_iter = new_sudts.clone().into_iter();
@@ -306,11 +306,7 @@ impl Balances {
             if row.is_sudt_row() {
                 if let Some(next) = repl_iter.next() {
                     let next_dist = AnyBalancesUnion::SUDTBalances(next);
-                    out.push(
-                        AnyBalances::new_builder()
-                            .set(next_dist)
-                            .build(),
-                    );
+                    out.push(AnyBalances::new_builder().set(next_dist).build());
                 } else {
                     out.push(row);
                 }
@@ -321,11 +317,7 @@ impl Balances {
 
         for rest in repl_iter {
             let rest_dist = AnyBalancesUnion::SUDTBalances(rest);
-            out.push(
-                AnyBalances::new_builder()
-                    .set(rest_dist)
-                    .build(),
-            );
+            out.push(AnyBalances::new_builder().set(rest_dist).build());
         }
 
         self.clone()
@@ -353,30 +345,27 @@ impl Balances {
         for row in self.assets().into_iter() {
             if row.is_ckb_row() {
                 let new_ckb = row.as_ckb().unwrap().clear_index(idx)?;
-                new_rows.push(
-                    row.clone()
-                        .as_builder()
-                        .set(new_ckb)
-                        .build(),
-                );
+                new_rows.push(row.clone().as_builder().set(new_ckb).build());
             } else if row.is_sudt_row() {
                 let sd = row.as_sudt().unwrap().distribution().clear_index(idx)?;
-                let new_sudt = row.as_sudt().unwrap().clone().as_builder().distribution(sd).build();
-                new_rows.push(
-                    row.clone()
-                        .as_builder()
-                        .set(new_sudt)
-                        .build(),
-                );
+                let new_sudt = row
+                    .as_sudt()
+                    .unwrap()
+                    .clone()
+                    .as_builder()
+                    .distribution(sd)
+                    .build();
+                new_rows.push(row.clone().as_builder().set(new_sudt).build());
             } else if row.is_eth_row() {
                 let ed = row.as_eth().unwrap().distribution().clear_index(idx)?;
-                let new_eth = row.as_eth().unwrap().clone().as_builder().distribution(ed).build();
-                new_rows.push(
-                    row.clone()
-                        .as_builder()
-                        .set(new_eth)
-                        .build(),
-                );
+                let new_eth = row
+                    .as_eth()
+                    .unwrap()
+                    .clone()
+                    .as_builder()
+                    .distribution(ed)
+                    .build();
+                new_rows.push(row.clone().as_builder().set(new_eth).build());
             }
         }
 
@@ -446,76 +435,68 @@ impl Balances {
     }
 
     pub fn equal_in_sum(&self, other: &Balances) -> Result<bool, Error> {
-        let self_total_ckbytes = self.ckbytes().sum()
-            + self
-                .locked()
-                .into_iter()
-                .map(|sa| sa.balances().ckbytes().sum())
-                .sum::<u64>();
-        let other_total_ckbytes = other.ckbytes().sum()
-            + other
-                .locked()
-                .into_iter()
-                .map(|sa| sa.balances().ckbytes().sum())
-                .sum::<u64>();
-        if self_total_ckbytes != other_total_ckbytes {
-            return Ok(false);
-        }
+        // Collect asset ordering from self
+        let assets: Vec<_> = self.assets().clone().into_iter().collect();
 
-        let self_s = self.sudts();
-        let other_s = other.sudts();
-        if self_s.len() != other_s.len() {
-            return Ok(false);
-        }
-
-        for (i, sb) in self_s.clone().into_iter().enumerate() {
-            let other_sb = other_s.get(i).ok_or(Error::IndexOutOfBound)?;
-            if sb.asset().as_slice() != other_sb.asset().as_slice() {
-                return Ok(false);
-            }
-
-            let mut self_total = sb.distribution().sum();
-            let mut other_total = other_sb.distribution().sum();
-
-            for sub in self.locked().into_iter() {
-                for s in sub.balances().sudts().into_iter() {
-                    if s.asset().as_slice() == sb.asset().as_slice() {
-                        self_total += s.distribution().sum();
-                    }
+        // Compute locked sums per asset index from self.locked
+        let mut self_locked_sums = vec![0u128; assets.len()];
+        for sub in self.locked().into_iter() {
+            for (i, entry) in sub.balances().into_iter().enumerate() {
+                if i >= self_locked_sums.len() {
+                    break;
                 }
+                let mut le = [0u8; 16];
+                le.copy_from_slice(entry.as_slice());
+                self_locked_sums[i] += u128::from_le_bytes(le);
             }
-            for sub in other.locked().into_iter() {
-                for s in sub.balances().sudts().into_iter() {
-                    if s.asset().as_slice() == other_sb.asset().as_slice() {
-                        other_total += s.distribution().sum();
-                    }
+        }
+
+        let mut other_locked_sums = vec![0u128; assets.len()];
+        for sub in other.locked().into_iter() {
+            for (i, entry) in sub.balances().into_iter().enumerate() {
+                if i >= other_locked_sums.len() {
+                    break;
                 }
-            }
-
-            if self_total != other_total {
-                return Ok(false);
+                let mut le = [0u8; 16];
+                le.copy_from_slice(entry.as_slice());
+                other_locked_sums[i] += u128::from_le_bytes(le);
             }
         }
 
-        let self_e = self.eth_rows();
-        let other_e = other.eth_rows();
-
-        if self_e.len() != other_e.len() {
-            return Ok(false);
-        }
-
-        for (i, eb) in self_e.clone().into_iter().enumerate() {
-            let other_eb = other_e.get(i).ok_or(Error::IndexOutOfBound)?;
-
-            if eb.asset().as_slice() != other_eb.asset().as_slice() {
-                return Ok(false);
-            }
-
-            let self_total = eb.distribution().sum();
-            let other_total = other_eb.distribution().sum();
-
-            if self_total != other_total {
-                return Ok(false);
+        // Compare per asset
+        for (i, row) in assets.iter().enumerate() {
+            if row.is_ckb_row() {
+                let s = self.ckbytes().sum() as u128 + self_locked_sums[i];
+                let o = other.ckbytes().sum() as u128 + other_locked_sums[i];
+                if s != o {
+                    return Ok(false);
+                }
+            } else if row.is_sudt_row() {
+                let self_sudt = row.as_sudt().unwrap();
+                let other_assets: Vec<_> = other.assets().clone().into_iter().collect();
+                let other_row = other_assets.get(i).ok_or(Error::IndexOutOfBound)?;
+                let other_sudt = other_row.as_sudt().unwrap();
+                if self_sudt.asset().as_slice() != other_sudt.asset().as_slice() {
+                    return Ok(false);
+                }
+                let s = self_sudt.distribution().sum() + self_locked_sums[i];
+                let o = other_sudt.distribution().sum() + other_locked_sums[i];
+                if s != o {
+                    return Ok(false);
+                }
+            } else if row.is_eth_row() {
+                let self_eth = row.as_eth().unwrap();
+                let other_assets: Vec<_> = other.assets().clone().into_iter().collect();
+                let other_row = other_assets.get(i).ok_or(Error::IndexOutOfBound)?;
+                let other_eth = other_row.as_eth().unwrap();
+                if self_eth.asset().as_slice() != other_eth.asset().as_slice() {
+                    return Ok(false);
+                }
+                let s = self_eth.distribution().sum() + self_locked_sums[i];
+                let o = other_eth.distribution().sum() + other_locked_sums[i];
+                if s != o {
+                    return Ok(false);
+                }
             }
         }
         Ok(true)
@@ -716,28 +697,50 @@ impl Balances {
 }
 
 impl SubBalances {
+    /// Compare the flat locked totals in self against the sum of vc_balances
+    /// across all participants. Each entry in self is the total locked for
+    /// asset[i], matching the parent state's asset ordering.
     pub fn equal_in_sum(&self, vc_balances: &Balances) -> Result<bool, Error> {
-        if self.ckbytes().sum() != vc_balances.ckbytes().sum() {
-            return Ok(false);
-        }
+        let locked: Vec<u128> = self
+            .clone() // ← add .clone() here
+            .into_iter()
+            .map(|entry| {
+                let mut le = [0u8; 16];
+                le.copy_from_slice(entry.as_slice());
+                u128::from_le_bytes(le)
+            })
+            .collect();
 
-        if self.sudts().len() != vc_balances.sudts().len() {
-            return Ok(false);
-        }
-
-        for locked_sudt in self.sudts().into_iter() {
-            for vc_sudt in vc_balances.sudts().into_iter() {
-                if locked_sudt.asset().as_slice() == vc_sudt.asset().as_slice() {
-                    if locked_sudt.distribution().sum() != vc_sudt.distribution().sum() {
-                        return Ok(false);
-                    }
-                }
+        // Build per-asset sums from vc_balances (sum across all participants)
+        let mut vc_sums: Vec<u128> = Vec::new();
+        for row in vc_balances.assets().clone().into_iter() {
+            if row.is_ckb_row() {
+                let ckb = row.as_ckb().unwrap();
+                let a: u64 = ckb.nth0().unpack(); // ← explicit type
+                let b: u64 = ckb.nth1().unpack(); // ← explicit type
+                let sum = a as u128 + b as u128;
+                vc_sums.push(sum);
+            } else if row.is_sudt_row() {
+                let sudt = row.as_sudt().unwrap();
+                let a: u128 = sudt.distribution().nth0().unpack(); // ← explicit type
+                let b: u128 = sudt.distribution().nth1().unpack(); // ← explicit type
+                vc_sums.push(a + b);
+            } else if row.is_eth_row() {
+                let eth = row.as_eth().unwrap();
+                let a: u128 = eth.distribution().nth0().unpack(); // ← explicit type
+                let b: u128 = eth.distribution().nth1().unpack(); // ← explicit type
+                vc_sums.push(a + b);
             }
         }
 
-        // NOTE: SubBalances molecule schema has no eth_rows field (only ckbytes + sudts).
-        // If ETH support is needed in locked/sub balances, the molecule type must be extended.
-
+        if locked.len() != vc_sums.len() {
+            return Ok(false);
+        }
+        for (l, v) in locked.iter().zip(vc_sums.iter()) {
+            if l != v {
+                return Ok(false);
+            }
+        }
         Ok(true)
     }
 }
@@ -922,7 +925,9 @@ impl SEC1EncodedPubKey {
 
 pub fn bytes_to_u128(bytes: &[u8]) -> u128 {
     assert_eq!(bytes.len(), 16, "Expected 16 bytes for u128 conversion");
-    let arr: [u8; 16] = bytes.try_into().expect("Failed to convert to 16-byte array");
+    let arr: [u8; 16] = bytes
+        .try_into()
+        .expect("Failed to convert to 16-byte array");
     u128::from_le_bytes(arr)
 }
 

@@ -23,9 +23,9 @@ use crate::perun::{
     test::{keys, ChannelId, Client},
 };
 use crate::perun::{channel::Channel, test};
+use perun_common::perun_types::{Allocation, AnyBalances, AnyBalancesUnion};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use perun_common::perun_types::{Allocation, AnyBalances, AnyBalancesUnion};
 
 #[derive(Debug, Clone)]
 pub struct VirtualChannel {
@@ -241,82 +241,130 @@ pub fn update_virtual_channel<'a>(
     vc_to_lc_idx_map: &'a [u8; 2],
 ) -> impl Fn(&ChannelState) -> Result<ChannelState, perun::Error> + 'a {
     move |s| {
-        // create a function for current balances of a lc, which takes another funding agreement with its locked
         let locked = fa.mk_locked_balances(vc_id)?;
         let vc_alloc = locked.get(0).expect("no 0th in SubAlloc: no funds locked");
-        // instead of creating locked balances, directly create balances and pass it to the new state.
-        let locked_ckb_1 = vc_alloc.balances().ckbytes().get(0).expect("no ckbytes");
-        let locked_ckb_2 = vc_alloc.balances().ckbytes().get(1).expect("no ckbytes");
+        let vc_sub_bals = vc_alloc.balances();
+        let entry0 = &fa.content()[0];
+        let entry1 = &fa.content()[1];
 
-        // let bals = s.clone().balances();
-        let old_ckb_1 = s
-            .balances()
-            .ckbytes()
-            .clone()
-            .get(vc_to_lc_idx_map[0].into())
-            .expect("no ckbytes");
-        let updated_ckb = old_ckb_1 - locked_ckb_1;
-
-        let old_ckb_2 = s
-            .balances()
-            .ckbytes()
-            .clone()
-            .get(vc_to_lc_idx_map[1].into())
-            .expect("no ckbytes");
-        let updated_ckb_2 = old_ckb_2 - locked_ckb_2;
-
-        let updated_ckb_dist = s
-            .balances()
-            .ckbytes()
-            .clone()
-            .as_builder()
-            .nth0(updated_ckb.pack())
-            .nth1(updated_ckb_2.pack())
-            .build();
-        let ckb_dist_union = AnyBalancesUnion::CKByteDistribution(updated_ckb_dist);
-
-        let mut sudt_allocation_builder = SUDTAllocation::new_builder();
         let mut allocation_builder = Allocation::new_builder();
-        allocation_builder = allocation_builder.push(AnyBalances::new_builder().set(ckb_dist_union).build());
+        let mut sudt_asset_idx = 0usize;
+        let mut eth_asset_idx = 0usize;
 
-        for (_, vc_sudt_bals) in vc_alloc.balances().sudts().clone().into_iter().enumerate() {
-            for (_, lc_sudt_bals) in s.balances().sudts().clone().into_iter().enumerate() {
-                if vc_sudt_bals.asset().type_script().as_slice()
-                    == lc_sudt_bals.asset().type_script().as_slice()
-                {
-                    let locked_sudt_bals1 = vc_sudt_bals.distribution().get(0).expect("no 0th");
-                    let locked_sudt_bals2 = vc_sudt_bals.distribution().get(1).expect("no 1st");
+        for row in s.balances().assets().into_iter() {
+            if row.is_ckb_row() {
+                let old_0: u64 = s
+                    .balances()
+                    .ckbytes()
+                    .get(vc_to_lc_idx_map[0] as usize)
+                    .expect("no ckbytes at idx 0");
+                let old_1: u64 = s
+                    .balances()
+                    .ckbytes()
+                    .get(vc_to_lc_idx_map[1] as usize)
+                    .expect("no ckbytes at idx 1");
+                let locked_0 = entry0.ckbytes;
+                let locked_1 = entry1.ckbytes;
 
-                    let old_sudt_bals1 = lc_sudt_bals
-                        .distribution()
-                        .get(vc_to_lc_idx_map[0].into())
-                        .expect("no 0th");
-                    let old_sudt_bals2 = lc_sudt_bals
-                        .distribution()
-                        .get(vc_to_lc_idx_map[1].into())
-                        .expect("no 1st");
+                let updated_dist = s
+                    .balances()
+                    .ckbytes()
+                    .clone()
+                    .as_builder()
+                    .nth0((old_0 - locked_0).pack())
+                    .nth1((old_1 - locked_1).pack())
+                    .build();
 
-                    let udpated_sudt_bals1 = old_sudt_bals1 - locked_sudt_bals1;
-                    let udpated_sudt_bals2 = old_sudt_bals2 - locked_sudt_bals2;
+                allocation_builder = allocation_builder.push(
+                    AnyBalances::new_builder()
+                        .set(AnyBalancesUnion::CKByteDistribution(updated_dist))
+                        .build(),
+                );
+            } else if row.is_sudt_row() {
+                let lc_sudt = row.as_sudt().unwrap();
+                let locked_0 = entry0
+                    .sudts
+                    .get(sudt_asset_idx)
+                    .expect("missing SUDT funding entry for participant 0")
+                    .1;
+                let locked_1 = entry1
+                    .sudts
+                    .get(sudt_asset_idx)
+                    .expect("missing SUDT funding entry for participant 1")
+                    .1;
 
-                    let updated_sudt_dist = lc_sudt_bals
-                        .distribution()
-                        .clone()
-                        .as_builder()
-                        .nth0(udpated_sudt_bals1.pack())
-                        .nth1(udpated_sudt_bals2.pack())
-                        .build();
-                    let updated_sudt_bals = lc_sudt_bals
-                        .clone()
-                        .as_builder()
-                        .distribution(updated_sudt_dist)
-                        .build();
-                    let sudt_bals_union = AnyBalancesUnion::SUDTBalances(updated_sudt_bals);
-                    allocation_builder = allocation_builder.push(AnyBalances::new_builder().set(sudt_bals_union).build());
-                }
+                let old_0: u128 = lc_sudt
+                    .distribution()
+                    .get(vc_to_lc_idx_map[0] as usize)
+                    .expect("no sudt dist at idx 0");
+                let old_1: u128 = lc_sudt
+                    .distribution()
+                    .get(vc_to_lc_idx_map[1] as usize)
+                    .expect("no sudt dist at idx 1");
+
+                let updated_dist = lc_sudt
+                    .distribution()
+                    .clone()
+                    .as_builder()
+                    .nth0((old_0 - locked_0).pack())
+                    .nth1((old_1 - locked_1).pack())
+                    .build();
+                let updated_bals = lc_sudt
+                    .clone()
+                    .as_builder()
+                    .distribution(updated_dist)
+                    .build();
+
+                allocation_builder = allocation_builder.push(
+                    AnyBalances::new_builder()
+                        .set(AnyBalancesUnion::SUDTBalances(updated_bals))
+                        .build(),
+                );
+                sudt_asset_idx += 1;
+            } else if row.is_eth_row() {
+                let lc_eth = row.as_eth().unwrap();
+                let locked_0 = entry0
+                    .eth_asset
+                    .get(eth_asset_idx)
+                    .expect("missing ETH funding entry for participant 0")
+                    .1;
+                let locked_1 = entry1
+                    .eth_asset
+                    .get(eth_asset_idx)
+                    .expect("missing ETH funding entry for participant 1")
+                    .1;
+
+                let old_0: u128 = lc_eth
+                    .distribution()
+                    .get(vc_to_lc_idx_map[0] as usize)
+                    .expect("no eth dist at idx 0");
+                let old_1: u128 = lc_eth
+                    .distribution()
+                    .get(vc_to_lc_idx_map[1] as usize)
+                    .expect("no eth dist at idx 1");
+
+                let updated_dist = lc_eth
+                    .distribution()
+                    .clone()
+                    .as_builder()
+                    .nth0((old_0 - locked_0).pack())
+                    .nth1((old_1 - locked_1).pack())
+                    .build();
+                let updated_bals = lc_eth
+                    .clone()
+                    .as_builder()
+                    .distribution(updated_dist)
+                    .build();
+
+                allocation_builder = allocation_builder.push(
+                    AnyBalances::new_builder()
+                        .set(AnyBalancesUnion::ETHBalances(updated_bals))
+                        .build(),
+                );
+                eth_asset_idx += 1;
             }
         }
-        let sudt_alloc = sudt_allocation_builder.build();
+
         Ok(s.clone()
             .as_builder()
             .version((Unpack::<u64>::unpack(&s.version()) + 1u64).pack())
@@ -324,9 +372,7 @@ pub fn update_virtual_channel<'a>(
                 s.balances()
                     .clone()
                     .as_builder()
-                    .assets(
-                        allocation_builder.build()
-                    )
+                    .assets(allocation_builder.build())
                     .locked(locked)
                     .build(),
             )
