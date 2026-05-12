@@ -8,6 +8,13 @@ use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
 use perun;
 use perun::{test, virtual_channel};
+use perun_common::perun_types::{
+    Allocation, AnyBalances, AnyBalancesUnion, Balances, ChannelState, CKByteDistribution,
+    LockedBalances, SubAlloc,
+};
+use perun_common::sig::ethereum_message_hash;
+use perun_common::sol::convert_ckb_state;
+use perun_common::{cfalse, ctrue};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Mutex;
