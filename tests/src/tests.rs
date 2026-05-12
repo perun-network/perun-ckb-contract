@@ -6,6 +6,7 @@ use super::*;
 use ckb_occupied_capacity::Capacity;
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::*, prelude::*};
 use ckb_testtool::context::Context;
+use alloy_sol_types::SolValue;
 use perun;
 use perun::{test, virtual_channel};
 use perun_common::perun_types::{
@@ -2965,7 +2966,7 @@ fn test_channel_id_matches_ethereum(
         .channel_id(Byte32::zero())
         .balances(balances)
         .version(1u64.pack())
-        .is_final(Bool::from_bool(false))
+        .is_final(cfalse!())
         .build();
 
     let state_eth = convert_ckb_state(&state);
