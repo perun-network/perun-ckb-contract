@@ -3,11 +3,8 @@
 #![allow(unused_attributes)]
 
 use ckb_std::default_alloc;
-use perun_common::sol::convert_ckb_state;
 ckb_std::entry!(program_entry);
 default_alloc!();
-// Import from `core` instead of from `std` since we are in no-std mode
-use alloy_sol_types::SolValue;
 use core::result::Result;
 
 // Import heap related library from `alloc`
@@ -32,16 +29,16 @@ use ckb_std::{
 use perun_common::{
     channels::{
         find_cell_by_type_hash, get_channel_action, unpack_byte32, unpack_u64,
-        verify_channel_id_cross_integrity, verify_max_one_channel, verify_thread_token_integrity,
-        verify_time_lock_expired, PChannelAction,
+        verify_channel_id_cross_integrity, verify_equal_sum_of_balances, verify_max_one_channel,
+        verify_thread_token_integrity, verify_time_lock_expired, verify_valid_state_sigs,
+        verify_version_number, PChannelAction,
     },
     error::Error,
     perun_types::{
         Balances, ChannelConstants, ChannelParameters, ChannelState, ChannelStatus, ChannelWitness,
-        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SEC1EncodedPubKey, SubAlloc,
-        VCChannelConstants, VirtualChannelStatus,
+        ChannelWitnessUnion, Dispute, IndexMap, ParentsVec, SubAlloc, VCChannelConstants,
+        VirtualChannelStatus,
     },
-    sig::{ethereum_message_hash, verify_signature},
 };
 
 const SUDT_MIN_LEN: usize = 16;
@@ -771,7 +768,7 @@ pub fn get_vc_participant_idx(lc_participant_idx: u8, idx_map: &IndexMap) -> Res
 pub fn get_idx_map(parents: &ParentsVec) -> Result<IndexMap, Error> {
     let pcts_hash = match load_cell_type_hash(0, Source::GroupInput)? {
         Some(hash) => hash,
-        None => panic!("type script not found"),
+        None => return Err(Error::TypeHashNotFound),
     };
     for i in 0..parents.len() {
         let parent = match parents.get(i) {
@@ -799,54 +796,8 @@ pub fn load_witness() -> Result<ChannelWitness, Error> {
     Ok(channel_witness)
 }
 
-pub fn verify_increasing_version_number(
-    old_status: &ChannelStatus,
-    new_state: &ChannelState,
-) -> Result<(), Error> {
-    let old_status_disputed: bool = old_status.disputed().to_bool();
-    let old_state_version: u64 = old_status.state().version().unpack();
-    let new_state_version: u64 = new_state.version().unpack();
-
-    // Allow registering initial state
-    if !old_status_disputed && old_state_version == 0 && new_state_version == 0 {
-        debug!("Allow registering initial state");
-        return Ok(());
-    }
-    if old_state_version < new_state_version {
-        return Ok(());
-    }
-    Err(Error::VersionNumberNotIncreasing)
-}
-
-pub fn verify_non_decreasing_version_number(
-    old_status: &ChannelStatus,
-    new_state: &ChannelState,
-) -> Result<(), Error> {
-    let old_state_version: u64 = old_status.state().version().unpack();
-    let new_state_version: u64 = new_state.version().unpack();
-
-    if old_state_version > new_state_version {
-        return Err(Error::InvalidVersionNumberVCProgressTx);
-    }
-    Ok(())
-}
-
-pub fn verify_valid_state_sigs(
-    sig_a: &Bytes,
-    sig_b: &Bytes,
-    state: &ChannelState,
-    pub_key_a: &SEC1EncodedPubKey,
-    pub_key_b: &SEC1EncodedPubKey,
-) -> Result<(), Error> {
-    let state_eth = convert_ckb_state(state);
-    let state_abi_encoded = state_eth.abi_encode();
-    let msg_hash = ethereum_message_hash(&state_abi_encoded);
-    verify_signature(&msg_hash, sig_a, pub_key_a.as_slice())?;
-    debug!("verify_valid_state_sigs: Signature A verified");
-    verify_signature(&msg_hash, sig_b, pub_key_b.as_slice())?;
-    debug!("verify_valid_state_sigs: Signature B verified");
-    Ok(())
-}
+// verify_valid_state_sigs, verify_equal_sum_of_balances, and verify_version_number
+// live in perun_common::channels (shared with perun-vchannel-typescript).
 
 pub fn verify_state_not_finalized(state: &ChannelState) -> Result<(), Error> {
     if state.is_final().to_bool() {
@@ -862,17 +813,6 @@ pub fn verify_status_funded(status: &ChannelStatus) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn verify_equal_sum_of_balances(
-    old_balances: &Balances,
-    new_balances: &Balances,
-) -> Result<(), Error> {
-    debug!("old balances {:?}", old_balances);
-    debug!("new balances {:?}", new_balances);
-    if !old_balances.equal_in_sum(new_balances)? {
-        return Err(Error::SumOfBalancesNotEqual);
-    }
-    Ok(())
-}
 
 pub fn verify_channel_continues_locked() -> Result<(), Error> {
     let input_lock_script = load_cell_lock(0, Source::GroupInput)?;
@@ -918,7 +858,7 @@ pub fn verify_funding_in_outputs(
     }
 
     let mut udt_sum =
-        vec![0u128, initial_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
+        vec![0u128; initial_balance.sudts().len().try_into().unwrap()].into_boxed_slice();
 
     let expected_pcts_script_hash = load_script_hash()?;
     let outputs = load_transaction()?.raw().outputs();
@@ -1018,7 +958,7 @@ pub fn verify_channel_state_progression(
     new_state: &ChannelState,
 ) -> Result<(), Error> {
     verify_equal_channel_id(&old_status.state(), new_state)?;
-    verify_increasing_version_number(old_status, new_state)?;
+    verify_version_number(old_status, new_state, true)?;
     verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
     verify_state_not_finalized(&old_status.state())?;
     Ok(())
@@ -1029,7 +969,7 @@ pub fn verify_vc_parent_state_progression(
     new_state: &ChannelState,
 ) -> Result<(), Error> {
     verify_equal_channel_id(&old_status.state(), new_state)?;
-    verify_non_decreasing_version_number(old_status, new_state)?;
+    verify_version_number(old_status, new_state, false)?;
     verify_equal_sum_of_balances(&old_status.state().balances(), &new_state.balances())?;
     verify_state_not_finalized(&old_status.state())?;
     Ok(())

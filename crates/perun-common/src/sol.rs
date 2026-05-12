@@ -100,7 +100,6 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
 
     let version_alloy = bytes_to_u64(state.version().as_slice());
 
-    let balances = state.balances();
     let mut assets = vec![];
     let mut backends = vec![];
     let mut balances_sol = vec![];

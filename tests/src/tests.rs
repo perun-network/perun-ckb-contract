@@ -43,6 +43,12 @@ fn channel_test_bench() -> Result<(), perun::Error> {
         test_multi_asset_abort,
         test_multi_asset_abort_zero_sudt_balance,
         test_multi_asset_force_close,
+        test_dispute_wrong_signer,
+        test_dispute_corrupted_signature,
+        test_dispute_version_regression,
+        test_dispute_inflated_balances,
+        test_eth_payment_and_force_close,
+        test_channel_id_matches_ethereum,
     ]
     .iter()
     .map(|test| {
@@ -2733,4 +2739,243 @@ fn test_vc_happy_multi_asset_with_merge(
             Ok(())
         },
     )
+}
+
+// =============================================================================
+// Security tests: signature forgery, version regression, balance inflation
+// =============================================================================
+
+fn test_dispute_wrong_signer(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+    let carol = random::account("carol");
+    let carol_client = test::Client::new(2, "carol".into(), carol.sk.clone());
+
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        let alice_client = test::Client::new(0, "alice".into(), parts[0].sk.clone());
+        let sig_a = alice_client.sign(chan.state().state())?;
+        let sig_carol = carol_client.sign(chan.state().state())?;
+
+        chan.with(alice)
+            .invalid()
+            .dispute_with_custom_sigs([sig_a, sig_carol])
+            .expect("dispute with wrong signer must fail");
+        Ok(())
+    })
+}
+
+fn test_dispute_corrupted_signature(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        let alice_client = test::Client::new(0, "alice".into(), parts[0].sk.clone());
+        let bob_client = test::Client::new(1, "bob".into(), parts[1].sk.clone());
+        let sig_a = alice_client.sign(chan.state().state())?;
+        let mut sig_b = bob_client.sign(chan.state().state())?;
+        if sig_b.len() > 10 {
+            sig_b[10] ^= 0xff;
+        }
+
+        chan.with(alice)
+            .invalid()
+            .dispute_with_custom_sigs([sig_a, sig_b])
+            .expect("dispute with corrupted signature must fail");
+        Ok(())
+    })
+}
+
+fn test_dispute_version_regression(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(alice)
+            .valid()
+            .update(bump_version())
+            .update(bump_version())
+            .dispute()
+            .expect("valid dispute at version 2");
+
+        chan.with(bob)
+            .invalid()
+            .update(set_version(1))
+            .dispute()
+            .expect("dispute with version regression must fail");
+        Ok(())
+    })
+}
+
+fn test_dispute_inflated_balances(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let funding_agreement = test::FundingAgreement::new_with_capacities(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+    );
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(alice)
+            .invalid()
+            .update(inflate_ckbytes(0, Capacity::bytes(50)?.as_u64()))
+            .dispute()
+            .expect("dispute with inflated balances must fail");
+        Ok(())
+    })
+}
+
+fn test_eth_payment_and_force_close(
+    context: Rc<Mutex<RefCell<Context>>>,
+    env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let (alice, bob) = ("alice", "bob");
+    let parts = [random::account(alice), random::account(bob)];
+    let funding = [
+        Capacity::bytes(100)?.as_u64(),
+        Capacity::bytes(100)?.as_u64(),
+    ];
+    let asset_funding = [20u128, 30u128];
+    let eth_funding = [50u128, 50u128];
+    let eth_chain_id = eth_funding.iter().cloned().sum::<u128>();
+
+    let funding_agreement = test::FundingAgreement::new_with_capacities_and_assets(
+        parts.iter().cloned().zip(funding.iter().cloned()).collect(),
+        &env.sample_udt_script,
+        env.sample_udt_max_cap.as_u64(),
+        parts
+            .iter()
+            .cloned()
+            .zip(asset_funding.iter().cloned())
+            .collect(),
+        eth_chain_id,
+        parts
+            .iter()
+            .cloned()
+            .zip(eth_funding.iter().cloned())
+            .collect(),
+    );
+
+    create_channel_test(context, env, &parts, |chan| {
+        chan.with(alice)
+            .open(&funding_agreement)
+            .expect("opening channel");
+        chan.with(bob)
+            .fund(&funding_agreement)
+            .expect("funding channel");
+
+        chan.with(alice)
+            .update(pay_eth(Direction::AtoB, 20, 0))
+            .dispute()
+            .expect("dispute after ETH payment");
+
+        chan.delay(env.challenge_duration);
+
+        chan.with(alice)
+            .force_close()
+            .expect("force close after ETH payment");
+
+        chan.assert();
+        Ok(())
+    })
+}
+
+fn test_channel_id_matches_ethereum(
+    _context: Rc<Mutex<RefCell<Context>>>,
+    _env: &perun::harness::Env,
+) -> Result<(), perun::Error> {
+    let balances = Balances::new_builder()
+        .assets(
+            Allocation::new_builder()
+                .push(
+                    AnyBalances::new_builder()
+                        .set(AnyBalancesUnion::CKByteDistribution(
+                            CKByteDistribution::new_builder()
+                                .set([100u64.pack(), 200u64.pack()])
+                                .build(),
+                        ))
+                        .build(),
+                )
+                .build(),
+        )
+        .locked(LockedBalances::new_builder().push(SubAlloc::new_builder().build()).build())
+        .build();
+
+    let state = ChannelState::new_builder()
+        .channel_id(Byte32::zero())
+        .balances(balances)
+        .version(1u64.pack())
+        .is_final(Bool::from_bool(false))
+        .build();
+
+    let state_eth = convert_ckb_state(&state);
+    let encoded = state_eth.abi_encode();
+    let hash = ethereum_message_hash(&encoded);
+
+    assert_eq!(hash.len(), 32);
+    let hash2 = ethereum_message_hash(&convert_ckb_state(&state).abi_encode());
+    assert_eq!(hash, hash2, "state encoding must be deterministic");
+    assert!(encoded.iter().any(|&b| b != 0), "ABI encoding must not be empty");
+    assert!(encoded.len() > 64, "ABI encoding must contain actual data");
+    Ok(())
 }
