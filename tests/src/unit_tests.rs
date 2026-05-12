@@ -56,7 +56,7 @@ fn test_signature() {
     let channel_state = ChannelState::new_builder()
         .channel_id(Byte32::zero())
         .balances(balances)
-        .is_final(Bool::from_bool(true))
+        .is_final(Bool::default())
         .version(10u64.pack())
         .build();
     let state_eth = convert_ckb_state(&channel_state);
@@ -170,7 +170,7 @@ fn test_cross_signature() {
     let channel_state = ChannelState::new_builder()
         .channel_id(Byte32::from_slice(&channel_id_bytes).unwrap())
         .balances(balances)
-        .is_final(Bool::from_bool(true))
+        .is_final(Bool::default())
         .version(version.pack())
         .build();
     let state_eth = convert_ckb_state(&channel_state);

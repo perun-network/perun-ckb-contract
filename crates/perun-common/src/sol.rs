@@ -14,6 +14,7 @@
 use crate::perun_types::ChannelState;
 use alloy_primitives::{Address, Bytes as PrimBytes, FixedBytes, U256};
 use alloy_sol_types::sol;
+use alloy_sol_types::SolValue;
 use ckb_std::ckb_types::bytes;
 use k256::{ecdsa::VerifyingKey, elliptic_curve::sec1::EncodedPoint, Secp256k1};
 use sha3::{Digest, Keccak256};
@@ -310,7 +311,13 @@ mod tests {
         ChannelState::new_builder()
             .channel_id(Byte32::from_slice(&cid).unwrap())
             .balances(balances)
-            .is_final(Bool::from_bool(is_final))
+            .is_final(
+                if is_final {
+                    Bool::default()
+                } else {
+                    Bool::new_builder().set(False::default()).build()
+                },
+            )
             .version(version.pack())
             .build()
     }
@@ -341,7 +348,13 @@ mod tests {
         ChannelState::new_builder()
             .channel_id(Byte32::from_slice(&cid).unwrap())
             .balances(balances)
-            .is_final(Bool::from_bool(is_final))
+            .is_final(
+                if is_final {
+                    Bool::default()
+                } else {
+                    Bool::new_builder().set(False::default()).build()
+                },
+            )
             .version(version.pack())
             .build()
     }
