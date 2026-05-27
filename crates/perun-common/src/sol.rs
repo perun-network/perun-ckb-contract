@@ -96,7 +96,6 @@ impl Chain {
 
 pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
     let channel_id_alloy: FixedBytes<32> = FixedBytes::from_slice(state.channel_id().as_slice());
-
     let version_alloy = bytes_to_u64(state.version().as_slice());
 
     let mut assets = vec![];
@@ -104,42 +103,23 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
     let mut balances_sol = vec![];
 
     for row in state.balances().assets().clone().into_iter() {
-        let is_ckb = row.is_ckb_row();
-        let is_sudt = row.is_sudt_row();
-        let is_eth = row.is_eth_row();
-
-        if is_ckb {
+        if row.is_ckb_row() {
             if let Some(ckbytes) = row.as_ckb() {
                 assets.push(AssetSol {
                     chainID: U256::from(BACKEND_ID_CKB),
                     ethHolder: Address::from_slice(&[0u8; 20]),
                     ccHolder: PrimBytes::copy_from_slice(&[CKBYTE_MAGIC]),
                 });
-
-                let ckb_user0 = ckbytes.nth0();
-
-                let ckb_user0_bytes = ckb_user0.as_slice();
-                assert_eq!(
-                    ckb_user0_bytes.len(),
-                    8,
-                    "CKBytes distribution must be exactly 8 bytes"
-                );
-                let ckb_user0_u256 = U256::from(u64::from_le_bytes(ckb_user0_bytes.try_into().unwrap()));
-
-                let ckb_user1 = ckbytes.nth1();
-                let ckb_user1_bytes = ckb_user1.as_slice();
-                assert_eq!(
-                    ckb_user1_bytes.len(),
-                    8,
-                    "CKBytes distribution must be exactly 8 bytes"
-                );
-                let ckb_user1_u256 = U256::from(u64::from_le_bytes(ckb_user1_bytes.try_into().unwrap()));
-
+                let u0 = U256::from(u64::from_le_bytes(
+                    ckbytes.nth0().as_slice().try_into().unwrap(),
+                ));
+                let u1 = U256::from(u64::from_le_bytes(
+                    ckbytes.nth1().as_slice().try_into().unwrap(),
+                ));
                 backends.push(U256::from(BACKEND_ID_CKB));
-                balances_sol.push(vec![ckb_user0_u256, ckb_user1_u256]);
+                balances_sol.push(vec![u0, u1]);
             }
-
-        } else if is_sudt {
+        } else if row.is_sudt_row() {
             if let Some(sudt) = row.as_sudt() {
                 let asset_bytes = bytes::Bytes::from(sudt.asset().as_bytes());
                 let mut encoded_bytes = Vec::with_capacity(asset_bytes.len() + 1);
@@ -156,13 +136,11 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
                     U256::from(bytes_to_u128(sudt.distribution().nth1().as_slice())),
                 ]);
             }
-
-        } else if is_eth {
+        } else if row.is_eth_row() {
             if let Some(eth) = row.as_eth() {
                 let chain_id = U256::from(u128::from_le_bytes({
-                    let cid = eth.asset().chain_id();
                     let mut le = [0u8; 16];
-                    le.copy_from_slice(cid.as_slice());
+                    le.copy_from_slice(eth.asset().chain_id().as_slice());
                     le
                 }));
                 assets.push(AssetSol {
@@ -176,31 +154,58 @@ pub fn convert_ckb_state(state: &ChannelState) -> StateSol {
                     U256::from(bytes_to_u128(eth.distribution().nth1().as_slice())),
                 ]);
             }
-
         } else {
             unreachable!()
         }
     }
 
-    let locked = vec![];
+    // Locked balances — previously hardcoded to vec![]
+    let mut locked = vec![];
+    for sub_alloc in state.balances().locked().clone().into_iter() {
+        // id: Byte32 → FixedBytes<32>
+        let id: FixedBytes<32> = FixedBytes::from_slice(sub_alloc.id().as_slice());
+
+        // balances: SubBalances (vector<Uint128>) → Vec<U256>
+        // Each Uint128 is 16 bytes LE, one entry per asset, positionally aligned.
+        let sub_balances: Vec<U256> = sub_alloc
+            .balances()
+            .into_iter()
+            .map(|entry| {
+                let mut le = [0u8; 16];
+                le.copy_from_slice(entry.as_slice());
+                U256::from(u128::from_le_bytes(le))
+            })
+            .collect();
+
+        // idx_map: IndexMap (array [byte; 2]) → Vec<u16>
+        // nth0 = sub-participant 0 maps to parent participant idx_map[0]
+        // nth1 = sub-participant 1 maps to parent participant idx_map[1]
+        let idx = sub_alloc.idx_map();
+        let index_map = vec![
+            idx.nth0().as_slice()[0] as u16,
+            idx.nth1().as_slice()[0] as u16,
+        ];
+
+        locked.push(SubAllocSol {
+            ID: vec![id],
+            balances: sub_balances,
+            indexMap: index_map,
+        });
+    }
 
     let outcome = AllocationSol {
-        assets: assets,
-        backends: backends,
+        assets,
+        backends,
         balances: balances_sol,
         locked,
     };
-
-    let app_data_alloy = PrimBytes::copy_from_slice(&[]);
-
-    let is_final = state.is_final().to_bool();
 
     StateSol {
         channelID: channel_id_alloy,
         version: version_alloy,
         outcome,
-        appData: app_data_alloy,
-        isFinal: is_final,
+        appData: PrimBytes::copy_from_slice(&[]),
+        isFinal: state.is_final().to_bool(),
     }
 }
 
@@ -245,8 +250,8 @@ pub fn convert_params(params: &ChannelParameters) -> ParamsSol {
         nonce: nonce_alloy,
         participants: participants_sol,
         app: app_alloy,
-        ledgerChannel: true,
-        virtualChannel: false,
+        ledgerChannel: params.is_ledger_channel().to_bool(),
+        virtualChannel: params.is_virtual_channel().to_bool(),
     }
 }
 
@@ -276,6 +281,10 @@ pub fn eth_address_from_sec1_pubkey(sec1_pubkey: &[u8]) -> Result<Address, &'sta
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::perun_types::{
+        Allocation, AnyBalances, AnyBalancesUnion, Balances, Bool, CKByteDistribution,
+        ChannelState, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances,
+    };
     use alloy_primitives::FixedBytes;
     use alloy_sol_types::SolValue;
     use ckb_gen_types::{
@@ -283,10 +292,6 @@ mod tests {
         prelude::Pack,
     };
     use molecule::prelude::{Builder, Entity};
-    use crate::perun_types::{
-        AnyBalances, AnyBalancesUnion, Allocation, Balances, Bool, ChannelState,
-        CKByteDistribution, ETHAsset, ETHBalances, ETHDistribution, EthAddress, LockedBalances,
-    };
 
     // ── helpers ────────────────────────────────────────────────────────────
 
@@ -300,10 +305,16 @@ mod tests {
 
     fn make_ckb_state(cid: [u8; 32], version: u64, is_final: bool, a: u64, b: u64) -> ChannelState {
         let ckb = AnyBalancesUnion::CKByteDistribution(
-            CKByteDistribution::new_builder().set([a.pack(), b.pack()]).build(),
+            CKByteDistribution::new_builder()
+                .set([a.pack(), b.pack()])
+                .build(),
         );
         let balances = Balances::new_builder()
-            .assets(Allocation::new_builder().push(AnyBalances::new_builder().set(ckb).build()).build())
+            .assets(
+                Allocation::new_builder()
+                    .push(AnyBalances::new_builder().set(ckb).build())
+                    .build(),
+            )
             .locked(LockedBalances::default())
             .build();
         ChannelState::new_builder()
@@ -315,17 +326,35 @@ mod tests {
     }
 
     fn make_ckb_eth_state(
-        cid: [u8; 32], version: u64, is_final: bool,
-        ckb_a: u64, ckb_b: u64,
-        chain_id: u128, addr: [u8; 20], eth_a: u128, eth_b: u128,
+        cid: [u8; 32],
+        version: u64,
+        is_final: bool,
+        ckb_a: u64,
+        ckb_b: u64,
+        chain_id: u128,
+        addr: [u8; 20],
+        eth_a: u128,
+        eth_b: u128,
     ) -> ChannelState {
         let ckb = AnyBalancesUnion::CKByteDistribution(
-            CKByteDistribution::new_builder().set([ckb_a.pack(), ckb_b.pack()]).build(),
+            CKByteDistribution::new_builder()
+                .set([ckb_a.pack(), ckb_b.pack()])
+                .build(),
         );
         let eth = AnyBalancesUnion::ETHBalances(
             ETHBalances::new_builder()
-                .asset(ETHAsset::new_builder().chain_id(uint128(chain_id)).asset_address(eth_addr(addr)).build())
-                .distribution(ETHDistribution::new_builder().nth0(uint128(eth_a)).nth1(uint128(eth_b)).build())
+                .asset(
+                    ETHAsset::new_builder()
+                        .chain_id(uint128(chain_id))
+                        .asset_address(eth_addr(addr))
+                        .build(),
+                )
+                .distribution(
+                    ETHDistribution::new_builder()
+                        .nth0(uint128(eth_a))
+                        .nth1(uint128(eth_b))
+                        .build(),
+                )
                 .build(),
         );
         let balances = Balances::new_builder()
@@ -363,57 +392,60 @@ mod tests {
 
     #[test]
     fn mutate_channel_id() {
-        let base    = make_ckb_state(CID,        VER, false, CKB_A, CKB_B);
-        let mutated = make_ckb_state([2u8; 32],  VER, false, CKB_A, CKB_B);
+        let base = make_ckb_state(CID, VER, false, CKB_A, CKB_B);
+        let mutated = make_ckb_state([2u8; 32], VER, false, CKB_A, CKB_B);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
     #[test]
     fn mutate_version() {
-        let base    = make_ckb_state(CID, VER,     false, CKB_A, CKB_B);
+        let base = make_ckb_state(CID, VER, false, CKB_A, CKB_B);
         let mutated = make_ckb_state(CID, VER + 1, false, CKB_A, CKB_B);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
     #[test]
     fn mutate_is_final() {
-        let base    = make_ckb_state(CID, VER, false, CKB_A, CKB_B);
-        let mutated = make_ckb_state(CID, VER, true,  CKB_A, CKB_B);
+        let base = make_ckb_state(CID, VER, false, CKB_A, CKB_B);
+        let mutated = make_ckb_state(CID, VER, true, CKB_A, CKB_B);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
     #[test]
     fn mutate_ckb_balance_a() {
-        let base    = make_ckb_state(CID, VER, false, CKB_A,     CKB_B);
+        let base = make_ckb_state(CID, VER, false, CKB_A, CKB_B);
         let mutated = make_ckb_state(CID, VER, false, CKB_A + 1, CKB_B);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
     #[test]
     fn mutate_ckb_balance_b() {
-        let base    = make_ckb_state(CID, VER, false, CKB_A, CKB_B);
+        let base = make_ckb_state(CID, VER, false, CKB_A, CKB_B);
         let mutated = make_ckb_state(CID, VER, false, CKB_A, CKB_B + 1);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
     #[test]
     fn mutate_eth_balance_a() {
-        let base    = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A,     ETH_B);
-        let mutated = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A + 1, ETH_B);
+        let base = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A, ETH_B);
+        let mutated =
+            make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A + 1, ETH_B);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
     #[test]
     fn mutate_eth_balance_b() {
-        let base    = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A, ETH_B);
-        let mutated = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A, ETH_B + 1);
+        let base = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A, ETH_B);
+        let mutated =
+            make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A, ETH_B + 1);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
     #[test]
     fn mutate_eth_chain_id() {
-        let base    = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN,     ADDR, ETH_A, ETH_B);
-        let mutated = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN + 1, ADDR, ETH_A, ETH_B);
+        let base = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A, ETH_B);
+        let mutated =
+            make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN + 1, ADDR, ETH_A, ETH_B);
         assert_ne!(encode(&base), encode(&mutated));
     }
 
@@ -421,7 +453,7 @@ mod tests {
     fn mutate_eth_asset_address() {
         let mut other = ADDR;
         other[0] ^= 0xFF;
-        let base    = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR,  ETH_A, ETH_B);
+        let base = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, ADDR, ETH_A, ETH_B);
         let mutated = make_ckb_eth_state(CID, VER, false, CKB_A, CKB_B, CHAIN, other, ETH_A, ETH_B);
         assert_ne!(encode(&base), encode(&mutated));
     }

@@ -1,3 +1,8 @@
+wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18 && rm llvm.sh
+```
+cargo install cargo-generate
+```
+cargo install cargo-generate
 <h1 align="center"><br>
     <a href="https://perun.network/"><img src=".assets/go-perun.png" alt="Perun" width="196"></a>
 <br></h1>
@@ -43,11 +48,11 @@ Update the rustc version to 1.85.0 and install the following:
 sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf \
 libc6-dev-riscv64-cross libc6-riscv64-cross linux-libc-dev-riscv64-cross
 ```
+cargo install cargo-generate --locked --version 0.23.4
 ```
 wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18 && rm llvm.sh
 ```
 ```
-cargo install cargo-generate
 ```
 Add the target:
 ```
