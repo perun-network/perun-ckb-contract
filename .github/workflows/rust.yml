@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: ["dev"]
   pull_request:
-    branches: [ "dev" ]
+    branches: ["dev"]
   workflow_dispatch:
 
 env:
@@ -15,46 +15,56 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-          tests/target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            tests/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf libc6-dev-riscv64-cross libc6-riscv64-cross linux-libc-dev-riscv64-cross
-        wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18 && rm llvm.sh
-        cargo install cargo-generate
-        rustup target add riscv64imac-unknown-none-elf
-    - name: Create Symlink
-      run: sudo ln -s /usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h /usr/riscv64-linux-gnu/include/gnu/stubs-lp64.h
-    - name: Build contracts
-      env:
-        RUSTFLAGS: "-C linker=rust-lld"
-        CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER: rust-lld
-        CC_riscv64imac_unknown_none_elf: riscv64-unknown-elf-gcc
-        AR_riscv64imac_unknown_none_elf: riscv64-unknown-elf-ar
-        C_INCLUDE_PATH: /usr/riscv64-linux-gnu/include
-        CFLAGS: "-I/usr/riscv64-linux-gnu/include"
-        TARGET_CFLAGS: "-I/usr/riscv64-linux-gnu/include"
-      run: |
-        chmod +x ./setup_env.sh
-        source ./setup_env.sh build && make build
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf libc6-dev-riscv64-cross libc6-riscv64-cross linux-libc-dev-riscv64-cross
+          wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18 && rm llvm.sh
+          cargo install cargo-generate --locked --version 0.23.4
+          rustup target add riscv64imac-unknown-none-elf
+      - name: Create Symlink
+        run: sudo ln -s /usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h /usr/riscv64-linux-gnu/include/gnu/stubs-lp64.h
 
-    - name: Test contracts
-      env:
-        RUSTFLAGS: "-C linker=rust-lld"
-        CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER: rust-lld
-        CC_riscv64imac_unknown_none_elf: riscv64-unknown-elf-gcc
-        AR_riscv64imac_unknown_none_elf: riscv64-unknown-elf-ar
-        C_INCLUDE_PATH: /usr/riscv64-linux-gnu/include
-        CFLAGS: "-I/usr/riscv64-linux-gnu/include"
-        TARGET_CFLAGS: "-I/usr/riscv64-linux-gnu/include"
-      run: |
-        source ./setup_env.sh test && make test
+      - name: Rust diagnostics
+        run: |
+          rustup show
+          rustc -vV
+          cargo --version
+          cargo tree -e features -p bytes --target riscv64imac-unknown-none-elf
+          cargo tree -e features -p alloy-sol-types --target riscv64imac-unknown-none-elf
+          git rev-parse HEAD
+          git status --short
+      - name: Build contracts
+        env:
+          RUSTFLAGS: "-C linker=rust-lld"
+          CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER: rust-lld
+          CC_riscv64imac_unknown_none_elf: riscv64-unknown-elf-gcc
+          AR_riscv64imac_unknown_none_elf: riscv64-unknown-elf-ar
+          C_INCLUDE_PATH: /usr/riscv64-linux-gnu/include
+          CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+          TARGET_CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+        run: |
+          chmod +x ./setup_env.sh
+          source ./setup_env.sh build && make build
+
+      - name: Test contracts
+        env:
+          RUSTFLAGS: "-C linker=rust-lld"
+          CARGO_TARGET_RISCV64IMAC_UNKNOWN_NONE_ELF_LINKER: rust-lld
+          CC_riscv64imac_unknown_none_elf: riscv64-unknown-elf-gcc
+          AR_riscv64imac_unknown_none_elf: riscv64-unknown-elf-ar
+          C_INCLUDE_PATH: /usr/riscv64-linux-gnu/include
+          CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+          TARGET_CFLAGS: "-I/usr/riscv64-linux-gnu/include"
+        run: |
+          source ./setup_env.sh test && make test
