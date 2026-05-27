@@ -250,8 +250,8 @@ pub fn convert_params(params: &ChannelParameters) -> ParamsSol {
         nonce: nonce_alloy,
         participants: participants_sol,
         app: app_alloy,
-        ledgerChannel: true,
-        virtualChannel: false,
+        ledgerChannel: params.is_ledger_channel().to_bool(),
+        virtualChannel: params.is_virtual_channel().to_bool(),
     }
 }
 

@@ -10,6 +10,7 @@ perun-common = { path = "../../crates/perun-common", default-features = false, f
 bytes = { version = "1.0.1", default-features = false }
 molecule = { version = "0.8.0", default-features = false, features = ["bytes_vec"] }
 alloy-sol-types = {version = "0.7.7", default-features = false}
+sha3 = { version = "0.10.8", default-features = false }
 
 [features]
 library = []

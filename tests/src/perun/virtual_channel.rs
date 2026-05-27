@@ -8,12 +8,12 @@ use ckb_testtool::{
 use k256::ecdsa::VerifyingKey;
 use perun_common::{
     cfalse, ctrue,
-    helpers::blake2b256,
     perun_types::{
         ChannelParametersBuilder, ChannelState, IndexMapBuilder, ParentDataBuilder,
         ParentsVecBuilder, Participant, SUDTAllocation, VCChannelConstants,
         VCChannelConstantsBuilder, VirtualChannelStatus,
     },
+    sol::convert_params,
 };
 
 use super::test::FundingAgreement;
@@ -110,7 +110,13 @@ impl VirtualChannel {
             .is_ledger_channel(cfalse!())
             .is_virtual_channel(ctrue!())
             .build();
-        let cid_raw = blake2b256(vc_chan_params.as_slice());
+        // VC channel ID = Keccak256(abi_encode(convert_vc_params(params))),
+        // matching the on-chain check in verify_vchannel_id_integrity.
+        use alloy_sol_types::SolValue;
+        use sha3::{Digest, Keccak256};
+        let params_sol = convert_params(&vc_chan_params);
+        let encoded = params_sol.abi_encode();
+        let cid_raw: [u8; 32] = Keccak256::digest(&encoded).into();
         let cid = ChannelId::from(cid_raw);
 
         let parents_builder = ParentsVecBuilder::default();

@@ -1614,6 +1614,7 @@ dependencies = [
  "ckb-std 0.17.2",
  "molecule",
  "perun-common",
+ "sha3",
 ]
 
 [[package]]

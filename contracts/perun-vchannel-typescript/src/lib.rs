@@ -24,7 +24,6 @@ use perun_common::{
         verify_valid_state_sigs, VChannelAction,
     },
     error::Error,
-    helpers::blake2b256,
     perun_types::{
         ChannelParameters, ChannelStatus, ChannelWitness,
         ChannelWitnessUnion, Participant, VCChannelConstants,
@@ -554,7 +553,11 @@ pub fn verify_vchannel_id_integrity(
     channel_id: &Byte32,
     params: &ChannelParameters,
 ) -> Result<(), Error> {
-    let digest = blake2b256(params.as_slice());
+    use alloy_sol_types::SolValue;
+    use sha3::{Digest, Keccak256};
+    let params_sol = perun_common::sol::convert_params(params);
+    let encoded = params_sol.abi_encode();
+    let digest = Keccak256::digest(&encoded);
     if digest[..] != unpack_byte32(channel_id)[..] {
         return Err(Error::InvalidChannelId);
     }
