@@ -61,6 +61,7 @@ fn main() -> Result<(), Error> {
             contribution_id,
             principal_returned,
             fee_ckb,
+            traded_ckb,
             price_x64,
         } => check_settle_channel_insert(
             &ctx,
@@ -68,6 +69,7 @@ fn main() -> Result<(), Error> {
             &contribution_id,
             principal_returned,
             fee_ckb,
+            traded_ckb,
             price_x64,
         ),
         PoolWitness::CancelReservation {
@@ -522,15 +524,21 @@ fn check_fund_channel_extract(
     Ok(())
 }
 
+// principal_returned is the remainder of the channel extract that physically
+// returns to the pool; traded_ckb is the rest of that extract, sold to the
+// peer during the swap. Together they release the channel's full reservation,
+// and the policy fee applies to the traded notional — not the remainder, which
+// would make the fee shrink as the trade grows.
 fn check_settle_channel_insert(
     ctx: &GroupContext,
     channel_id: &[u8; 32],
     contribution_id: &[u8; 32],
     principal_returned: u64,
     fee_ckb: u64,
+    traded_ckb: u64,
     price_x64: u128,
 ) -> Result<(), Error> {
-    if principal_returned == 0 && fee_ckb == 0 {
+    if principal_returned == 0 && fee_ckb == 0 && traded_ckb == 0 {
         return Err(Error::InvalidSettlement);
     }
     let (inp, inp_cap, out, out_cap) = one_lp_in_out(ctx)?;
@@ -552,7 +560,8 @@ fn check_settle_channel_insert(
     require_operator_unchanged(inp, out)?;
     require_nonce_inc(inp, out)?;
 
-    if principal_returned > inp.reserved_ckb {
+    let reserved_release = checked_add(principal_returned, traded_ckb)?;
+    if reserved_release > inp.reserved_ckb {
         return Err(Error::InvalidSettlement);
     }
 
@@ -560,7 +569,7 @@ fn check_settle_channel_insert(
         && (flags.contains(LPPolicyFlag::EnforceMaxFee)
             || flags.contains(LPPolicyFlag::EnforceMinFee))
     {
-        let policy_fee_u128 = (principal_returned as u128)
+        let policy_fee_u128 = (traded_ckb as u128)
             .checked_mul(inp.policy.fee_rate_bps as u128)
             .ok_or(Error::LPArithmetic)?
             / 10_000u128;
@@ -592,7 +601,7 @@ fn check_settle_channel_insert(
 
     if out_cap != checked_add(inp_cap, total_return)?
         || out.available_ckb != checked_add(inp.available_ckb, total_return)?
-        || out.reserved_ckb != checked_sub(inp.reserved_ckb, principal_returned)?
+        || out.reserved_ckb != checked_sub(inp.reserved_ckb, reserved_release)?
         || out.cumulative_fees_earned_ckb != checked_add(inp.cumulative_fees_earned_ckb, fee_ckb)?
     {
         return Err(Error::PoolReserveMismatch);

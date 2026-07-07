@@ -157,7 +157,10 @@ fn lp_happy_path_deposit_extract_settle_success() {
         0xFE, 0x55, 0xAA, 0x11, 0x22, 0x33, 0x44, 0x66, 0x77, 0x88, 0x99, 0xBB, 0xCC, 0xDD, 0xEE,
         0x13, 0x37,
     ];
-    let principal_returned = EXTRACT_CKB;
+    // Real swap shape: traded_ckb of the extract was sold to the peer during
+    // the swap; only the remainder returns to the pool as principal.
+    let traded_ckb = 1_500_000_000u64;
+    let principal_returned = EXTRACT_CKB - traded_ckb;
     let fee_ckb = 500_000_000u64;
     let total_return = principal_returned + fee_ckb;
 
@@ -320,6 +323,7 @@ fn lp_happy_path_deposit_extract_settle_success() {
         contribution_id: [0xE1; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb,
         price_x64: 1,
     });
 
@@ -589,6 +593,7 @@ fn lp_settle_rejects_when_channel_still_live_in_tx() {
         contribution_id: [0xCB; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb: 0,
         price_x64: 1,
     });
 
@@ -1033,6 +1038,7 @@ fn lp_settle_rejects_when_operator_does_not_fund_return() {
         contribution_id: [0x44; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb: 0,
         price_x64: 1,
     });
 
@@ -1078,7 +1084,9 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
-    let principal_returned = 1_000_000_000u64;
+    let principal_returned = 200_000_000u64;
+    let traded_ckb = 1_000_000_000u64;
+    let extract_ckb = principal_returned + traded_ckb;
     let fee_ckb = 60_000_000u64;
     let total_return = principal_returned + fee_ckb;
     let flags = LPPolicyFlags::empty().with(LPPolicyFlag::EnforceMaxFee);
@@ -1087,8 +1095,8 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned,
-        principal_returned,
+        LP_IN_CAP - extract_ckb,
+        extract_ckb,
         0,
         50,
     );
@@ -1098,7 +1106,7 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned + total_return,
+        LP_IN_CAP - extract_ckb + total_return,
         0,
         fee_ckb,
         51,
@@ -1107,7 +1115,7 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
 
     let lp_input = create_typed_lp_cell(
         &mut context,
-        LP_IN_CAP - principal_returned,
+        LP_IN_CAP - extract_ckb,
         owner_lock,
         lp_type.clone(),
         &input_lp,
@@ -1123,6 +1131,7 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
         contribution_id: [0x55; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb,
         price_x64: 1,
     });
 
@@ -1130,7 +1139,7 @@ fn lp_settle_fee_exceeds_rate_with_cap_flag_fails() {
         vec![lp_input, operator_funding],
         vec![
             TxOutputSpec {
-                capacity: LP_IN_CAP - principal_returned + total_return,
+                capacity: LP_IN_CAP - extract_ckb + total_return,
                 lock: operator_lock.clone(),
                 type_script: Some(lp_type),
                 data: Bytes::from(output_lp.encode()),
@@ -1168,7 +1177,9 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
-    let principal_returned = 1_000_000_000u64;
+    let principal_returned = 200_000_000u64;
+    let traded_ckb = 1_000_000_000u64;
+    let extract_ckb = principal_returned + traded_ckb;
     let fee_ckb = 1u64;
     let total_return = principal_returned + fee_ckb;
     let flags = LPPolicyFlags::empty().with(LPPolicyFlag::EnforceMinFee);
@@ -1177,8 +1188,8 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned,
-        principal_returned,
+        LP_IN_CAP - extract_ckb,
+        extract_ckb,
         0,
         54,
     );
@@ -1188,7 +1199,7 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned + total_return,
+        LP_IN_CAP - extract_ckb + total_return,
         0,
         fee_ckb,
         55,
@@ -1197,7 +1208,7 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
 
     let lp_input = create_typed_lp_cell(
         &mut context,
-        LP_IN_CAP - principal_returned,
+        LP_IN_CAP - extract_ckb,
         owner_lock,
         lp_type.clone(),
         &input_lp,
@@ -1213,6 +1224,7 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
         contribution_id: [0x58; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb,
         price_x64: 1,
     });
 
@@ -1220,7 +1232,7 @@ fn lp_settle_fee_below_rate_with_min_flag_fails() {
         vec![lp_input, operator_funding],
         vec![
             TxOutputSpec {
-                capacity: LP_IN_CAP - principal_returned + total_return,
+                capacity: LP_IN_CAP - extract_ckb + total_return,
                 lock: operator_lock.clone(),
                 type_script: Some(lp_type),
                 data: Bytes::from(output_lp.encode()),
@@ -1304,6 +1316,7 @@ fn lp_settle_zero_price_fails() {
         contribution_id: [0x66; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb: 0,
         price_x64: 0,
     });
 
@@ -1394,6 +1407,7 @@ fn lp_settle_price_outside_safe_interval_fails() {
         contribution_id: [0x67; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb: 0,
         price_x64: 999,
     });
 
@@ -1484,6 +1498,7 @@ fn lp_settle_price_at_safe_interval_boundary_passes() {
         contribution_id: [0x68; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb: 0,
         price_x64: 1_000,
     });
 
@@ -1529,7 +1544,9 @@ fn lp_settle_fee_at_max_policy_boundary_passes() {
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
-    let principal_returned = 1_000_000_000u64;
+    let principal_returned = 200_000_000u64;
+    let traded_ckb = 1_000_000_000u64;
+    let extract_ckb = principal_returned + traded_ckb;
     let fee_ckb = 50_000_000u64;
     let total_return = principal_returned + fee_ckb;
     let flags = LPPolicyFlags::empty().with(LPPolicyFlag::EnforceMaxFee);
@@ -1538,8 +1555,8 @@ fn lp_settle_fee_at_max_policy_boundary_passes() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned,
-        principal_returned,
+        LP_IN_CAP - extract_ckb,
+        extract_ckb,
         0,
         56,
     );
@@ -1549,7 +1566,7 @@ fn lp_settle_fee_at_max_policy_boundary_passes() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned + total_return,
+        LP_IN_CAP - extract_ckb + total_return,
         0,
         fee_ckb,
         57,
@@ -1558,7 +1575,7 @@ fn lp_settle_fee_at_max_policy_boundary_passes() {
 
     let lp_input = create_typed_lp_cell(
         &mut context,
-        LP_IN_CAP - principal_returned,
+        LP_IN_CAP - extract_ckb,
         owner_lock,
         lp_type.clone(),
         &input_lp,
@@ -1574,6 +1591,7 @@ fn lp_settle_fee_at_max_policy_boundary_passes() {
         contribution_id: [0x59; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb,
         price_x64: 1,
     });
 
@@ -1581,7 +1599,7 @@ fn lp_settle_fee_at_max_policy_boundary_passes() {
         vec![lp_input, operator_funding],
         vec![
             TxOutputSpec {
-                capacity: LP_IN_CAP - principal_returned + total_return,
+                capacity: LP_IN_CAP - extract_ckb + total_return,
                 lock: operator_lock.clone(),
                 type_script: Some(lp_type),
                 data: Bytes::from(output_lp.encode()),
@@ -1619,7 +1637,9 @@ fn lp_settle_fee_at_min_policy_boundary_passes() {
 
     let owner_hash = script_hash_array(&owner_lock);
     let operator_hash = script_hash_array(&operator_lock);
-    let principal_returned = 1_000_000_000u64;
+    let principal_returned = 200_000_000u64;
+    let traded_ckb = 1_000_000_000u64;
+    let extract_ckb = principal_returned + traded_ckb;
     let fee_ckb = 50_000_000u64;
     let total_return = principal_returned + fee_ckb;
     let flags = LPPolicyFlags::empty().with(LPPolicyFlag::EnforceMinFee);
@@ -1628,8 +1648,8 @@ fn lp_settle_fee_at_min_policy_boundary_passes() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned,
-        principal_returned,
+        LP_IN_CAP - extract_ckb,
+        extract_ckb,
         0,
         58,
     );
@@ -1639,7 +1659,7 @@ fn lp_settle_fee_at_min_policy_boundary_passes() {
         pool_id,
         owner_hash,
         operator_hash,
-        LP_IN_CAP - principal_returned + total_return,
+        LP_IN_CAP - extract_ckb + total_return,
         0,
         fee_ckb,
         59,
@@ -1648,7 +1668,7 @@ fn lp_settle_fee_at_min_policy_boundary_passes() {
 
     let lp_input = create_typed_lp_cell(
         &mut context,
-        LP_IN_CAP - principal_returned,
+        LP_IN_CAP - extract_ckb,
         owner_lock,
         lp_type.clone(),
         &input_lp,
@@ -1664,6 +1684,7 @@ fn lp_settle_fee_at_min_policy_boundary_passes() {
         contribution_id: [0x5A; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb,
         price_x64: 1,
     });
 
@@ -1671,7 +1692,7 @@ fn lp_settle_fee_at_min_policy_boundary_passes() {
         vec![lp_input, operator_funding],
         vec![
             TxOutputSpec {
-                capacity: LP_IN_CAP - principal_returned + total_return,
+                capacity: LP_IN_CAP - extract_ckb + total_return,
                 lock: operator_lock.clone(),
                 type_script: Some(lp_type),
                 data: Bytes::from(output_lp.encode()),
@@ -1750,6 +1771,7 @@ fn lp_settle_zero_price_passes_without_require_price_flag() {
         contribution_id: [0x6B; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb: 0,
         price_x64: 0,
     });
 
@@ -2000,6 +2022,7 @@ fn lp_settle_zero_contribution_id_fails() {
         contribution_id: [0u8; 32],
         principal_returned,
         fee_ckb,
+        traded_ckb: 0,
         price_x64: 1,
     });
 

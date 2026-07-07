@@ -40,6 +40,7 @@ table SettleChannelInsertWitness {
     contribution_id:    Byte32,
     principal_returned: Uint64,
     fee_ckb:            Uint64,
+    traded_ckb:         Uint64,
     price_x64:          Uint128,
 }
 

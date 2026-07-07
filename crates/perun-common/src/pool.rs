@@ -45,7 +45,7 @@ const _: [(); 4] = [(); MAGIC_LP_CELL.len()];
 const WITNESS_LEN_LP_DEPOSIT: usize = 1;
 const WITNESS_LEN_LP_WITHDRAW: usize = 9;
 const WITNESS_LEN_FUND_CHANNEL_EXTRACT: usize = 73;
-const WITNESS_LEN_SETTLE_CHANNEL_INSERT: usize = 97;
+const WITNESS_LEN_SETTLE_CHANNEL_INSERT: usize = 105;
 const WITNESS_LEN_CANCEL_RESERVATION: usize = 65;
 const WITNESS_LEN_ROTATE_OPERATOR: usize = 33;
 
@@ -54,7 +54,8 @@ const WITNESS_OFFSET_WITHDRAW_CKB_OUT: usize = 1;
 const WITNESS_OFFSET_CONTRIBUTION_ID: usize = WITNESS_OFFSET_CHANNEL_ID + 32;
 const WITNESS_OFFSET_U64_A: usize = WITNESS_OFFSET_CONTRIBUTION_ID + 32;
 const WITNESS_OFFSET_U64_B: usize = WITNESS_OFFSET_U64_A + 8;
-const WITNESS_OFFSET_U128: usize = WITNESS_OFFSET_U64_B + 8;
+const WITNESS_OFFSET_U64_C: usize = WITNESS_OFFSET_U64_B + 8;
+const WITNESS_OFFSET_U128: usize = WITNESS_OFFSET_U64_C + 8;
 const WITNESS_OFFSET_ROTATE_OPERATOR: usize = 1;
 
 const WITNESS_END_CHANNEL_ID: usize = WITNESS_OFFSET_CHANNEL_ID + 32;
@@ -62,6 +63,7 @@ const WITNESS_END_WITHDRAW_CKB_OUT: usize = WITNESS_OFFSET_WITHDRAW_CKB_OUT + 8;
 const WITNESS_END_CONTRIBUTION_ID: usize = WITNESS_OFFSET_CONTRIBUTION_ID + 32;
 const WITNESS_END_U64_A: usize = WITNESS_OFFSET_U64_A + 8;
 const WITNESS_END_U64_B: usize = WITNESS_OFFSET_U64_B + 8;
+const WITNESS_END_U64_C: usize = WITNESS_OFFSET_U64_C + 8;
 const WITNESS_END_U128: usize = WITNESS_OFFSET_U128 + 16;
 const WITNESS_END_ROTATE_OPERATOR: usize = WITNESS_OFFSET_ROTATE_OPERATOR + 32;
 
@@ -270,6 +272,7 @@ pub enum PoolWitness {
         contribution_id: [u8; 32],
         principal_returned: u64,
         fee_ckb: u64,
+        traded_ckb: u64,
         price_x64: u128,
     },
     CancelReservation {
@@ -352,6 +355,11 @@ impl PoolWitness {
                         .try_into()
                         .unwrap(),
                 );
+                let traded_ckb = u64::from_le_bytes(
+                    data[WITNESS_OFFSET_U64_C..WITNESS_END_U64_C]
+                        .try_into()
+                        .unwrap(),
+                );
                 let price_x64 = u128::from_le_bytes(
                     data[WITNESS_OFFSET_U128..WITNESS_END_U128]
                         .try_into()
@@ -362,6 +370,7 @@ impl PoolWitness {
                     contribution_id,
                     principal_returned,
                     fee_ckb,
+                    traded_ckb,
                     price_x64,
                 })
             }
@@ -421,6 +430,7 @@ impl PoolWitness {
                 contribution_id,
                 principal_returned,
                 fee_ckb,
+                traded_ckb,
                 price_x64,
             } => {
                 b.push(op::SETTLE_CHANNEL_INSERT);
@@ -428,6 +438,7 @@ impl PoolWitness {
                 b.extend_from_slice(contribution_id);
                 b.extend_from_slice(&principal_returned.to_le_bytes());
                 b.extend_from_slice(&fee_ckb.to_le_bytes());
+                b.extend_from_slice(&traded_ckb.to_le_bytes());
                 b.extend_from_slice(&price_x64.to_le_bytes());
             }
             Self::CancelReservation {
@@ -456,7 +467,7 @@ impl PoolWitness {
             Self::LPWithdraw { ckb_out } => lp_types::PoolWitness::new_builder()
                 .set(
                     lp_types::LPWithdrawWitness::new_builder()
-                        .ckb_out((*ckb_out).to_le_bytes().into())
+                        .ckb_out((*ckb_out).to_le_bytes())
                         .build(),
                 )
                 .build(),
@@ -467,9 +478,9 @@ impl PoolWitness {
             } => lp_types::PoolWitness::new_builder()
                 .set(
                     lp_types::FundChannelExtractWitness::new_builder()
-                        .channel_id((*channel_id).into())
-                        .contribution_id((*contribution_id).into())
-                        .extract_ckb((*extract_ckb).to_le_bytes().into())
+                        .channel_id(*channel_id)
+                        .contribution_id(*contribution_id)
+                        .extract_ckb((*extract_ckb).to_le_bytes())
                         .build(),
                 )
                 .build(),
@@ -478,15 +489,17 @@ impl PoolWitness {
                 contribution_id,
                 principal_returned,
                 fee_ckb,
+                traded_ckb,
                 price_x64,
             } => lp_types::PoolWitness::new_builder()
                 .set(
                     lp_types::SettleChannelInsertWitness::new_builder()
-                        .channel_id((*channel_id).into())
-                        .contribution_id((*contribution_id).into())
-                        .principal_returned((*principal_returned).to_le_bytes().into())
-                        .fee_ckb((*fee_ckb).to_le_bytes().into())
-                        .price_x64((*price_x64).to_le_bytes().into())
+                        .channel_id(*channel_id)
+                        .contribution_id(*contribution_id)
+                        .principal_returned((*principal_returned).to_le_bytes())
+                        .fee_ckb((*fee_ckb).to_le_bytes())
+                        .traded_ckb((*traded_ckb).to_le_bytes())
+                        .price_x64((*price_x64).to_le_bytes())
                         .build(),
                 )
                 .build(),
@@ -496,8 +509,8 @@ impl PoolWitness {
             } => lp_types::PoolWitness::new_builder()
                 .set(
                     lp_types::CancelReservationWitness::new_builder()
-                        .channel_id((*channel_id).into())
-                        .contribution_id((*contribution_id).into())
+                        .channel_id(*channel_id)
+                        .contribution_id(*contribution_id)
                         .build(),
                 )
                 .build(),
@@ -506,7 +519,7 @@ impl PoolWitness {
             } => lp_types::PoolWitness::new_builder()
                 .set(
                     lp_types::RotateOperatorWitness::new_builder()
-                        .new_operator_lock_hash((*new_operator_lock_hash).into())
+                        .new_operator_lock_hash(*new_operator_lock_hash)
                         .build(),
                 )
                 .build(),
@@ -539,12 +552,14 @@ impl PoolWitness {
                 let contribution_id: [u8; 32] = w.contribution_id().into();
                 let principal_returned: [u8; 8] = w.principal_returned().into();
                 let fee_ckb: [u8; 8] = w.fee_ckb().into();
+                let traded_ckb: [u8; 8] = w.traded_ckb().into();
                 let price_x64: [u8; 16] = w.price_x64().into();
                 Ok(Self::SettleChannelInsert {
                     channel_id,
                     contribution_id,
                     principal_returned: u64::from_le_bytes(principal_returned),
                     fee_ckb: u64::from_le_bytes(fee_ckb),
+                    traded_ckb: u64::from_le_bytes(traded_ckb),
                     price_x64: u128::from_le_bytes(price_x64),
                 })
             }
@@ -672,6 +687,7 @@ mod tests {
                 contribution_id: [7u8; 32],
                 principal_returned: 123,
                 fee_ckb: 9,
+                traded_ckb: 3000,
                 price_x64: 99,
             },
             PoolWitness::CancelReservation {

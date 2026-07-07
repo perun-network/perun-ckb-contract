@@ -230,6 +230,7 @@ fn lp_witness_roundtrip_in_tests_crate() {
             contribution_id: [0x44; 32],
             principal_returned: 500,
             fee_ckb: 20,
+            traded_ckb: 4_000,
             price_x64: 1_000,
         },
         PoolWitness::CancelReservation {
