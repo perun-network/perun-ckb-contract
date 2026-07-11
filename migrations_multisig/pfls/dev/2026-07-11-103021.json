@@ -1,0 +1,13 @@
+{
+  "cell_recipes": [
+    {
+      "name": "pfls",
+      "tx_hash": "0xd22d1b65d312461362519b415d7b8414732bc5eda27e832ac6879e9beb302712",
+      "index": 0,
+      "occupied_capacity": 4299000000000,
+      "data_hash": "0x0635c98ceaf348fd1d7da063a44b0878f2b11612f6375beb51e3d2b11708f99e",
+      "type_id": "0xdcd9e4db453c871e5d4c6bba070b0636193004ec0a8df5d3ebe594971cf8a134"
+    }
+  ],
+  "dep_group_recipes": []
+}

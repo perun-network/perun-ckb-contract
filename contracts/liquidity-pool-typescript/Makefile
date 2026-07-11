@@ -4,7 +4,7 @@ cur_dir = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 
 TOP := $(cur_dir)
 CUSTOM_RUSTFLAGS := -C debug-assertions
-FULL_RUSTFLAGS := -C target-feature=+zba,+zbb,+zbc,+zbs,-a $(CUSTOM_RUSTFLAGS)
+FULL_RUSTFLAGS := -C target-feature=+zba,+zbb,+zbc,+zbs -C passes=lower-atomic $(CUSTOM_RUSTFLAGS)
 CARGO_ARGS :=
 MODE := release
 CLANG := $(shell $(TOP)/scripts/find_clang)

@@ -1,0 +1,13 @@
+{
+  "cell_recipes": [
+    {
+      "name": "pcts",
+      "tx_hash": "0x2aa3b02c9a6963f9ca368bd605037ddabd34e58a0660d2d1390781f196c4ad11",
+      "index": 0,
+      "occupied_capacity": 24199000000000,
+      "data_hash": "0x9dfa6952dedece932f5e774a7c66c6d189fc6246cd83d7b0cf7e33c2eac05176",
+      "type_id": "0x7b86dc57ea4830f2265b64f3aab806bc3c84e9013bd73a37d89c9e4aa743c5c1"
+    }
+  ],
+  "dep_group_recipes": []
+}

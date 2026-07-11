@@ -1,0 +1,13 @@
+{
+  "cell_recipes": [
+    {
+      "name": "vcts",
+      "tx_hash": "0xcbba0dbddabfcb0764f486ee058d879ef2d526f5dcd8eb12b35d31e8121fdb07",
+      "index": 0,
+      "occupied_capacity": 20594200000000,
+      "data_hash": "0xaf698f20af7eec0a6af08c57c50ee46a640ad65b6d02fb13d524df7f51bf0cf4",
+      "type_id": "0x6c76e9a8377bac486b52d3e6fea3f91cc939836b9c4901aded7efb29f320c023"
+    }
+  ],
+  "dep_group_recipes": []
+}
