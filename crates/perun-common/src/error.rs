@@ -165,6 +165,7 @@ pub enum Error {
     LPBadOperatorRotation = -41,
     LPChallengeStateInvalid = -42,
     LPRecoveryStateInvalid = -43,
+    LPMissingBeneficiary = -44,
 }
 impl From<Error> for i8 {
     #[inline]

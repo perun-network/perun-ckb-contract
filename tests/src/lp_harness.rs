@@ -201,6 +201,10 @@ pub fn build_lp_type(
         .expect("build lp typescript")
 }
 
+/// Fixed non-zero beneficiary for test cells: creation rejects a zero
+/// beneficiary, and immutability tests need a stable value to preserve.
+pub const TEST_ETH_BENEFICIARY: [u8; 20] = [0xBE; 20];
+
 pub fn make_lp_cell(
     pool_id: [u8; 32],
     owner_lock_hash: [u8; 32],
@@ -220,6 +224,7 @@ pub fn make_lp_cell(
         policy: lp_policy(),
         nonce,
         active: true,
+        eth_beneficiary: TEST_ETH_BENEFICIARY,
     }
 }
 

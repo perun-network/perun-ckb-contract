@@ -2346,6 +2346,152 @@ fn lp_init_rejects_zero_fee_policy() {
 }
 
 #[test]
+fn lp_init_rejects_zero_eth_beneficiary() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xB7; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+
+    let mut output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 0);
+    output_lp.eth_beneficiary = [0u8; 20];
+
+    let funding_input = create_auth_cell(&mut context, LP_IN_CAP, owner_lock.clone());
+    let witness = witness_from_pool(PoolWitness::LPDeposit);
+
+    let tx = build_tx_from_specs(
+        vec![funding_input],
+        vec![TxOutputSpec {
+            capacity: LP_IN_CAP,
+            lock: owner_lock,
+            type_script: Some(lp_type),
+            data: Bytes::from(output_lp.encode()),
+        }],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "init deposit must reject a zero eth_beneficiary"
+    );
+}
+
+#[test]
+fn lp_init_rejects_missing_owner_signature() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xB8; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+
+    let output_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 0);
+
+    // Funded exclusively by the operator: no input carries the owner's lock,
+    // so the owner never signed off on the cell (or its beneficiary).
+    let funding_input = create_auth_cell(&mut context, LP_IN_CAP, operator_lock.clone());
+    let witness = witness_from_pool(PoolWitness::LPDeposit);
+
+    let tx = build_tx_from_specs(
+        vec![funding_input],
+        vec![TxOutputSpec {
+            capacity: LP_IN_CAP,
+            lock: owner_lock,
+            type_script: Some(lp_type),
+            data: Bytes::from(output_lp.encode()),
+        }],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "init deposit must reject a creation tx the owner did not sign"
+    );
+}
+
+#[test]
+fn lp_deposit_beneficiary_mutation_fails() {
+    let mut context = Context::default();
+    let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);
+    let (always_success_out_point, always_success_dep) = deploy_always_success(&mut context);
+
+    let pool_id = [0xB9; 32];
+    let owner_lock = build_lock(&mut context, &always_success_out_point, 1);
+    let operator_lock = build_lock(&mut context, &always_success_out_point, 2);
+    let lp_type = build_lp_type(&mut context, &lp_ts_out_point, pool_id);
+
+    let owner_hash = script_hash_array(&owner_lock);
+    let operator_hash = script_hash_array(&operator_lock);
+
+    let input_lp = make_lp_cell(pool_id, owner_hash, operator_hash, LP_IN_CAP, 0, 0, 30);
+    let mut output_lp = make_lp_cell(
+        pool_id,
+        owner_hash,
+        operator_hash,
+        LP_IN_CAP + TOPUP_CAP_DELTA,
+        0,
+        0,
+        31,
+    );
+    output_lp.eth_beneficiary = [0xEE; 20];
+
+    let lp_input = create_typed_lp_cell(
+        &mut context,
+        LP_IN_CAP,
+        owner_lock.clone(),
+        lp_type.clone(),
+        &input_lp,
+    );
+    let owner_auth = create_auth_cell(&mut context, AUTH_INPUT_CAP, owner_lock.clone());
+
+    let witness = witness_from_pool(PoolWitness::LPDeposit);
+
+    let tx = build_tx_from_specs(
+        vec![lp_input, owner_auth],
+        vec![
+            TxOutputSpec {
+                capacity: LP_IN_CAP + TOPUP_CAP_DELTA,
+                lock: owner_lock.clone(),
+                type_script: Some(lp_type),
+                data: Bytes::from(output_lp.encode()),
+            },
+            TxOutputSpec {
+                capacity: AUTH_INPUT_CAP - TOPUP_CAP_DELTA,
+                lock: owner_lock,
+                type_script: None,
+                data: Bytes::new(),
+            },
+        ],
+        vec![lp_ts_dep, always_success_dep],
+        witness,
+    );
+
+    let tx = context.complete_tx(tx);
+    let result = verify_and_dump_failed_tx(&context, &tx, MAX_CYCLES);
+    assert!(
+        result.is_err(),
+        "deposit must fail when the output mutates eth_beneficiary"
+    );
+}
+
+#[test]
 fn lp_init_rejects_zero_policy_version() {
     let mut context = Context::default();
     let (lp_ts_out_point, lp_ts_dep) = deploy_lp_typescript(&mut context);

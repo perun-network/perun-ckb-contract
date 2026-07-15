@@ -358,6 +358,7 @@ fn require_immutable_except_operator(inp: &LPCell, out: &LPCell) -> Result<(), E
         || inp.owner_lock_hash != out.owner_lock_hash
         || !same_policy(inp, out)
         || inp.active != out.active
+        || inp.eth_beneficiary != out.eth_beneficiary
     {
         return Err(Error::LPWitnessMismatch);
     }
@@ -399,6 +400,14 @@ fn check_lp_deposit(ctx: &GroupContext) -> Result<(), Error> {
         {
             return Err(Error::PoolReserveMismatch);
         }
+        // The beneficiary receives ETH-pool shares when this cell's traded
+        // CKB is converted, so it must be a real address and must be the
+        // owner's own designation: creation requires the owner's signature,
+        // and the field is immutable afterwards.
+        if out.eth_beneficiary == [0u8; 20] {
+            return Err(Error::LPMissingBeneficiary);
+        }
+        verify_owner_signing(&out.owner_lock_hash)?;
         validate_policy_fields(&out.policy)?;
         return Ok(());
     }

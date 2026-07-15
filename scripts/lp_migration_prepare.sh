@@ -10,6 +10,7 @@ Usage:
     --pool-id 0x<64hex> \
     --owner-lock-hash 0x<64hex> \
     --operator-lock-hash 0x<64hex> \
+    [--eth-beneficiary 0x<40hex>] \
     [--available-ckb 20000000000] \
     [--reserved-ckb 0] \
     [--fee-rate-bps 30] \
@@ -34,6 +35,10 @@ EOF
 POOL_ID=""
 OWNER_LOCK_HASH=""
 OPERATOR_LOCK_HASH=""
+# ETH address credited with ETH-pool shares when this cell's traded CKB is
+# converted. The verifier rejects creation with a zero beneficiary; consumers
+# fall back to the devnet owner's (bob's) ETH address when this is empty.
+ETH_BENEFICIARY=""
 AVAILABLE_CKB="20000000000"
 RESERVED_CKB="0"
 FEE_RATE_BPS="30"
@@ -53,6 +58,8 @@ while [[ $# -gt 0 ]]; do
       OWNER_LOCK_HASH="$2"; shift 2 ;;
     --operator-lock-hash)
       OPERATOR_LOCK_HASH="$2"; shift 2 ;;
+    --eth-beneficiary)
+      ETH_BENEFICIARY="$2"; shift 2 ;;
     --available-ckb)
       AVAILABLE_CKB="$2"; shift 2 ;;
     --reserved-ckb)
@@ -112,9 +119,22 @@ if [[ "$NETWORK" != "dev" && "$NETWORK" != "release" ]]; then
   exit 1
 fi
 
+require_hex20() {
+  local v="$1"
+  local n="$2"
+  local t="${v#0x}"
+  if [[ ! "$t" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "$n must be a 20-byte hex ETH address (0x + 40 hex chars)" >&2
+    exit 1
+  fi
+}
+
 require_hex32 "$POOL_ID" "pool-id"
 require_hex32 "$OWNER_LOCK_HASH" "owner-lock-hash"
 require_hex32 "$OPERATOR_LOCK_HASH" "operator-lock-hash"
+if [[ -n "$ETH_BENEFICIARY" ]]; then
+  require_hex20 "$ETH_BENEFICIARY" "eth-beneficiary"
+fi
 require_u64 "$AVAILABLE_CKB" "available-ckb"
 require_u64 "$RESERVED_CKB" "reserved-ckb"
 require_u64 "$FEE_RATE_BPS" "fee-rate-bps"
@@ -157,6 +177,7 @@ cat > "$OUT_FILE" <<EOF
   "pool_id": "${POOL_ID#0x}",
   "owner_lock_hash": "${OWNER_LOCK_HASH#0x}",
   "operator_lock_hash": "${OPERATOR_LOCK_HASH#0x}",
+  "eth_beneficiary": "${ETH_BENEFICIARY#0x}",
   "available_ckb": $AVAILABLE_CKB,
   "reserved_ckb": $RESERVED_CKB,
   "cumulative_fees_earned_ckb": 0,

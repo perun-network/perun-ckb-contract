@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 pub const MAGIC_LP_CELL: &[u8; 4] = b"LPLC";
 
-pub const LP_CELL_SIZE: usize = 185;
+pub const LP_CELL_SIZE: usize = 205;
 const LP_OFFSET_POOL_ID: usize = 4;
 const LP_OFFSET_OWNER_LOCK_HASH: usize = LP_OFFSET_POOL_ID + 32;
 const LP_OFFSET_OPERATOR_LOCK_HASH: usize = LP_OFFSET_OWNER_LOCK_HASH + 32;
@@ -23,6 +23,7 @@ const LP_OFFSET_SAFE_PRICE_MIN_X64: usize = LP_OFFSET_POLICY_VERSION + 4;
 const LP_OFFSET_SAFE_PRICE_MAX_X64: usize = LP_OFFSET_SAFE_PRICE_MIN_X64 + 16;
 const LP_OFFSET_NONCE: usize = LP_OFFSET_SAFE_PRICE_MAX_X64 + 16;
 const LP_OFFSET_ACTIVE: usize = LP_OFFSET_NONCE + 8;
+const LP_OFFSET_ETH_BENEFICIARY: usize = LP_OFFSET_ACTIVE + 1;
 
 const LP_END_POOL_ID: usize = LP_OFFSET_POOL_ID + 32;
 const LP_END_OWNER_LOCK_HASH: usize = LP_OFFSET_OWNER_LOCK_HASH + 32;
@@ -38,8 +39,9 @@ const LP_END_SAFE_PRICE_MIN_X64: usize = LP_OFFSET_SAFE_PRICE_MIN_X64 + 16;
 const LP_END_SAFE_PRICE_MAX_X64: usize = LP_OFFSET_SAFE_PRICE_MAX_X64 + 16;
 const LP_END_NONCE: usize = LP_OFFSET_NONCE + 8;
 const LP_END_ACTIVE: usize = LP_OFFSET_ACTIVE + 1;
+const LP_END_ETH_BENEFICIARY: usize = LP_OFFSET_ETH_BENEFICIARY + 20;
 
-const _: [(); LP_CELL_SIZE] = [(); LP_END_ACTIVE];
+const _: [(); LP_CELL_SIZE] = [(); LP_END_ETH_BENEFICIARY];
 const _: [(); 4] = [(); MAGIC_LP_CELL.len()];
 
 const WITNESS_LEN_LP_DEPOSIT: usize = 1;
@@ -146,6 +148,9 @@ pub struct LPCell {
     pub policy: LPPolicy,
     pub nonce: u64,
     pub active: bool,
+    /// ETH address that receives ETH-pool shares when this cell's traded CKB
+    /// is converted (owner-designated at creation, immutable, never zero).
+    pub eth_beneficiary: [u8; 20],
 }
 
 impl LPCell {
@@ -166,6 +171,7 @@ impl LPCell {
         b.extend_from_slice(&self.policy.safe_price_max_x64.to_le_bytes());
         b.extend_from_slice(&self.nonce.to_le_bytes());
         b.push(if self.active { 1 } else { 0 });
+        b.extend_from_slice(&self.eth_beneficiary);
         b
     }
 
@@ -231,6 +237,9 @@ impl LPCell {
         );
         let nonce = u64::from_le_bytes(data[LP_OFFSET_NONCE..LP_END_NONCE].try_into().unwrap());
         let active = data[LP_OFFSET_ACTIVE] != 0;
+        let eth_beneficiary: [u8; 20] = data[LP_OFFSET_ETH_BENEFICIARY..LP_END_ETH_BENEFICIARY]
+            .try_into()
+            .unwrap();
 
         Ok(Self {
             pool_id,
@@ -249,6 +258,7 @@ impl LPCell {
             },
             nonce,
             active,
+            eth_beneficiary,
         })
     }
 
@@ -604,6 +614,7 @@ mod tests {
             },
             nonce: 9,
             active: true,
+            eth_beneficiary: [4u8; 20],
         }
     }
 
@@ -627,6 +638,7 @@ mod tests {
         assert_eq!(dec.policy.safe_price_max_x64, 1_000);
         assert_eq!(dec.nonce, 9);
         assert!(dec.active);
+        assert_eq!(dec.eth_beneficiary, [4u8; 20]);
     }
 
     #[test]

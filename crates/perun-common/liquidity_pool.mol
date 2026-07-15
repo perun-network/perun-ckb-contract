@@ -1,6 +1,7 @@
 import blockchain;
 
 array PoolId [byte; 32];
+array Byte20 [byte; 20];
 
 table LPPolicy {
     max_trading_volume: Uint64,
@@ -21,6 +22,7 @@ table LPCell {
     policy:                     LPPolicy,
     nonce:                      Uint64,
     active:                     byte,
+    eth_beneficiary:            Byte20,
 }
 
 table LPDepositWitness {}
