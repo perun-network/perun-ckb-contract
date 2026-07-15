@@ -4,11 +4,9 @@ use ckb_std::error::SysError;
 use k256::ecdsa::Error as SigError;
 use molecule::error::VerificationError;
 
-/// Error
 #[derive(Debug)]
 #[repr(i8)]
 pub enum Error {
-    // System Errors
     IndexOutOfBound = 1,
     ItemMissing,
     LengthNotEnough,
@@ -20,18 +18,13 @@ pub enum Error {
     MaxFdsCreated,
     UnexpectedSysError,
     TypeIDError,
-    // Verification Errors
     InvalidDisputeMode,
     TotalSizeNotMatch,
     HeaderIsBroken,
     UnknownItem,
     OffsetsNotMatch,
     FieldCountNotMatch,
-
-    // Signature Errors
     SignatureVerificationError,
-
-    // Add customized errors here...
     NoArgs,
     NoWitness,
     ChannelIdMismatch,
@@ -129,6 +122,50 @@ pub enum Error {
     InvalidVCRentPayoutCell,
     LedgerChannelHasLockedFunds,
     InvalidDummyEntry,
+    PoolLSNoArgs = -1,
+    PoolTypescriptNotFound = -2,
+    PoolInvalidCellMagic = -3,
+    PoolStateTooShort = -4,
+    LPPositionTooShort = -5,
+    PoolStateInputMissing = -6,
+    PoolStateOutputMissing = -7,
+    PoolIdMismatch = -8,
+    PoolReserveMismatch = -9,
+    LPArithmetic = -10,
+    SlippageExceeded = -11,
+    OperatorNotSigning = -12,
+    LPPositionInputMissing = -13,
+    LPPositionPoolIdMismatch = -14,
+    LPAmountZero = -15,
+    LPSupplyZero = -16,
+    PoolWitnessMissing = -17,
+    PoolWitnessInvalid = -18,
+    MultiplePoolStateCells = -19,
+    PoolCKBReserveInconsistent = -20,
+    PoolCKBAmountZero = -21,
+    PoolAlreadyInitialised = -22,
+    PoolIdInitMismatch = -23,
+    ChannelAlreadyReserved = -24,
+    ChannelNotReserved = -25,
+    ReservationExpired = -26,
+    InsufficientCKBLiquidity = -27,
+    InsufficientETHLiquidity = -28,
+    InvalidReservationState = -29,
+    InvalidSettlement = -30,
+    InvalidSwapOutput = -31,
+    InvalidFeeAccounting = -32,
+    NoActivePosition = -33,
+    NoFeesToClaim = -34,
+    InsufficientLiquidityForSwap = -35,
+    LPCellInputMissing = -36,
+    LPCellOutputMissing = -37,
+    MultipleLPCells = -38,
+    LPPolicyViolation = -39,
+    LPWitnessMismatch = -40,
+    LPBadOperatorRotation = -41,
+    LPChallengeStateInvalid = -42,
+    LPRecoveryStateInvalid = -43,
+    LPMissingBeneficiary = -44,
 }
 impl From<Error> for i8 {
     #[inline]

@@ -53,7 +53,11 @@ build:
 		done; \
 	else \
 		$(MAKE) -e -C contracts/$(CONTRACT) build; \
-		cargo build -p $(CONTRACT)-sim; \
+		if cargo metadata --no-deps --format-version 1 | grep -q '"name":"$(CONTRACT)-sim"'; then \
+			cargo build -p $(CONTRACT)-sim; \
+		else \
+			echo "Skipping simulator build: package $(CONTRACT)-sim not found"; \
+		fi; \
 	fi;
 
 # Run a single make task for a specific contract. For example:
@@ -149,4 +153,11 @@ CHECKSUM_FILE := build/checksums-$(MODE).txt
 checksum: build
 	shasum -a 256 build/$(MODE)/* > $(CHECKSUM_FILE)
 
-.PHONY: build test check clippy fmt cargo clean prepare checksum
+verify-lp-deployment:
+	@test -f deployment/dev/deployment_lp.toml || (echo "missing deployment/dev/deployment_lp.toml" && exit 1)
+	@test -f deployment/release/deployment_lp.toml || (echo "missing deployment/release/deployment_lp.toml" && exit 1)
+	@test -f scripts/lp_migration_prepare.sh || (echo "missing scripts/lp_migration_prepare.sh" && exit 1)
+	@test -d migrations_lp || (echo "missing migrations_lp directory" && exit 1)
+	@echo "LP deployment manifests and migration helper are present"
+
+.PHONY: build test check clippy fmt cargo clean prepare checksum verify-lp-deployment

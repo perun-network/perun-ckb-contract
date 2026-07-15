@@ -275,7 +275,7 @@ pub fn update_virtual_channel<'a>(
             .build();
         let ckb_dist_union = AnyBalancesUnion::CKByteDistribution(updated_ckb_dist);
 
-        let mut sudt_allocation_builder = SUDTAllocation::new_builder();
+        let sudt_allocation_builder = SUDTAllocation::new_builder();
         let mut allocation_builder = Allocation::new_builder();
         allocation_builder = allocation_builder.push(AnyBalances::new_builder().set(ckb_dist_union).build());
 

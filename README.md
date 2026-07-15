@@ -76,6 +76,49 @@ source ./setup_env.sh test && make test
 ```
 or run them using the IDE
 
+Notes:
+- `setup_env.sh` uses target-scoped build variables for the RISC-V target to avoid contaminating host (x86_64) test builds.
+- You can still run build and test in one shell, but switching modes (`build` -> `test`) is the recommended flow.
+
+## LP Deployment And Migration
+
+LP deployment manifests are provided separately for dev and release:
+
+- `deployment/dev/deployment_lp.toml`
+- `deployment/release/deployment_lp.toml`
+
+Run a quick manifest/tooling check:
+
+``` sh
+make verify-lp-deployment
+```
+
+Prepare a fresh-deposit LP cell migration spec:
+
+``` sh
+bash scripts/lp_migration_prepare.sh \
+  --pool-id 0x<64hex> \
+  --owner-lock-hash 0x<64hex> \
+  --operator-lock-hash 0x<64hex> \
+  --policy-flags 0 \
+  --policy-version 1 \
+  --network dev \
+  --out migrations_lp/lp_cell_spec.json \
+  --monitoring-checklist-out migrations_lp/lp_monitoring_checklist.md
+```
+
+The helper prints a minimal command skeleton for deployment and LP cell bootstrap transactions.
+It also writes a rollout checklist that you can use during staged rollout to track signer-auth failures,
+policy violations, reserve conservation errors, and fee attribution drift.
+
+Recommended staged rollout sequence:
+
+1. Run `make verify-lp-deployment`.
+2. Generate migration spec and checklist with `scripts/lp_migration_prepare.sh`.
+3. Deploy LP scripts using `deployment/<network>/deployment_lp.toml`.
+4. Execute one canary LP funding tx and one canary settlement tx.
+5. Gate wider rollout on checklist pass with no unexplained signer/policy/conservation failures.
+
 ## perun-common
 Additionally, to the available contracts we extracted common functionality into
 its own `perun-common` crate which gives some additional helpers and
@@ -94,3 +137,44 @@ sudo ln -s /usr/riscv64-linux-gnu/include/gnu/stubs-lp64d.h /usr/riscv64-linux-g
 ```
 
 Then try compiling again.
+
+## LP Audit Remediation Notes (perun-x-yield-pool branch)
+
+- **Operator-authorized LP operations**: `FundChannelExtract` and LP settlement paths are operator-authorized. LP deposits/withdrawals remain owner-authorized.
+
+- **Two-step settle model**: LP settlement is decoupled from channel cell consumption. The expected flow is: (1) channel settle returns balances to channel participants, including the hub/operator leg, then (2) operator calls LP `SettleChannelInsert` in a separate transaction and directly funds principal+fee back to the LP cell. The LP validator enforces operator-funded return accounting in this second step.
+
+- **LP witness set simplified**: LP transitions are modeled via `LPDeposit`, `LPWithdraw`, `FundChannelExtract`, `SettleChannelInsert`, `CancelReservation`, and `RotateOperator`.
+
+- **Typed LP policy flags**: `policy_flags` is validated against the typed bit set in `perun_common::pool::LPPolicyFlag`:
+  - bit 0: `EnforceMaxFee`
+  - bit 1: `EnforceMinFee`
+  - bit 2: `RequirePrice`
+  - bit 3: `SafePrice`
+  Unknown bits are rejected on LP initialization and policy validation paths.
+
+- **Witness and cell parser strictness**:
+  - LP cell decoding now requires exact `LP_CELL_SIZE` length (no trailing-byte acceptance).
+  - LP witness decoding now enforces exact opcode payload lengths (no short/long payload tolerance).
+  - Parser layout offsets for LP cells and LP witnesses are centralized with compile-time size assertions.
+
+- **Witness ID semantics**:
+  - `FundChannelExtract`, `SettleChannelInsert`, and `CancelReservation` require non-zero `contribution_id`.
+  - `FundChannelExtract` and `CancelReservation` now also require non-zero `channel_id`.
+
+- **Molecule codegen guard**: A build-time guard has been added in the `perun-common` crate to detect stale generated Molecule bindings. If you modify `crates/perun-common/liquidity_pool.mol`, regenerate the bindings before building:
+
+```sh
+make -C crates/perun-common generate-liquidity-pool-types
+```
+
+If you see a build error mentioning `src/liquidity_pool_types.rs is older than liquidity_pool.mol`, run the command above and rebuild.
+
+- **Tests & harness**: Unit and integration tests cover the operator-auth model and two-step settlement constraints (including rejection when operator funding is missing or channel state is still live in settle tx) under `tests/`. Run the full test suite after regenerating bindings:
+
+```sh
+source ./setup_env.sh test && make test
+```
+
+- **Migration helper & rollout checklist**: The `scripts/lp_migration_prepare.sh` helper was extended to emit a monitoring checklist for staged rollouts. Use `make verify-lp-deployment` and the migration helper to prepare a safe deployment.
+

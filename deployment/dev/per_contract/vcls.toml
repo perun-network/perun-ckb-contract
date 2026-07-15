@@ -1,0 +1,10 @@
+[[cells]]
+name = "vcls"
+enable_type_id = true
+location = { file = "build/release/perun-vchannel-lockscript" }
+
+# 2-of-3 Secp256k1Multisig lock (auto-generated args — run compute_multisig_args.sh to recompute)
+[lock]
+code_hash = "0x5c5069eb0857efc65e1bca0c07df34c31663b3622fd3876c876320fc9634e2a8"
+args = "0xf5931f4c33e24dcd246a2df22515ce62e5a814e9"
+hash_type = "type"

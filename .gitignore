@@ -5,6 +5,7 @@ contracts/**/target/*
 tests/target/*
 migrations/**
 migrations_vc/**
+migrations_lp/**
 
 # C
 contracts/c/build/*
@@ -13,3 +14,5 @@ contracts/c/build/*
 build/*
 !.gitkeep
 .tmp/
+
+tests/failed_txs/*

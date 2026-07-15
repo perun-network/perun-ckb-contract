@@ -46,7 +46,7 @@ const DUMMY_LOCKED_FUNDS_ID: [u8; 32] = [0u8; 32];
 
 pub fn program_entry() -> i8 {
     match main() {
-        Ok(_) => 0,   // Success
+        Ok(_) => 0,         // Success
         Err(e) => e.into(), // Failure
     }
 }
@@ -509,13 +509,8 @@ pub fn check_vc_force_close(
     debug!("check_vc_force_close");
     let channel_capacity = load_cell_capacity(0, Source::GroupInput)?;
 
-    //perform closing checks for ledger channel
-    verify_status_funded(old_status)?;
-    debug!("verify_status_funded(lc) passed");
-    verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
-    debug!("verify_time_lock_expired(lc) passed");
-    verify_status_disputed(old_status)?;
-    debug!("verify_status_disputed(lc) passed");
+    verify_force_close_preconditions(old_status, channel_constants)?;
+    debug!("verify_force_close_preconditions(lc) passed");
 
     //perform checks for child vc
     verify_time_lock_expired(vcts_args.params().challenge_duration().unpack())?;
@@ -544,12 +539,8 @@ pub fn check_normal_force_close(
 
     verify_no_locked_funds(&old_status)?;
     debug!("verify_no_locked_funds passed");
-    verify_status_funded(old_status)?;
-    debug!("verify_status_funded passed");
-    verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
-    debug!("verify_time_lock_expired passed");
-    verify_status_disputed(old_status)?;
-    debug!("verify_status_disputed passed");
+    verify_force_close_preconditions(old_status, channel_constants)?;
+    debug!("verify_force_close_preconditions passed");
 
     // Check if this is a case where vc cell is being closed
     verify_all_paid(
@@ -559,6 +550,16 @@ pub fn check_normal_force_close(
         false,
     )?;
     debug!("verify_all_paid passed");
+    Ok(())
+}
+
+pub fn verify_force_close_preconditions(
+    old_status: &ChannelStatus,
+    channel_constants: &ChannelConstants,
+) -> Result<(), Error> {
+    verify_status_funded(old_status)?;
+    verify_time_lock_expired(channel_constants.params().challenge_duration().unpack())?;
+    verify_status_disputed(old_status)?;
     Ok(())
 }
 
