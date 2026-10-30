@@ -3,6 +3,7 @@ TOP ?= $(abspath ../..)
 MODE ?= release
 MODE_ARGS = $(if $(filter release,$(MODE)),--release,)
 BUILD_DIR ?= build/$(MODE)
+OBJCOPY ?= llvm-objcopy
 RUST_LLD = $(shell rustc --print sysroot)/lib/rustlib/$(shell rustc -vV | sed -n 's/^host: //p')/bin/rust-lld
 
 .PHONY: build
@@ -14,3 +15,4 @@ build:
 		--version-script=exports.map --undefined=validate -Bsymbolic \
 		$(TOP)/target/riscv64imac-unknown-none-elf/$(MODE)/libxudt_extension.a \
 		-o $(TOP)/$(BUILD_DIR)/xudt-extension
+	$(OBJCOPY) --strip-debug --strip-unneeded $(TOP)/$(BUILD_DIR)/xudt-extension
