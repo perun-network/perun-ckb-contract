@@ -150,3 +150,9 @@ checksum: build
 	shasum -a 256 build/$(MODE)/* > $(CHECKSUM_FILE)
 
 .PHONY: build test check clippy fmt cargo clean prepare checksum
+
+# Optional fixture used by the Go backend xUDT integration tests.
+xudt-extension:
+	$(MAKE) -C test-contracts/xudt-extension build TOP="$(TOP)" BUILD_DIR="$(BUILD_DIR)" MODE="$(MODE)"
+
+.PHONY: xudt-extension
