@@ -1,0 +1,11 @@
+[package]
+name = "xudt-extension"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+ckb-std = { version = "0.17.0", default-features = false, features = ["allocator"] }

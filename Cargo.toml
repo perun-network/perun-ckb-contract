@@ -13,6 +13,7 @@ members = [
   "contracts/perun-channel-typescript",
   "contracts/perun-channel-lockscript",
   "tests",
+  "test-contracts/xudt-extension",
 ]
 
 [profile.release]

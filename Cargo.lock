@@ -2665,6 +2665,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "xudt-extension"
+version = "0.1.0"
+dependencies = [
+ "ckb-std 0.17.2",
+]
+
+[[package]]
 name = "xxhash-rust"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
